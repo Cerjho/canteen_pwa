@@ -32,6 +32,14 @@ import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Product, ProductCategory } from '../../types';
 
+// Helper to format date in local timezone (avoids UTC shift issues)
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 interface MenuSchedule {
   id: string;
   product_id: string;
@@ -173,7 +181,7 @@ export default function AdminWeeklyMenu() {
       const { data, error } = await supabase
         .from('holidays')
         .select('*')
-        .gte('date', new Date().toISOString().split('T')[0])
+        .gte('date', formatDateLocal(new Date()))
         .order('date');
       if (error) throw error;
       return data;
@@ -1141,7 +1149,7 @@ function HolidayModal({
       holidayDate.setFullYear(year + 1);
     }
     setName(holiday.name);
-    setDate(holidayDate.toISOString().split('T')[0]);
+    setDate(formatDateLocal(holidayDate));
     setIsRecurring(true); // National holidays are usually recurring
   };
 
@@ -1199,7 +1207,7 @@ function HolidayModal({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
+                min={formatDateLocal(new Date())}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 required
               />

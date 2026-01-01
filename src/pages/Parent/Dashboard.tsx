@@ -26,6 +26,14 @@ import {
   Sparkles
 } from 'lucide-react';
 
+// Helper to format date in local timezone (avoids UTC shift issues)
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 interface OrderItem {
   id: string;
   product_id: string;
@@ -86,7 +94,7 @@ export default function ParentDashboard() {
   // Subscribe to realtime order updates
   useOrderSubscription();
   
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = formatDateLocal(new Date());
   
   // Fetch today's active orders (pending, preparing, ready)
   const { data: todayOrders, isLoading: loadingToday, refetch: refetchToday } = useQuery<Order[]>({

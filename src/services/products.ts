@@ -25,9 +25,17 @@ export interface CanteenStatus {
   date?: string;
 }
 
+// Helper to format date as YYYY-MM-DD in LOCAL timezone (not UTC)
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Check if a date matches a holiday (including recurring holidays)
 async function checkHoliday(targetDate: Date): Promise<{ name: string } | null> {
-  const dateStr = targetDate.toISOString().split('T')[0];
+  const dateStr = formatDateLocal(targetDate);
   const monthDay = dateStr.slice(5); // Extract MM-DD (e.g., "12-25" for Christmas)
   
   // Check for exact date match (non-recurring holidays)
@@ -64,7 +72,7 @@ async function checkHoliday(targetDate: Date): Promise<{ name: string } | null> 
 export async function getCanteenStatus(date?: Date): Promise<CanteenStatus> {
   const targetDate = date || new Date();
   const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 6 = Saturday
-  const dateStr = targetDate.toISOString().split('T')[0];
+  const dateStr = formatDateLocal(targetDate);
   
   // Check if weekend
   if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -107,7 +115,7 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
   let checkDate = new Date(today);
   while (dates.length < daysAhead) {
     const dayOfWeek = checkDate.getDay();
-    const dateStr = checkDate.toISOString().split('T')[0];
+    const dateStr = formatDateLocal(checkDate);
     const monthDay = dateStr.slice(5); // MM-DD
     
     // Skip weekends and holidays (both exact and recurring)
@@ -125,7 +133,7 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
 // Get products available for a specific date based on menu schedule
 export async function getProductsForDate(date: Date): Promise<Product[]> {
   const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const dateStr = date.toISOString().split('T')[0];
+  const dateStr = formatDateLocal(date);
   
   // Weekend check - return empty (canteen closed)
   if (dayOfWeek === 0 || dayOfWeek === 6) {
