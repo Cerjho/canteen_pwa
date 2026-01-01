@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -37,26 +37,37 @@ export default function Menu() {
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all' | 'favorites'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { showToast } = useToast();
   
-  // Get available order dates (next 5 weekdays)
+  // Get available order dates (next 5 weekdays, excluding holidays)
   const { data: availableDates } = useQuery({
     queryKey: ['available-order-dates'],
     queryFn: () => getAvailableOrderDates(5)
   });
   
+  // Auto-select first available date when dates load
+  useEffect(() => {
+    if (availableDates && availableDates.length > 0 && !selectedDate) {
+      setSelectedDate(availableDates[0]);
+    }
+  }, [availableDates, selectedDate]);
+  
+  // Use first available date or today as fallback
+  const effectiveDate = selectedDate || availableDates?.[0] || new Date();
+  
   // Check canteen status for selected date
   const { data: canteenStatus } = useQuery({
-    queryKey: ['canteen-status', selectedDate.toISOString()],
-    queryFn: () => getCanteenStatus(selectedDate)
+    queryKey: ['canteen-status', effectiveDate.toISOString()],
+    queryFn: () => getCanteenStatus(effectiveDate),
+    enabled: !!selectedDate
   });
   
   // Fetch products for the selected date
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products', selectedDate.toISOString()],
-    queryFn: () => getProductsForDate(selectedDate),
-    enabled: canteenStatus?.isOpen !== false
+    queryKey: ['products', effectiveDate.toISOString()],
+    queryFn: () => getProductsForDate(effectiveDate),
+    enabled: !!selectedDate && canteenStatus?.isOpen !== false
   });
 
   const { data: children } = useChildren();
@@ -112,8 +123,8 @@ export default function Menu() {
     }
 
     const selectedChild = children?.find(c => c.id === selectedChildId);
-    const scheduledFor = selectedDate.toISOString().split('T')[0];
-    const isFutureOrder = !isToday(selectedDate);
+    const scheduledFor = effectiveDate.toISOString().split('T')[0];
+    const isFutureOrder = !isToday(effectiveDate);
 
     try {
       const result = await checkout(selectedChildId, paymentMethod, notes, scheduledFor);
@@ -142,7 +153,7 @@ export default function Menu() {
   const handlePrevDate = () => {
     if (!availableDates) return;
     const currentIdx = availableDates.findIndex(d => 
-      d.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0]
+      d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
     );
     if (currentIdx > 0) {
       setSelectedDate(availableDates[currentIdx - 1]);
@@ -152,7 +163,7 @@ export default function Menu() {
   const handleNextDate = () => {
     if (!availableDates) return;
     const currentIdx = availableDates.findIndex(d => 
-      d.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0]
+      d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
     );
     if (currentIdx < availableDates.length - 1) {
       setSelectedDate(availableDates[currentIdx + 1]);
@@ -172,20 +183,20 @@ export default function Menu() {
               <button
                 onClick={handlePrevDate}
                 disabled={!availableDates || availableDates.findIndex(d => 
-                  d.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0]
+                  d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
                 ) === 0}
                 className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
               >
                 <ChevronLeft size={20} />
               </button>
               <div className="text-center">
-                <p className="font-semibold text-gray-900">{getDateLabel(selectedDate)}</p>
-                <p className="text-xs text-gray-500">{format(selectedDate, 'MMMM d, yyyy')}</p>
+                <p className="font-semibold text-gray-900">{getDateLabel(effectiveDate)}</p>
+                <p className="text-xs text-gray-500">{format(effectiveDate, 'MMMM d, yyyy')}</p>
               </div>
               <button
                 onClick={handleNextDate}
                 disabled={!availableDates || availableDates.findIndex(d => 
-                  d.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0]
+                  d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
                 ) === availableDates.length - 1}
                 className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
               >
@@ -199,7 +210,7 @@ export default function Menu() {
                     key={date.toISOString()}
                     onClick={() => setSelectedDate(date)}
                     className={`flex-1 min-w-[60px] px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
-                      date.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0]
+                      date.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
                         ? 'bg-primary-600 text-white'
                         : isToday(date)
                         ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
@@ -219,7 +230,7 @@ export default function Menu() {
               <CalendarOff size={48} className="text-gray-400" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {isToday(selectedDate) ? 'Canteen Closed Today' : 'Canteen Closed'}
+              {isToday(effectiveDate) ? 'Canteen Closed Today' : 'Canteen Closed'}
             </h2>
             {canteenStatus.reason === 'weekend' && (
               <p className="text-gray-600 mb-4">
@@ -253,7 +264,7 @@ export default function Menu() {
           subtitle={
             <span className="flex items-center gap-1.5">
               <Calendar size={14} className="text-primary-500" />
-              {isToday(selectedDate) ? "Today's Menu" : `Menu for ${format(selectedDate, 'EEE, MMM d')}`}
+              {isToday(effectiveDate) ? "Today's Menu" : `Menu for ${format(effectiveDate, 'EEE, MMM d')}`}
             </span>
           }
           action={
@@ -278,7 +289,7 @@ export default function Menu() {
               <Calendar size={16} className="text-primary-500" />
               Order for:
             </span>
-            {!isToday(selectedDate) && (
+            {!isToday(effectiveDate) && (
               <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
                 Advance Order
               </span>
@@ -291,7 +302,7 @@ export default function Menu() {
                   key={date.toISOString()}
                   onClick={() => setSelectedDate(date)}
                   className={`flex-1 min-w-[60px] px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
-                    date.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0]
+                    date.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
                       ? 'bg-primary-600 text-white'
                       : isToday(date)
                       ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'

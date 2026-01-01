@@ -87,14 +87,10 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  // Get holidays for the next month (non-recurring)
-  const endDate = new Date(today);
-  endDate.setDate(endDate.getDate() + 30);
-  
+  // Get ALL holidays (we'll filter in code for correct matching)
   const { data: holidays } = await supabase
     .from('holidays')
-    .select('date, is_recurring')
-    .or(`and(date.gte.${today.toISOString().split('T')[0]},date.lte.${endDate.toISOString().split('T')[0]}),is_recurring.eq.true`);
+    .select('date, is_recurring');
   
   // Build sets for exact dates and recurring month-days
   const exactHolidayDates = new Set<string>();
@@ -129,6 +125,7 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
 // Get products available for a specific date based on menu schedule
 export async function getProductsForDate(date: Date): Promise<Product[]> {
   const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const dateStr = date.toISOString().split('T')[0];
   
   // Weekend check - return empty (canteen closed)
   if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -142,7 +139,28 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
     return []; // Holiday - canteen closed
   }
   
-  // First check if there are any menu schedules for this day
+  // First check for date-specific overrides (takes priority over weekly template)
+  const { data: dateOverrides } = await supabase
+    .from('menu_date_overrides')
+    .select('product_id')
+    .eq('scheduled_date', dateStr)
+    .eq('is_active', true);
+  
+  // If there are date-specific overrides, use those
+  if (dateOverrides && dateOverrides.length > 0) {
+    const productIds = dateOverrides.map(o => o.product_id);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('available', true)
+      .in('id', productIds)
+      .order('category', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  }
+  
+  // Fall back to weekly template
   const { data: daySchedules, error: scheduleError } = await supabase
     .from('menu_schedules')
     .select('product_id')
