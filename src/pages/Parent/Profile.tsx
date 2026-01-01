@@ -1,13 +1,29 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { LogOut, User, Edit2, ChevronRight, Wallet, Link2, Unlink, AlertCircle } from 'lucide-react';
+import { 
+  LogOut, 
+  User, 
+  Edit2, 
+  ChevronRight, 
+  Wallet, 
+  Link2, 
+  Unlink, 
+  AlertCircle,
+  Phone,
+  Key,
+  Save,
+  X,
+  Clock
+} from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { getChildren, linkStudent, unlinkStudent, updateChild, Child } from '../../services/children';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import type { Parent } from '../../types';
 
 export default function Profile() {
@@ -16,6 +32,15 @@ export default function Profile() {
   const { showToast } = useToast();
   const [showLinkChild, setShowLinkChild] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [unlinkingChild, setUnlinkingChild] = useState<Child | null>(null);
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    phone_number: ''
+  });
 
   // Fetch parent profile
   const { data: profile, isLoading: profileLoading } = useQuery({
@@ -39,6 +64,42 @@ export default function Profile() {
     enabled: !!user
   });
 
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { first_name: string; last_name: string; phone_number: string }) => {
+      const { error: dbError } = await supabase
+        .from('parents')
+        .update({
+          first_name: data.first_name,
+          last_name: data.last_name,
+          phone_number: data.phone_number || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user!.id);
+      
+      if (dbError) throw dbError;
+
+      // Also update user metadata
+      const { error: authError } = await supabase.auth.updateUser({
+        data: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          phone_number: data.phone_number
+        }
+      });
+      
+      if (authError) throw authError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setIsEditingProfile(false);
+      showToast('Profile updated successfully', 'success');
+    },
+    onError: () => {
+      showToast('Failed to update profile', 'error');
+    }
+  });
+
   // Link child mutation (via Edge Function)
   const linkChildMutation = useMutation({
     mutationFn: (studentId: string) => linkStudent(studentId),
@@ -55,9 +116,13 @@ export default function Profile() {
     mutationFn: unlinkStudent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['children'] });
+      setUnlinkingChild(null);
       showToast('Child unlinked successfully', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to unlink child', 'error')
+    onError: (error: Error) => {
+      setUnlinkingChild(null);
+      showToast(error.message || 'Failed to unlink child', 'error');
+    }
   });
 
   // Update child mutation (dietary info only, via Edge Function)
@@ -71,6 +136,28 @@ export default function Profile() {
     },
     onError: (error: Error) => showToast(error.message || 'Failed to update info', 'error')
   });
+
+  const handleEditProfile = () => {
+    setFormData({
+      first_name: profile?.first_name || '',
+      last_name: profile?.last_name || '',
+      phone_number: profile?.phone_number || ''
+    });
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = () => {
+    if (!formData.first_name.trim() || !formData.last_name.trim()) {
+      showToast('First and last name are required', 'error');
+      return;
+    }
+    updateProfileMutation.mutate(formData);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingProfile(false);
+    setFormData({ first_name: '', last_name: '', phone_number: '' });
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -87,19 +174,86 @@ export default function Profile() {
 
         {/* Account Info */}
         <section className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
-              <User size={32} className="text-primary-600" />
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
+                <User size={32} className="text-primary-600" />
+              </div>
+              <div>
+                {isEditingProfile ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.first_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                        placeholder="First Name"
+                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      />
+                      <input
+                        type="text"
+                        value={formData.last_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                        placeholder="Last Name"
+                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <input
+                      type="tel"
+                      value={formData.phone_number}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phone_number: e.target.value }))}
+                      placeholder="Phone (e.g., 09XX XXX XXXX)"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-xl font-bold">
+                      {profile?.first_name} {profile?.last_name}
+                    </h2>
+                    <p className="text-gray-600">{profile?.email}</p>
+                    {profile?.phone_number && (
+                      <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                        <Phone size={14} />
+                        {profile.phone_number}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold">
-                {profile?.first_name} {profile?.last_name}
-              </h2>
-              <p className="text-gray-600">{profile?.email}</p>
-            </div>
+            
+            {isEditingProfile ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancelEdit}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                  title="Cancel"
+                >
+                  <X size={20} />
+                </button>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={updateProfileMutation.isPending}
+                  className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg"
+                  title="Save"
+                >
+                  <Save size={20} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleEditProfile}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                title="Edit profile"
+              >
+                <Edit2 size={20} />
+              </button>
+            )}
           </div>
 
-          <div className="border-t pt-4">
+          {/* Account Details */}
+          <div className="space-y-3 border-t pt-4">
             <Link 
               to="/balance" 
               className="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-2 rounded-lg transition-colors"
@@ -117,6 +271,38 @@ export default function Profile() {
                 <ChevronRight size={20} className="text-gray-400" />
               </div>
             </Link>
+
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              className="w-full flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-2 rounded-lg transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <Key size={18} className="text-blue-600" />
+                </div>
+                <span className="text-gray-600">Change Password</span>
+              </div>
+              <ChevronRight size={20} className="text-gray-400" />
+            </button>
+
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="p-2 bg-purple-100 rounded-full">
+                <Clock size={18} className="text-purple-600" />
+              </div>
+              <div className="flex-1">
+                <span className="text-gray-600 text-sm">Member Since</span>
+                <p className="font-medium">
+                  {profile?.created_at 
+                    ? new Date(profile.created_at).toLocaleDateString('en-PH', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })
+                    : 'N/A'
+                  }
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -179,11 +365,7 @@ export default function Profile() {
                       <Edit2 size={18} className="text-gray-600" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm('Unlink this child from your account?')) {
-                          unlinkChildMutation.mutate(child.id);
-                        }
-                      }}
+                      onClick={() => setUnlinkingChild(child)}
                       className="p-2 hover:bg-amber-100 rounded-lg"
                       aria-label="Unlink child"
                       title="Unlink child"
@@ -201,10 +383,19 @@ export default function Profile() {
           )}
         </section>
 
+        {/* App Info */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-3">About</h3>
+          <div className="space-y-1 text-sm text-gray-600">
+            <p><strong>Canteen PWA</strong> - Parent Portal</p>
+            <p>Version 1.0.0</p>
+          </div>
+        </section>
+
         {/* Logout Button */}
         <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
+          onClick={() => setShowLogoutConfirm(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors bg-white shadow"
         >
           <LogOut size={20} />
           Sign Out
@@ -231,6 +422,37 @@ export default function Profile() {
           isLoading={updateChildMutation.isPending}
         />
       )}
+
+      {/* Unlink Child Confirmation */}
+      {unlinkingChild && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Unlink Child"
+          message={`Are you sure you want to unlink ${unlinkingChild.first_name} ${unlinkingChild.last_name} from your account? You can link them again later using their Student ID.`}
+          confirmLabel={unlinkChildMutation.isPending ? 'Unlinking...' : 'Unlink'}
+          type="warning"
+          onConfirm={() => unlinkChildMutation.mutate(unlinkingChild.id)}
+          onCancel={() => setUnlinkingChild(null)}
+        />
+      )}
+
+      {/* Logout Confirmation */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        type="danger"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onSuccess={() => showToast('Password changed successfully', 'success')}
+      />
     </div>
   );
 }

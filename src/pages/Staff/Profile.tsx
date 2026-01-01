@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LogOut, User, Mail, Phone, Clock, Shield, Save, X } from 'lucide-react';
+import { LogOut, User, Mail, Phone, Clock, Shield, Save, X, Key, ChevronRight, Edit2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 
 interface StaffProfile {
   id: string;
@@ -21,6 +23,8 @@ export default function StaffProfilePage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -148,8 +152,9 @@ export default function StaffProfilePage() {
               <button
                 onClick={handleEdit}
                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                title="Edit profile"
               >
-                <User size={20} />
+                <Edit2 size={20} />
               </button>
             ) : (
               <div className="flex gap-2">
@@ -225,6 +230,26 @@ export default function StaffProfilePage() {
           </div>
         </section>
 
+        {/* Security Section */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Security</h3>
+          <button
+            onClick={() => setShowPasswordModal(true)}
+            className="w-full flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-full">
+                <Key size={18} className="text-green-600" />
+              </div>
+              <div className="text-left">
+                <p className="font-medium">Change Password</p>
+                <p className="text-xs text-gray-500">Update your account password</p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-gray-400" />
+          </button>
+        </section>
+
         {/* App Info */}
         <section className="bg-white rounded-lg shadow p-6 mb-6">
           <h3 className="text-lg font-semibold mb-4">About</h3>
@@ -236,13 +261,31 @@ export default function StaffProfilePage() {
 
         {/* Logout Button */}
         <button
-          onClick={handleLogout}
+          onClick={() => setShowLogoutConfirm(true)}
           className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors bg-white shadow"
         >
           <LogOut size={20} />
           Sign Out
         </button>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onSuccess={() => showToast('Password changed successfully', 'success')}
+      />
+
+      {/* Logout Confirmation */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        type="danger"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   );
 }
