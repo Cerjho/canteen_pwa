@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';

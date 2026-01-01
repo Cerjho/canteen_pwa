@@ -1,9 +1,10 @@
 import { AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
+import { ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   type?: 'danger' | 'warning' | 'success' | 'info';
@@ -58,7 +59,7 @@ export function ConfirmDialog({
               <Icon size={32} className={color} />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-            <p className="text-gray-600 mb-6">{message}</p>
+            <div className="text-gray-600 mb-6">{message}</div>
             
             <div className="flex gap-3">
               <button

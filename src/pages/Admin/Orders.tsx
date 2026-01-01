@@ -419,8 +419,8 @@ export default function AdminOrders() {
               </p>
             </div>
           }
-          confirmText={refundMutation.isPending ? 'Processing...' : 'Confirm Refund'}
-          confirmVariant="danger"
+          confirmLabel={refundMutation.isPending ? 'Processing...' : 'Confirm Refund'}
+          type="danger"
           onConfirm={() => refundMutation.mutate(refundOrder)}
           onCancel={() => setRefundOrder(null)}
         />
