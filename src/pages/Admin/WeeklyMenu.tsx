@@ -149,13 +149,20 @@ export default function AdminWeeklyMenu() {
 
   // Check if a specific date is a holiday
   const isHoliday = (date: Date): Holiday | undefined => {
+    if (!holidays || holidays.length === 0) return undefined;
+    
     const dateStr = format(date, 'yyyy-MM-dd');
     const monthDay = dateStr.slice(5); // MM-DD
-    return holidays?.find(h => {
+    
+    return holidays.find(h => {
+      // Holiday date from DB might be 'YYYY-MM-DD' format
+      const holidayDateStr = h.date.split('T')[0]; // Handle if it has time component
+      const holidayMonthDay = holidayDateStr.slice(5); // MM-DD
+      
       if (h.is_recurring) {
-        return h.date.slice(5) === monthDay;
+        return holidayMonthDay === monthDay;
       }
-      return h.date === dateStr;
+      return holidayDateStr === dateStr;
     });
   };
 
