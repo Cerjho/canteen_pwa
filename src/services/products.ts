@@ -139,16 +139,16 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
     return []; // Holiday - canteen closed
   }
   
-  // First check for date-specific overrides (takes priority over weekly template)
-  const { data: dateOverrides } = await supabase
-    .from('menu_date_overrides')
+  // Check for date-specific menu schedules (new date-based system)
+  const { data: dateSchedules } = await supabase
+    .from('menu_schedules')
     .select('product_id')
     .eq('scheduled_date', dateStr)
     .eq('is_active', true);
   
-  // If there are date-specific overrides, use those
-  if (dateOverrides && dateOverrides.length > 0) {
-    const productIds = dateOverrides.map(o => o.product_id);
+  // If there are date-specific schedules, use those
+  if (dateSchedules && dateSchedules.length > 0) {
+    const productIds = dateSchedules.map(s => s.product_id);
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -160,11 +160,12 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
     return data || [];
   }
   
-  // Fall back to weekly template
+  // Fall back to day-of-week template (backward compatibility)
   const { data: daySchedules, error: scheduleError } = await supabase
     .from('menu_schedules')
     .select('product_id')
     .eq('day_of_week', dayOfWeek)
+    .is('scheduled_date', null)
     .eq('is_active', true);
 
   if (scheduleError) throw scheduleError;

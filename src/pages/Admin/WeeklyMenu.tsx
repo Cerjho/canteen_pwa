@@ -36,6 +36,7 @@ interface MenuSchedule {
   id: string;
   product_id: string;
   day_of_week: number;
+  scheduled_date?: string; // New: specific date for this schedule
   is_active: boolean;
   product?: Product;
 }
@@ -132,14 +133,34 @@ export default function AdminWeeklyMenu() {
     }
   });
 
-  // Fetch menu schedules
+  // Get week date range for queries
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 });
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+  const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+
+  // Check if a specific date is a holiday
+  const isHoliday = (date: Date): Holiday | undefined => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const monthDay = dateStr.slice(5); // MM-DD
+    return holidays?.find(h => {
+      if (h.is_recurring) {
+        return h.date.slice(5) === monthDay;
+      }
+      return h.date === dateStr;
+    });
+  };
+
+  // Fetch menu schedules for the selected week
   const { data: schedules, isLoading } = useQuery<MenuSchedule[]>({
-    queryKey: ['menu-schedules'],
+    queryKey: ['menu-schedules', weekStartStr, weekEndStr],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('menu_schedules')
         .select(`*, product:products(*)`)
-        .order('day_of_week');
+        .gte('scheduled_date', weekStartStr)
+        .lte('scheduled_date', weekEndStr)
+        .order('scheduled_date');
       if (error) throw error;
       return data;
     }
@@ -159,16 +180,18 @@ export default function AdminWeeklyMenu() {
     }
   });
 
-  // Add product to schedule
+  // Add product to schedule for a specific date
   const addToSchedule = useMutation({
     mutationFn: async ({ productId, dayOfWeek }: { productId: string; dayOfWeek: number }) => {
+      const scheduledDate = format(getDateForDay(dayOfWeek), 'yyyy-MM-dd');
       const { error } = await supabase
         .from('menu_schedules')
         .upsert({
           product_id: productId,
           day_of_week: dayOfWeek,
+          scheduled_date: scheduledDate,
           is_active: true
-        }, { onConflict: 'product_id,day_of_week' });
+        }, { onConflict: 'product_id,scheduled_date' });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -178,18 +201,20 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to add product', 'error')
   });
 
-  // Add multiple products at once
+  // Add multiple products at once for a specific date
   const addBulkToSchedule = useMutation({
     mutationFn: async ({ productIds, dayOfWeek }: { productIds: string[]; dayOfWeek: number }) => {
+      const scheduledDate = format(getDateForDay(dayOfWeek), 'yyyy-MM-dd');
       const items = productIds.map(id => ({
         product_id: id,
         day_of_week: dayOfWeek,
+        scheduled_date: scheduledDate,
         is_active: true
       }));
       
       const { error } = await supabase
         .from('menu_schedules')
-        .upsert(items, { onConflict: 'product_id,day_of_week' });
+        .upsert(items, { onConflict: 'product_id,scheduled_date' });
       if (error) throw error;
     },
     onSuccess: (_, { productIds }) => {
@@ -231,19 +256,22 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to update item', 'error')
   });
 
-  // Copy menu to another day
+  // Copy menu to another day (same week, date-based)
   const copyToDay = useMutation({
     mutationFn: async ({ fromDay, toDay }: { fromDay: number; toDay: number }) => {
-      const daySchedules = schedules?.filter(s => s.day_of_week === fromDay) || [];
+      const fromDate = format(getDateForDay(fromDay), 'yyyy-MM-dd');
+      const toDate = format(getDateForDay(toDay), 'yyyy-MM-dd');
+      const daySchedules = schedules?.filter(s => s.scheduled_date === fromDate) || [];
       if (daySchedules.length === 0) throw new Error('No items to copy');
 
-      await supabase.from('menu_schedules').delete().eq('day_of_week', toDay);
+      await supabase.from('menu_schedules').delete().eq('scheduled_date', toDate);
 
       const { error } = await supabase
         .from('menu_schedules')
         .insert(daySchedules.map(s => ({
           product_id: s.product_id,
           day_of_week: toDay,
+          scheduled_date: toDate,
           is_active: s.is_active
         })));
       if (error) throw error;
@@ -255,25 +283,30 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to copy menu', 'error')
   });
 
-  // Copy day to all weekdays
+  // Copy day to all weekdays (same week, date-based)
   const copyToAllDays = useMutation({
     mutationFn: async (fromDay: number) => {
-      const daySchedules = schedules?.filter(s => s.day_of_week === fromDay) || [];
+      const fromDate = format(getDateForDay(fromDay), 'yyyy-MM-dd');
+      const daySchedules = schedules?.filter(s => s.scheduled_date === fromDate) || [];
       if (daySchedules.length === 0) throw new Error('No items to copy');
 
       const targetDays = WEEKDAYS.filter(d => d.value !== fromDay).map(d => d.value);
       
+      // Delete and insert for each target day
+      const allItems: Array<{ product_id: string; day_of_week: number; scheduled_date: string; is_active: boolean }> = [];
       for (const toDay of targetDays) {
-        await supabase.from('menu_schedules').delete().eq('day_of_week', toDay);
+        const toDate = format(getDateForDay(toDay), 'yyyy-MM-dd');
+        await supabase.from('menu_schedules').delete().eq('scheduled_date', toDate);
+        
+        daySchedules.forEach(s => {
+          allItems.push({
+            product_id: s.product_id,
+            day_of_week: toDay,
+            scheduled_date: toDate,
+            is_active: s.is_active
+          });
+        });
       }
-
-      const allItems = targetDays.flatMap(toDay => 
-        daySchedules.map(s => ({
-          product_id: s.product_id,
-          day_of_week: toDay,
-          is_active: s.is_active
-        }))
-      );
 
       const { error } = await supabase.from('menu_schedules').insert(allItems);
       if (error) throw error;
@@ -285,13 +318,14 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to copy menu', 'error')
   });
 
-  // Clear day's menu
+  // Clear day's menu (for specific date)
   const clearDayMenu = useMutation({
     mutationFn: async (dayOfWeek: number) => {
+      const scheduledDate = format(getDateForDay(dayOfWeek), 'yyyy-MM-dd');
       const { error } = await supabase
         .from('menu_schedules')
         .delete()
-        .eq('day_of_week', dayOfWeek);
+        .eq('scheduled_date', scheduledDate);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -302,13 +336,14 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to clear menu', 'error')
   });
 
-  // Clear entire week
+  // Clear entire week (for selected week's dates)
   const clearWeekMenu = useMutation({
     mutationFn: async () => {
       const { error } = await supabase
         .from('menu_schedules')
         .delete()
-        .in('day_of_week', [1, 2, 3, 4, 5]);
+        .gte('scheduled_date', weekStartStr)
+        .lte('scheduled_date', weekEndStr);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -352,9 +387,13 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to remove holiday', 'error')
   });
 
-  // Computed values
-  const daySchedules = schedules?.filter(s => s.day_of_week === selectedDay) || [];
+  // Computed values - filter by specific date
+  const selectedDateStr = format(getDateForDay(selectedDay), 'yyyy-MM-dd');
+  const daySchedules = schedules?.filter(s => s.scheduled_date === selectedDateStr) || [];
   const activeItemsCount = daySchedules.filter(s => s.is_active).length;
+  
+  // Check if selected day is a holiday
+  const selectedDayHoliday = isHoliday(getDateForDay(selectedDay));
   
   const availableProducts = products?.filter(
     p => !daySchedules.some(s => s.product_id === p.id)
@@ -385,22 +424,27 @@ export default function AdminWeeklyMenu() {
     return acc;
   }, {} as Record<string, MenuSchedule[]>);
 
-  // Statistics
+  // Statistics - use date-based filtering
   const weekStats = useMemo(() => {
     const stats = WEEKDAYS.map(day => {
-      const dayItems = schedules?.filter(s => s.day_of_week === day.value) || [];
+      const dayDateStr = format(getDateForDay(day.value), 'yyyy-MM-dd');
+      const dayItems = schedules?.filter(s => s.scheduled_date === dayDateStr) || [];
       const activeItems = dayItems.filter(s => s.is_active);
+      const dayHoliday = isHoliday(getDateForDay(day.value));
       return {
         day: day.value,
+        date: dayDateStr,
         total: dayItems.length,
         active: activeItems.length,
         mains: dayItems.filter(s => s.product?.category === 'mains').length,
         snacks: dayItems.filter(s => s.product?.category === 'snacks').length,
         drinks: dayItems.filter(s => s.product?.category === 'drinks').length,
+        isHoliday: !!dayHoliday,
+        holidayName: dayHoliday?.name,
       };
     });
     return stats;
-  }, [schedules]);
+  }, [schedules, selectedWeek, holidays]);
 
   const handlePrevDay = () => {
     const idx = WEEKDAYS.findIndex(d => d.value === selectedDay);
@@ -557,13 +601,18 @@ export default function AdminWeeklyMenu() {
                       const stat = weekStats.find(s => s.day === day.value);
                       const dayDate = getDateForDay(day.value);
                       const isTodayDate = isCurrentWeek(selectedWeek) && isToday(dayDate);
+                      const dayIsHoliday = stat?.isHoliday;
                       
                       return (
                         <button
                           key={day.value}
                           onClick={() => setSelectedDay(day.value)}
                           className={`flex-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors relative flex flex-col items-center ${
-                            selectedDay === day.value
+                            dayIsHoliday
+                              ? selectedDay === day.value
+                                ? 'bg-red-600 text-white'
+                                : 'bg-red-50 text-red-600 border-2 border-red-200'
+                              : selectedDay === day.value
                               ? 'bg-primary-600 text-white'
                               : isTodayDate
                               ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
@@ -572,11 +621,15 @@ export default function AdminWeeklyMenu() {
                         >
                           <span>{day.short}</span>
                           <span className={`text-[10px] ${
-                            selectedDay === day.value ? 'text-primary-200' : 'text-gray-400'
+                            dayIsHoliday
+                              ? selectedDay === day.value ? 'text-red-200' : 'text-red-400'
+                              : selectedDay === day.value ? 'text-primary-200' : 'text-gray-400'
                           }`}>
                             {format(dayDate, 'd')}
                           </span>
-                          {(stat?.total || 0) > 0 && (
+                          {dayIsHoliday ? (
+                            <CalendarOff size={10} className="absolute -top-1 -right-1" />
+                          ) : (stat?.total || 0) > 0 && (
                             <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] flex items-center justify-center ${
                               selectedDay === day.value ? 'bg-white text-primary-600' : 'bg-primary-100 text-primary-600'
                             }`}>
@@ -589,11 +642,29 @@ export default function AdminWeeklyMenu() {
                   </div>
                 </div>
 
+                {/* Holiday Warning */}
+                {selectedDayHoliday && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                    <CalendarOff className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <p className="font-medium text-red-800">Holiday: {selectedDayHoliday.name}</p>
+                      <p className="text-sm text-red-600">
+                        The canteen is closed on this day. Menu items set here will not be available to parents.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Quick Actions */}
                 <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={() => setShowAddModal(true)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors"
+                    disabled={!!selectedDayHoliday}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors ${
+                      selectedDayHoliday
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-primary-600 text-white hover:bg-primary-700'
+                    }`}
                   >
                     <Plus size={20} />
                     Add Items
