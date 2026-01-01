@@ -353,6 +353,36 @@ export default function Menu() {
               <ProductCardSkeleton key={i} />
             ))}
           </div>
+        ) : !products || products.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Calendar size={40} className="text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">No Menu Available</h3>
+            <p className="text-gray-500 max-w-sm mx-auto">
+              The menu for {format(effectiveDate, 'EEEE, MMMM d')} hasn't been set yet. 
+              Please check back later or try another day.
+            </p>
+            {availableDates && availableDates.length > 1 && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">Try ordering for:</p>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  {availableDates
+                    .filter(d => d.toISOString().split('T')[0] !== effectiveDate.toISOString().split('T')[0])
+                    .slice(0, 3)
+                    .map(date => (
+                      <button
+                        key={date.toISOString()}
+                        onClick={() => setSelectedDate(date)}
+                        className="px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100"
+                      >
+                        {isToday(date) ? 'Today' : format(date, 'EEE, MMM d')}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">
