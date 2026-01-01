@@ -139,51 +139,23 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
     return []; // Holiday - canteen closed
   }
   
-  // Check for date-specific menu schedules (new date-based system)
-  const { data: dateSchedules } = await supabase
+  // Check for date-specific menu schedules (date-based system)
+  const { data: dateSchedules, error: scheduleError } = await supabase
     .from('menu_schedules')
     .select('product_id')
     .eq('scheduled_date', dateStr)
     .eq('is_active', true);
   
-  // If there are date-specific schedules, use those
-  if (dateSchedules && dateSchedules.length > 0) {
-    const productIds = dateSchedules.map(s => s.product_id);
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('available', true)
-      .in('id', productIds)
-      .order('category', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+  if (scheduleError) throw scheduleError;
+  
+  // If no menu is scheduled for this date, return empty array
+  // Admin must explicitly set menu for each date
+  if (!dateSchedules || dateSchedules.length === 0) {
+    return [];
   }
   
-  // Fall back to day-of-week template (backward compatibility)
-  const { data: daySchedules, error: scheduleError } = await supabase
-    .from('menu_schedules')
-    .select('product_id')
-    .eq('day_of_week', dayOfWeek)
-    .is('scheduled_date', null)
-    .eq('is_active', true);
-
-  if (scheduleError) throw scheduleError;
-
-  // If no schedules exist, return all available products (backward compatibility)
-  if (!daySchedules || daySchedules.length === 0) {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('available', true)
-      .order('category', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  // Get only products scheduled for that day
-  const productIds = daySchedules.map(s => s.product_id);
+  // Get only products scheduled for that date
+  const productIds = dateSchedules.map(s => s.product_id);
   const { data, error } = await supabase
     .from('products')
     .select('*')
