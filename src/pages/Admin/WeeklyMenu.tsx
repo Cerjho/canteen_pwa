@@ -125,7 +125,7 @@ export default function AdminWeeklyMenu() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('is_available', true)
+        .eq('available', true)
         .order('category')
         .order('name');
       if (error) throw error;
