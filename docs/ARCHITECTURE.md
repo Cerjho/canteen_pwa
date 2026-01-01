@@ -140,12 +140,18 @@ All Postgres tables enforce RLS:
 ```text
 Admin (unrestricted)
   ↓
-Staff (read orders, manage inventory)
+Staff (read orders, manage inventory, view students)
   ↓
-Parent (manage own children + orders)
+Parent (link/view own children, place orders)
   ↓
-Child (represented as data, no auth)
+Child/Student (represented as data, no auth - managed by admin)
 ```
+
+**Student Management Flow**:
+1. Admin adds students (individually or CSV import)
+2. System generates unique Student ID (YY-XXXXX format)
+3. School provides Student ID to parents
+4. Parent links child using Student ID in Profile page
 
 ## Deployment Architecture
 

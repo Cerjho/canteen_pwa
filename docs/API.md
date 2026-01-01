@@ -157,6 +157,197 @@ Send notification to parent (push/SMS).
 
 ---
 
+### 4. **POST /functions/v1/manage-student**
+
+Admin-only student management (add, update, delete, unlink, import).
+
+**Request Body** (Add):
+
+```json
+{
+  "action": "add",
+  "data": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "grade_level": "Grade 1",
+    "section": "A",
+    "dietary_restrictions": "None"
+  }
+}
+```
+
+**Request Body** (Update):
+
+```json
+{
+  "action": "update",
+  "student_id": "uuid",
+  "data": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "grade_level": "Grade 2",
+    "section": "B"
+  }
+}
+```
+
+**Request Body** (Delete):
+
+```json
+{
+  "action": "delete",
+  "student_id": "uuid"
+}
+```
+
+**Request Body** (Unlink):
+
+```json
+{
+  "action": "unlink",
+  "student_id": "uuid"
+}
+```
+
+**Request Body** (Import):
+
+```json
+{
+  "action": "import",
+  "students": [
+    { "first_name": "John", "last_name": "Doe", "grade_level": "Grade 1", "section": "A" },
+    { "first_name": "Jane", "last_name": "Smith", "grade_level": "Grade 2" }
+  ]
+}
+```
+
+**Response (200 OK)**:
+
+```json
+{
+  "success": true,
+  "student": { "id": "uuid", "student_id": "26-00001", ... }
+}
+```
+
+**Import Response**:
+
+```json
+{
+  "success": true,
+  "imported": 10,
+  "failed": 2,
+  "errors": ["Row 5: Invalid grade level"]
+}
+```
+
+**Error Responses**:
+
+- **403 Forbidden**: Non-admin user
+- **400 Bad Request**: Validation error
+- **404 Not Found**: Student not found
+- **400 Constraint Error**: Cannot delete student with orders
+
+**Security**:
+- Validates admin role from JWT token
+- Sanitizes all input strings
+- Server-side student ID generation
+- Validates grade levels against whitelist
+
+---
+
+### 5. **POST /functions/v1/link-student**
+
+Parent linking/unlinking students.
+
+**Request Body** (Link):
+
+```json
+{
+  "action": "link",
+  "student_id": "26-00001"
+}
+```
+
+**Request Body** (Unlink):
+
+```json
+{
+  "action": "unlink",
+  "student_id": "uuid"
+}
+```
+
+**Response (200 OK)**:
+
+```json
+{
+  "success": true,
+  "student": {
+    "id": "uuid",
+    "student_id": "26-00001",
+    "first_name": "John",
+    "last_name": "Doe",
+    "grade_level": "Grade 1"
+  }
+}
+```
+
+**Error Responses**:
+
+- **404 Not Found**: Student ID not found
+- **400 Already Linked**: Student already linked to parent
+- **400 Limit Reached**: Max 10 children per parent
+- **403 Forbidden**: Attempting to unlink other's child
+
+**Security**:
+- Verifies parent role from JWT
+- Prevents linking already-linked students
+- Race condition protection on link operation
+- Only allows unlinking own children
+- Logs security events
+
+---
+
+### 6. **POST /functions/v1/update-dietary**
+
+Parent updates child's dietary restrictions.
+
+**Request Body**:
+
+```json
+{
+  "child_id": "uuid",
+  "dietary_restrictions": "No peanuts, lactose intolerant"
+}
+```
+
+**Response (200 OK)**:
+
+```json
+{
+  "success": true,
+  "child": {
+    "id": "uuid",
+    "student_id": "26-00001",
+    "first_name": "John",
+    "dietary_restrictions": "No peanuts, lactose intolerant"
+  }
+}
+```
+
+**Error Responses**:
+
+- **403 Forbidden**: Not the child's parent
+- **404 Not Found**: Child not found
+
+**Security**:
+- Verifies parent owns the child
+- Sanitizes input (max 500 chars, strips HTML)
+- Only allows dietary_restrictions update
+
+---
+
 ## Database Access (Supabase Client SDK)
 
 ### Products

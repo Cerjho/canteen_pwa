@@ -1,1 +1,471 @@
-// Parent Dashboard page
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format, isToday, isTomorrow, parseISO, differenceInMinutes } from 'date-fns';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../../services/supabaseClient';
+import { useAuth } from '../../hooks/useAuth';
+import { useOrderSubscription } from '../../hooks/useOrderSubscription';
+import { useCart } from '../../hooks/useCart';
+import { PageHeader } from '../../components/PageHeader';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { EmptyState } from '../../components/EmptyState';
+import { PullToRefresh } from '../../components/PullToRefresh';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { useToast } from '../../components/Toast';
+import { 
+  Package, 
+  Clock, 
+  ChefHat, 
+  RefreshCw, 
+  Bell, 
+  CalendarClock, 
+  Calendar, 
+  X, 
+  RotateCcw, 
+  MapPin, 
+  Sparkles
+} from 'lucide-react';
+
+interface OrderItem {
+  id: string;
+  product_id: string;
+  quantity: number;
+  price_at_order: number;
+  product: {
+    name: string;
+    image_url: string;
+  };
+}
+
+interface Order {
+  id: string;
+  status: string;
+  total_amount: number;
+  created_at: string;
+  scheduled_for: string;
+  notes?: string;
+  child: {
+    first_name: string;
+    last_name: string;
+  };
+  items: OrderItem[];
+}
+
+// Get friendly date label
+function getScheduledLabel(dateStr: string): string {
+  const date = parseISO(dateStr);
+  if (isToday(date)) return 'Today';
+  if (isTomorrow(date)) return 'Tomorrow';
+  return format(date, 'EEE, MMM d');
+}
+
+// Get estimated wait time
+function getEstimatedWait(status: string, createdAt: string): string {
+  const elapsed = differenceInMinutes(new Date(), new Date(createdAt));
+  if (status === 'pending') {
+    const remaining = Math.max(10 - elapsed, 0);
+    return remaining > 0 ? `~${remaining}min` : 'Soon';
+  }
+  if (status === 'preparing') {
+    const remaining = Math.max(5 - (elapsed % 10), 0);
+    return remaining > 0 ? `~${remaining}min` : 'Almost ready';
+  }
+  return 'Ready now!';
+}
+
+export default function ParentDashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const { addItem } = useCart();
+  const [activeTab, setActiveTab] = useState<'today' | 'scheduled'>('today');
+  const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
+  
+  // Subscribe to realtime order updates
+  useOrderSubscription();
+  
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  // Fetch today's active orders (pending, preparing, ready)
+  const { data: todayOrders, isLoading: loadingToday, refetch: refetchToday } = useQuery<Order[]>({
+    queryKey: ['active-orders', user?.id, todayStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          child:children(first_name, last_name),
+          items:order_items(
+            *,
+            product:products(name, image_url)
+          )
+        `)
+        .eq('parent_id', user!.id)
+        .eq('scheduled_for', todayStr)
+        .in('status', ['pending', 'preparing', 'ready'])
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+    refetchInterval: 30000
+  });
+
+  // Fetch scheduled future orders
+  const { data: scheduledOrders, isLoading: loadingScheduled, refetch: refetchScheduled } = useQuery<Order[]>({
+    queryKey: ['scheduled-orders', user?.id, todayStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          child:children(first_name, last_name),
+          items:order_items(
+            *,
+            product:products(name, image_url)
+          )
+        `)
+        .eq('parent_id', user!.id)
+        .gt('scheduled_for', todayStr)
+        .in('status', ['pending'])
+        .order('scheduled_for', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user
+  });
+
+  // Cancel order mutation
+  const cancelOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .eq('parent_id', user!.id)
+        .in('status', ['pending']); // Can only cancel pending orders
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['active-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled-orders'] });
+      showToast('Order cancelled successfully', 'success');
+      setShowCancelDialog(null);
+    },
+    onError: () => {
+      showToast('Failed to cancel order', 'error');
+    }
+  });
+
+  // Reorder functionality
+  const handleReorder = (order: Order) => {
+    order.items.forEach(item => {
+      addItem({
+        product_id: item.product_id,
+        name: item.product.name,
+        price: item.price_at_order,
+        image_url: item.product.image_url,
+        quantity: item.quantity
+      });
+    });
+    showToast('Items added to cart!', 'success');
+    navigate('/menu');
+  };
+
+  const handleCancelOrder = (orderId: string) => {
+    setCancellingOrder(true);
+    cancelOrderMutation.mutate(orderId, {
+      onSettled: () => setCancellingOrder(false)
+    });
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([refetchToday(), refetchScheduled()]);
+  };
+
+  const getStatusDetails = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return { 
+          icon: Clock, 
+          label: 'Pending', 
+          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          message: 'Waiting for kitchen',
+          progress: 25
+        };
+      case 'preparing':
+        return { 
+          icon: ChefHat, 
+          label: 'Preparing', 
+          color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+          message: 'Being prepared now',
+          progress: 60
+        };
+      case 'ready':
+        return { 
+          icon: Bell, 
+          label: 'Ready!', 
+          color: 'bg-green-50 text-green-700 border-green-200',
+          message: 'Ready for pickup',
+          progress: 100
+        };
+      default:
+        return { 
+          icon: Clock, 
+          label: status, 
+          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          message: '',
+          progress: 0
+        };
+    }
+  };
+
+  const isLoading = activeTab === 'today' ? loadingToday : loadingScheduled;
+  const orders = activeTab === 'today' ? todayOrders : scheduledOrders;
+
+  return (
+    <div className="min-h-screen pb-20 bg-gray-50">
+      <PullToRefresh onRefresh={handleRefresh} className="min-h-screen">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between mb-4">
+            <PageHeader
+              title="My Orders"
+              subtitle="Track your orders"
+            />
+            <button
+              onClick={handleRefresh}
+              className="p-2 text-gray-600 hover:bg-gray-200 rounded-full"
+            >
+              <RefreshCw size={20} />
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('today')}
+              className={`flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'today'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-600 border border-gray-200'
+              }`}
+            >
+              <Bell size={18} />
+              Today's Orders
+              {todayOrders && todayOrders.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                  activeTab === 'today' ? 'bg-primary-500' : 'bg-gray-100'
+                }`}>
+                  {todayOrders.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('scheduled')}
+              className={`flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'scheduled'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-600 border border-gray-200'
+              }`}
+            >
+              <CalendarClock size={18} />
+              Scheduled
+              {scheduledOrders && scheduledOrders.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                  activeTab === 'scheduled' ? 'bg-primary-500' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {scheduledOrders.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {isLoading ? (
+            <LoadingSpinner size="lg" />
+          ) : orders && orders.length > 0 ? (
+            <div className="space-y-4">
+              {orders.map((order) => {
+                const status = getStatusDetails(order.status);
+                const StatusIcon = status.icon;
+                const isFutureOrder = activeTab === 'scheduled';
+                
+                return (
+                  <div 
+                    key={order.id} 
+                    className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
+                      isFutureOrder ? 'border-amber-200' : status.color
+                    } ${order.status === 'ready' ? 'animate-pulse-subtle ring-2 ring-green-400' : ''}`}
+                  >
+                    {/* Progress Bar */}
+                    {!isFutureOrder && (
+                      <div className="h-1 bg-gray-100">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            order.status === 'pending' ? 'bg-gray-400' :
+                            order.status === 'preparing' ? 'bg-yellow-400' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${status.progress}%` }}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Status Banner */}
+                    <div className={`px-4 py-3 flex items-center justify-between ${
+                      isFutureOrder ? 'bg-amber-50 text-amber-700' : status.color
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {isFutureOrder ? (
+                          <>
+                            <Calendar size={20} />
+                            <span className="font-semibold">{getScheduledLabel(order.scheduled_for)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <StatusIcon size={20} className={order.status === 'ready' ? 'animate-bounce' : ''} />
+                            <span className="font-semibold">{status.label}</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!isFutureOrder && order.status !== 'ready' && (
+                          <span className="text-sm bg-white/50 px-2 py-0.5 rounded-full">
+                            {getEstimatedWait(order.status, order.created_at)}
+                          </span>
+                        )}
+                        <span className="text-sm">
+                          {isFutureOrder ? 'Advance Order' : status.message}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Ready Banner */}
+                    {order.status === 'ready' && (
+                      <div className="bg-green-500 text-white px-4 py-2 flex items-center justify-center gap-2">
+                        <Sparkles size={16} />
+                        <span className="font-medium">Your order is ready for pickup!</span>
+                        <Sparkles size={16} />
+                      </div>
+                    )}
+                    
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="font-semibold text-lg">
+                            For {order.child.first_name} {order.child.last_name}
+                          </h3>
+                          <p className="text-sm text-gray-500">
+                            {isFutureOrder 
+                              ? format(parseISO(order.scheduled_for), 'EEEE, MMMM d')
+                              : `Ordered at ${format(new Date(order.created_at), 'h:mm a')}`
+                            }
+                          </p>
+                        </div>
+                        <span className="text-xl font-bold text-primary-600">
+                          ₱{order.total_amount.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {/* Order Notes */}
+                      {order.notes && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-3">
+                          <p className="text-sm text-yellow-800">📝 {order.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Items List */}
+                      <div className="space-y-2 mb-4">
+                        {order.items.map((item) => (
+                          <div key={item.id} className="flex items-center gap-3">
+                            {item.product.image_url && (
+                              <img
+                                src={item.product.image_url}
+                                alt={item.product.name}
+                                className="w-10 h-10 rounded-lg object-cover"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{item.product.name}</p>
+                            </div>
+                            <span className="text-sm text-gray-600">×{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 pt-2 border-t border-gray-100">
+                        {/* Reorder button - available for all orders */}
+                        <button
+                          onClick={() => handleReorder(order)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        >
+                          <RotateCcw size={16} />
+                          <span className="text-sm font-medium">Reorder</span>
+                        </button>
+                        
+                        {/* Cancel button - only for pending orders */}
+                        {order.status === 'pending' && (
+                          <button
+                            onClick={() => setShowCancelDialog(order.id)}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <X size={16} />
+                            <span className="text-sm font-medium">Cancel</span>
+                          </button>
+                        )}
+                        
+                        {/* Pickup location for ready orders */}
+                        {order.status === 'ready' && (
+                          <div className="flex-1 flex items-center justify-center gap-2 py-2 text-green-600 bg-green-50 rounded-lg">
+                            <MapPin size={16} />
+                            <span className="text-sm font-medium">Pickup at Canteen</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={activeTab === 'today' ? Package : CalendarClock}
+              title={activeTab === 'today' ? 'No active orders' : 'No scheduled orders'}
+              description={
+                activeTab === 'today' 
+                  ? "Your today's orders will appear here" 
+                  : "Order ahead for future days from the menu"
+              }
+              action={
+                <Link 
+                  to="/menu" 
+                  className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 font-medium"
+                >
+                  {activeTab === 'today' ? 'Browse Menu' : 'Order Ahead'}
+                </Link>
+              }
+            />
+          )}
+        </div>
+      </PullToRefresh>
+
+      {/* Cancel Order Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!showCancelDialog}
+        onCancel={() => setShowCancelDialog(null)}
+        onConfirm={() => showCancelDialog && handleCancelOrder(showCancelDialog)}
+        title="Cancel Order?"
+        message="Are you sure you want to cancel this order? Your payment will be refunded to your account balance."
+        confirmLabel={cancellingOrder ? 'Cancelling...' : 'Yes, Cancel Order'}
+        type="danger"
+      />
+    </div>
+  );
+}

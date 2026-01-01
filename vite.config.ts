@@ -1,8 +1,27 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.ts'],
+    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['e2e/**/*', 'node_modules/**/*'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/**',
+        'tests/**',
+        'e2e/**',
+        '**/*.d.ts',
+        'src/vite-env.d.ts'
+      ]
+    }
+  },
   plugins: [
     react(),
     VitePWA({

@@ -65,25 +65,34 @@ Stores parent/guardian accounts.
 
 ### **children**
 
-Stores student profiles (managed by parents).
+Stores student profiles (managed by school admin, linked by parents).
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
 | `id` | uuid | PRIMARY KEY | |
-| `parent_id` | uuid | FOREIGN KEY → parents(id), NOT NULL | |
+| `student_id` | text | UNIQUE, NOT NULL | Auto-generated ID (YY-XXXXX format) |
+| `parent_id` | uuid | FOREIGN KEY → parents(id), NULL | Nullable until parent links |
 | `first_name` | text | NOT NULL | |
 | `last_name` | text | NOT NULL | |
 | `grade_level` | text | NOT NULL | e.g., "Grade 1" |
 | `section` | text | | e.g., "A" |
 | `dietary_restrictions` | text | | Allergies, preferences |
+| `created_by` | uuid | FOREIGN KEY → auth.users(id) | Admin who created the record |
 | `created_at` | timestamptz | DEFAULT now() | |
 | `updated_at` | timestamptz | DEFAULT now() | |
 
 **Indexes**:
 
 - `idx_children_parent_id` on `parent_id`
+- `idx_children_student_id` on `student_id` (UNIQUE)
 
-**RLS**: Parents can only manage their own children.
+**RLS Policies**:
+
+- **Admins**: Full CRUD access to all students
+- **Parents**: Can view linked children, link unlinked students, update dietary info only
+- **Staff**: Can view all students (for order processing)
+
+**Note**: Students are added by school administrators only. Parents link to existing students using the Student ID provided by the school.
 
 ---
 

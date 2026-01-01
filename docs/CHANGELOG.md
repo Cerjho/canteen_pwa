@@ -9,14 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial project setup
-- Parent authentication
-- Child profile management
-- Menu browsing
-- Order placement
-- Offline order queue
-- Staff dashboard
-- Admin panel
+- **Student Management System**: Admin-only student registration
+  - Admin can add students manually or via CSV import
+  - Auto-generated Student IDs (YY-XXXXX format)
+  - Admin Students page with search, filter, and bulk actions
+  - Parents link to students using Student ID (no longer add directly)
+- Student ID column in children table
+- `created_by` tracking for student records
+- CSV import with template download feature
+
+### Changed
+
+- `children.parent_id` is now nullable (students exist before parent links)
+- Profile page redesigned for linking flow instead of adding children
+- Admin nav updated with "Students" menu item
+
+### Security
+
+- New RLS policies for student management:
+  - Admins: Full CRUD on all students
+  - Parents: View linked children, link unlinked students, update dietary info
+  - Staff: View all students for order processing
 
 ## [1.0.0] - 2026-01-15
 

@@ -6,6 +6,31 @@ Reusable React components for consistent UI across the app.
 
 ---
 
+## Admin Pages
+
+### Admin/Students
+
+Full student management page for administrators.
+
+**Features**:
+- **Stats Dashboard**: Total students, linked, unlinked counts
+- **Add Student Form**: Manual entry with auto-generated Student ID
+- **CSV Import**: Bulk upload with template download
+- **Search & Filter**: By name, Student ID, parent email, grade, link status
+- **Student Actions**: Edit details, unlink from parent, delete
+
+**Location**: `src/pages/Admin/Students.tsx`
+
+**Route**: `/admin/students`
+
+**Key Functions**:
+- `addStudent()`: Creates student with auto-generated ID
+- `updateStudent()`: Updates student details
+- `unlinkStudent()`: Removes parent link
+- `importCSV()`: Bulk import from CSV file
+
+---
+
 ## Core Components
 
 ### ProductCard

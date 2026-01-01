@@ -1,1 +1,172 @@
-// Main App component
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from './hooks/useAuth';
+// Parent pages
+import ParentMenu from './pages/Parent/Menu';
+import ParentDashboard from './pages/Parent/Dashboard';
+import ParentProfile from './pages/Parent/Profile';
+import ParentBalance from './pages/Parent/Balance';
+import ParentOrderHistory from './pages/Parent/OrderHistory';
+import ParentOrderConfirmation from './pages/Parent/OrderConfirmation';
+// Staff pages
+import StaffDashboard from './pages/Staff/Dashboard';
+import StaffProducts from './pages/Staff/Products';
+import StaffProfile from './pages/Staff/Profile';
+// Auth pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+// Shared components
+import { LoadingSpinner } from './components/LoadingSpinner';
+import { BottomNav } from './components/BottomNav';
+import { OfflineIndicator } from './components/OfflineIndicator';
+
+// Admin pages
+import AdminLayout from './pages/Admin/Layout';
+import AdminDashboard from './pages/Admin/Dashboard';
+import AdminProducts from './pages/Admin/Products';
+import AdminOrders from './pages/Admin/Orders';
+import AdminUsers from './pages/Admin/Users';
+import AdminReports from './pages/Admin/Reports';
+import AdminWeeklyMenu from './pages/Admin/WeeklyMenu';
+import AdminStudents from './pages/Admin/Students';
+import AdminProfile from './pages/Admin/Profile';
+
+// Role types
+type UserRole = 'parent' | 'staff' | 'admin';
+
+// Role-based route protection component
+function RoleRoute({ 
+  children, 
+  allowedRoles,
+  user,
+  userRole 
+}: { 
+  children: React.ReactNode;
+  allowedRoles: UserRole[];
+  user: any;
+  userRole: UserRole;
+}) {
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  if (!allowedRoles.includes(userRole)) {
+    // Redirect to appropriate home based on role
+    if (userRole === 'admin') return <Navigate to="/admin" />;
+    if (userRole === 'staff') return <Navigate to="/staff" />;
+    return <Navigate to="/menu" />;
+  }
+  
+  return <>{children}</>;
+}
+
+// Get default route based on role
+function getDefaultRoute(role: UserRole): string {
+  switch (role) {
+    case 'admin': return '/admin';
+    case 'staff': return '/staff';
+    default: return '/menu';
+  }
+}
+
+function App() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  
+  // Get user role from metadata
+  const userRole: UserRole = user?.user_metadata?.role || 'parent';
+  
+  // Check if current path is admin route
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <OfflineIndicator />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={!user ? <Login /> : <Navigate to={getDefaultRoute(userRole)} />} />
+        <Route path="/register" element={!user ? <Register /> : <Navigate to={getDefaultRoute(userRole)} />} />
+
+        {/* Parent routes - also accessible by admin */}
+        <Route path="/menu" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentMenu />
+          </RoleRoute>
+        } />
+        <Route path="/dashboard" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentDashboard />
+          </RoleRoute>
+        } />
+        <Route path="/profile" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentProfile />
+          </RoleRoute>
+        } />
+        <Route path="/orders" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentOrderHistory />
+          </RoleRoute>
+        } />
+        <Route path="/balance" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentBalance />
+          </RoleRoute>
+        } />
+        <Route path="/order-confirmation" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentOrderConfirmation />
+          </RoleRoute>
+        } />
+
+        {/* Staff routes - also accessible by admin */}
+        <Route path="/staff" element={
+          <RoleRoute allowedRoles={['staff', 'admin']} user={user} userRole={userRole}>
+            <StaffDashboard />
+          </RoleRoute>
+        } />
+        <Route path="/staff/products" element={
+          <RoleRoute allowedRoles={['staff', 'admin']} user={user} userRole={userRole}>
+            <StaffProducts />
+          </RoleRoute>
+        } />
+        <Route path="/staff/profile" element={
+          <RoleRoute allowedRoles={['staff', 'admin']} user={user} userRole={userRole}>
+            <StaffProfile />
+          </RoleRoute>
+        } />
+
+        {/* Admin-only routes */}
+        <Route path="/admin" element={
+          <RoleRoute allowedRoles={['admin']} user={user} userRole={userRole}>
+            <AdminLayout />
+          </RoleRoute>
+        }>
+          <Route index element={<AdminDashboard />} />
+          <Route path="products" element={<AdminProducts />} />
+          <Route path="weekly-menu" element={<AdminWeeklyMenu />} />
+          <Route path="students" element={<AdminStudents />} />
+          <Route path="orders" element={<AdminOrders />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="reports" element={<AdminReports />} />
+          <Route path="profile" element={<AdminProfile />} />
+        </Route>
+
+        {/* Default redirect based on role */}
+        <Route path="/" element={<Navigate to={user ? getDefaultRoute(userRole) : "/login"} />} />
+      </Routes>
+      
+      {/* Bottom Navigation - only show when logged in and not on admin routes */}
+      {user && !isAdminRoute && <BottomNav />}
+    </>
+  );
+}
+
+export default App;
