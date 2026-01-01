@@ -11,8 +11,7 @@ import {
   ChevronLeft,
   Calendar,
   GraduationCap,
-  User,
-  LogOut
+  User
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
