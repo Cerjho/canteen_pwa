@@ -25,6 +25,41 @@ export interface CanteenStatus {
   date?: string;
 }
 
+// Check if a date matches a holiday (including recurring holidays)
+async function checkHoliday(targetDate: Date): Promise<{ name: string } | null> {
+  const dateStr = targetDate.toISOString().split('T')[0];
+  const monthDay = dateStr.slice(5); // Extract MM-DD (e.g., "12-25" for Christmas)
+  
+  // Check for exact date match (non-recurring holidays)
+  const { data: exactHoliday } = await supabase
+    .from('holidays')
+    .select('name, is_recurring')
+    .eq('date', dateStr)
+    .maybeSingle();
+  
+  if (exactHoliday) {
+    return { name: exactHoliday.name };
+  }
+  
+  // Check for recurring holidays (match month-day pattern)
+  // Get all recurring holidays and check if any match the month-day
+  const { data: recurringHolidays } = await supabase
+    .from('holidays')
+    .select('name, date')
+    .eq('is_recurring', true);
+  
+  if (recurringHolidays) {
+    for (const holiday of recurringHolidays) {
+      const holidayMonthDay = holiday.date.slice(5); // Extract MM-DD from stored date
+      if (holidayMonthDay === monthDay) {
+        return { name: holiday.name };
+      }
+    }
+  }
+  
+  return null;
+}
+
 // Check if canteen is open on a specific date (defaults to today)
 export async function getCanteenStatus(date?: Date): Promise<CanteenStatus> {
   const targetDate = date || new Date();
@@ -36,12 +71,8 @@ export async function getCanteenStatus(date?: Date): Promise<CanteenStatus> {
     return { isOpen: false, reason: 'weekend', date: dateStr };
   }
   
-  // Check if holiday
-  const { data: holiday } = await supabase
-    .from('holidays')
-    .select('name')
-    .eq('date', dateStr)
-    .maybeSingle();
+  // Check if holiday (including recurring)
+  const holiday = await checkHoliday(targetDate);
   
   if (holiday) {
     return { isOpen: false, reason: 'holiday', holidayName: holiday.name, date: dateStr };
@@ -56,25 +87,36 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  // Get holidays for the next month
+  // Get holidays for the next month (non-recurring)
   const endDate = new Date(today);
   endDate.setDate(endDate.getDate() + 30);
   
   const { data: holidays } = await supabase
     .from('holidays')
-    .select('date')
-    .gte('date', today.toISOString().split('T')[0])
-    .lte('date', endDate.toISOString().split('T')[0]);
+    .select('date, is_recurring')
+    .or(`and(date.gte.${today.toISOString().split('T')[0]},date.lte.${endDate.toISOString().split('T')[0]}),is_recurring.eq.true`);
   
-  const holidayDates = new Set(holidays?.map(h => h.date) || []);
+  // Build sets for exact dates and recurring month-days
+  const exactHolidayDates = new Set<string>();
+  const recurringMonthDays = new Set<string>();
+  
+  holidays?.forEach(h => {
+    if (h.is_recurring) {
+      recurringMonthDays.add(h.date.slice(5)); // MM-DD
+    } else {
+      exactHolidayDates.add(h.date);
+    }
+  });
   
   let checkDate = new Date(today);
   while (dates.length < daysAhead) {
     const dayOfWeek = checkDate.getDay();
     const dateStr = checkDate.toISOString().split('T')[0];
+    const monthDay = dateStr.slice(5); // MM-DD
     
-    // Skip weekends and holidays
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.has(dateStr)) {
+    // Skip weekends and holidays (both exact and recurring)
+    const isHoliday = exactHolidayDates.has(dateStr) || recurringMonthDays.has(monthDay);
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday) {
       dates.push(new Date(checkDate));
     }
     
@@ -87,19 +129,14 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
 // Get products available for a specific date based on menu schedule
 export async function getProductsForDate(date: Date): Promise<Product[]> {
   const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const dateStr = date.toISOString().split('T')[0];
   
   // Weekend check - return empty (canteen closed)
   if (dayOfWeek === 0 || dayOfWeek === 6) {
     return [];
   }
   
-  // Check for holiday
-  const { data: holiday } = await supabase
-    .from('holidays')
-    .select('id')
-    .eq('date', dateStr)
-    .maybeSingle();
+  // Check for holiday (including recurring)
+  const holiday = await checkHoliday(date);
   
   if (holiday) {
     return []; // Holiday - canteen closed
