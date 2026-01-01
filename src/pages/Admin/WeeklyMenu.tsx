@@ -118,14 +118,13 @@ export default function AdminWeeklyMenu() {
     return addDays(weekStart, dayOfWeek - 1);
   };
 
-  // Fetch all products
+  // Fetch all products (admin sees all products regardless of availability)
   const { data: products } = useQuery<Product[]>({
     queryKey: ['all-products'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('available', true)
         .order('category')
         .order('name');
       if (error) throw error;
