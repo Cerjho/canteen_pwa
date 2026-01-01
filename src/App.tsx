@@ -29,6 +29,8 @@ import AdminReports from './pages/Admin/Reports';
 import AdminWeeklyMenu from './pages/Admin/WeeklyMenu';
 import AdminStudents from './pages/Admin/Students';
 import AdminProfile from './pages/Admin/Profile';
+import AdminSettings from './pages/Admin/Settings';
+import AdminAuditLogs from './pages/Admin/AuditLogs';
 
 // Role types
 type UserRole = 'parent' | 'staff' | 'admin';
@@ -156,6 +158,8 @@ function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="reports" element={<AdminReports />} />
+          <Route path="audit-logs" element={<AdminAuditLogs />} />
+          <Route path="settings" element={<AdminSettings />} />
           <Route path="profile" element={<AdminProfile />} />
         </Route>
 

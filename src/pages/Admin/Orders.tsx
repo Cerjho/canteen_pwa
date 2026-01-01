@@ -5,12 +5,15 @@ import {
   Search, 
   RefreshCw, 
   Eye,
-  Download
+  Download,
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { OrderStatus } from '../../types';
 
 interface OrderWithDetails {
@@ -40,6 +43,7 @@ export default function AdminOrders() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
+  const [refundOrder, setRefundOrder] = useState<OrderWithDetails | null>(null);
 
   // Fetch orders
   const { data: orders, isLoading, refetch } = useQuery<OrderWithDetails[]>({
@@ -111,6 +115,48 @@ export default function AdminOrders() {
       showToast('Order status updated', 'success');
     },
     onError: () => showToast('Failed to update order', 'error')
+  });
+
+  // Refund order mutation
+  const refundMutation = useMutation({
+    mutationFn: async (order: OrderWithDetails) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/refund-order`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            order_id: order.id,
+            reason: 'Admin initiated refund'
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to process refund');
+      }
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-parents'] });
+      setRefundOrder(null);
+      showToast('Order refunded successfully. Balance has been restored.', 'success');
+    },
+    onError: (error: Error) => {
+      showToast(error.message || 'Failed to process refund', 'error');
+    }
   });
 
   // Filter orders by search
@@ -304,12 +350,24 @@ export default function AdminOrders() {
                       </select>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                      >
-                        <Eye size={18} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                          title="View Details"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        {order.status !== 'cancelled' && order.status !== 'completed' && (
+                          <button
+                            onClick={() => setRefundOrder(order)}
+                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg"
+                            title="Refund Order"
+                          >
+                            <RotateCcw size={18} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -334,6 +392,37 @@ export default function AdminOrders() {
             updateStatus.mutate({ orderId: selectedOrder.id, status });
             setSelectedOrder(null);
           }}
+          onRefund={() => {
+            setSelectedOrder(null);
+            setRefundOrder(selectedOrder);
+          }}
+        />
+      )}
+
+      {/* Refund Confirmation Dialog */}
+      {refundOrder && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Confirm Refund"
+          message={
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-orange-600">
+                <AlertTriangle size={20} />
+                <span className="font-medium">This action cannot be undone</span>
+              </div>
+              <p className="text-gray-600">
+                Refund <span className="font-semibold">₱{refundOrder.total_amount.toFixed(2)}</span> to{' '}
+                <span className="font-semibold">{refundOrder.parent.first_name} {refundOrder.parent.last_name}</span>?
+              </p>
+              <p className="text-sm text-gray-500">
+                The order will be cancelled and the amount will be added back to the parent's balance.
+              </p>
+            </div>
+          }
+          confirmText={refundMutation.isPending ? 'Processing...' : 'Confirm Refund'}
+          confirmVariant="danger"
+          onConfirm={() => refundMutation.mutate(refundOrder)}
+          onCancel={() => setRefundOrder(null)}
         />
       )}
     </div>
@@ -345,9 +434,10 @@ interface OrderDetailModalProps {
   order: OrderWithDetails;
   onClose: () => void;
   onUpdateStatus: (status: OrderStatus) => void;
+  onRefund: () => void;
 }
 
-function OrderDetailModal({ order, onClose, onUpdateStatus }: OrderDetailModalProps) {
+function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDetailModalProps) {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
@@ -459,9 +549,20 @@ function OrderDetailModal({ order, onClose, onUpdateStatus }: OrderDetailModalPr
               </div>
             </div>
 
+            {/* Refund Button */}
+            {order.status !== 'cancelled' && order.status !== 'completed' && (
+              <button
+                onClick={onRefund}
+                className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 font-medium"
+              >
+                <RotateCcw size={18} />
+                Refund Order
+              </button>
+            )}
+
             <button
               onClick={onClose}
-              className="w-full mt-4 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="w-full mt-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
             >
               Close
             </button>

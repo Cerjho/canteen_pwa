@@ -8,10 +8,12 @@ import {
   BarChart3,
   Menu,
   X,
-  ChevronLeft,
   Calendar,
   GraduationCap,
-  User
+  User,
+  Settings,
+  History,
+  ChevronLeft
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -23,6 +25,8 @@ const navItems = [
   { to: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
   { to: '/admin/users', icon: Users, label: 'Parents' },
   { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/admin/audit-logs', icon: History, label: 'Audit Logs' },
+  { to: '/admin/settings', icon: Settings, label: 'Settings' },
   { to: '/admin/profile', icon: User, label: 'My Profile' },
 ];
 

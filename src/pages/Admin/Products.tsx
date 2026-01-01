@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, Search, Package, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { uploadProductImage, compressImage, deleteProductImage } from '../../services/storage';
 import type { Product, ProductCategory } from '../../types';
 
 const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
@@ -274,6 +275,7 @@ interface ProductModalProps {
 }
 
 function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: product?.name || '',
     description: product?.description || '',
@@ -283,6 +285,52 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
     stock_quantity: product?.stock_quantity || 100,
     available: product?.available ?? true
   });
+  const [imagePreview, setImagePreview] = useState<string | null>(product?.image_url || null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+    setIsUploading(true);
+
+    try {
+      // Show preview immediately
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+
+      // Compress and upload
+      const compressedFile = await compressImage(file, 800, 0.85);
+      const result = await uploadProductImage(compressedFile, product?.id);
+
+      if (result.success && result.url) {
+        setFormData(prev => ({ ...prev, image_url: result.url! }));
+        showToast('Image uploaded successfully', 'success');
+      } else {
+        setUploadError(result.error || 'Failed to upload image');
+        setImagePreview(product?.image_url || null);
+      }
+    } catch (error) {
+      setUploadError('Failed to upload image');
+      setImagePreview(product?.image_url || null);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (formData.image_url && formData.image_url.includes('supabase')) {
+      await deleteProductImage(formData.image_url);
+    }
+    setFormData(prev => ({ ...prev, image_url: '' }));
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -361,15 +409,68 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
                 </select>
               </div>
 
+              {/* Image Upload Section */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+                
+                {/* Image Preview */}
+                {imagePreview ? (
+                  <div className="relative mb-3">
+                    <img
+                      src={imagePreview}
+                      alt="Product preview"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg"
+                    >
+                      <X size={16} />
+                    </button>
+                    {isUploading && (
+                      <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                        <Loader2 size={32} className="text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-colors"
+                  >
+                    <ImageIcon size={40} className="mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-600">Click to upload image</p>
+                    <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP (max 5MB)</p>
+                  </div>
+                )}
+                
                 <input
-                  type="url"
-                  value={formData.image_url}
-                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="https://..."
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleImageSelect}
+                  className="hidden"
                 />
+                
+                {uploadError && (
+                  <p className="text-sm text-red-500 mt-1">{uploadError}</p>
+                )}
+                
+                {/* Fallback URL input */}
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-1">Or enter image URL:</p>
+                  <input
+                    type="url"
+                    value={formData.image_url}
+                    onChange={(e) => {
+                      setFormData({ ...formData, image_url: e.target.value });
+                      setImagePreview(e.target.value || null);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                    placeholder="https://..."
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
