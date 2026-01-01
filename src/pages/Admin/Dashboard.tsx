@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, startOfDay, startOfWeek, startOfMonth, subDays, differenceInMinutes, getHours } from 'date-fns';
 import { 
@@ -35,6 +35,7 @@ import { supabase } from '../../services/supabaseClient';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { useNavigate } from 'react-router-dom';
+import { playNotificationSound } from '../../utils/notificationSound';
 
 // ==================== INTERFACES ====================
 interface DashboardStats {
@@ -132,8 +133,6 @@ export default function AdminDashboard() {
   const [systemHealth, setSystemHealth] = useState<SystemHealth>({ realtime: 'healthy' });
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Save sound preference
   useEffect(() => {
@@ -394,8 +393,8 @@ export default function AdminDashboard() {
       .channel('admin-dashboard-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
         // Play notification sound
-        if (soundEnabled && audioRef.current) {
-          audioRef.current.play().catch(() => {});
+        if (soundEnabled) {
+          playNotificationSound(0.5);
         }
         
         // Show toast notification
@@ -600,8 +599,6 @@ export default function AdminDashboard() {
   // ==================== RENDER ====================
   return (
     <div className="min-h-screen pb-20 bg-gray-50">
-      <audio ref={audioRef} src="/notification.mp3" preload="auto" />
-      
       {/* Offline Banner */}
       {!isOnline && (
         <div className="bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2">

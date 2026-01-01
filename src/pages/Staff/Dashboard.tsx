@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X } from 'lucide-react';
 import { format, differenceInMinutes } from 'date-fns';
@@ -8,6 +8,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { SearchBar } from '../../components/SearchBar';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { playNotificationSound } from '../../utils/notificationSound';
 
 type StatusFilter = 'all' | 'pending' | 'preparing' | 'ready';
 
@@ -57,15 +58,8 @@ export default function StaffDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const previousOrderCount = useRef<number>(0);
   const { showToast } = useToast();
-
-  // Initialize audio for notifications
-  useEffect(() => {
-    audioRef.current = new Audio('/notification.mp3');
-    audioRef.current.volume = 0.5;
-  }, []);
 
   const { data: orders, isLoading, refetch } = useQuery<StaffOrder[]>({
     queryKey: ['staff-orders', statusFilter],
@@ -121,8 +115,8 @@ export default function StaffDashboard() {
         () => {
           refetch();
           // Play notification sound for new orders
-          if (soundEnabled && audioRef.current) {
-            audioRef.current.play().catch(() => {});
+          if (soundEnabled) {
+            playNotificationSound(0.5);
           }
           showToast('🔔 New order received!', 'info');
         }
@@ -145,8 +139,8 @@ export default function StaffDashboard() {
   useEffect(() => {
     if (orders && orders.length > previousOrderCount.current && previousOrderCount.current > 0) {
       // New orders came in
-      if (soundEnabled && audioRef.current) {
-        audioRef.current.play().catch(() => {});
+      if (soundEnabled) {
+        playNotificationSound(0.5);
       }
     }
     previousOrderCount.current = orders?.length || 0;

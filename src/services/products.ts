@@ -41,7 +41,7 @@ export async function getCanteenStatus(date?: Date): Promise<CanteenStatus> {
     .from('holidays')
     .select('name')
     .eq('date', dateStr)
-    .single();
+    .maybeSingle();
   
   if (holiday) {
     return { isOpen: false, reason: 'holiday', holidayName: holiday.name, date: dateStr };
@@ -99,7 +99,7 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
     .from('holidays')
     .select('id')
     .eq('date', dateStr)
-    .single();
+    .maybeSingle();
   
   if (holiday) {
     return []; // Holiday - canteen closed
