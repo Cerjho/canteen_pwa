@@ -89,6 +89,67 @@ export async function getCanteenStatus(date?: Date): Promise<CanteenStatus> {
   return { isOpen: true, date: dateStr };
 }
 
+// WeekdayInfo type for getWeekdaysWithStatus
+export interface WeekdayInfo {
+  date: Date;
+  dateStr: string;
+  isOpen: boolean;
+  isHoliday: boolean;
+  holidayName?: string;
+}
+
+// Get next N weekdays with their status (including holidays)
+export async function getWeekdaysWithStatus(daysAhead: number = 5): Promise<WeekdayInfo[]> {
+  const weekdays: WeekdayInfo[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Get ALL holidays
+  const { data: holidays } = await supabase
+    .from('holidays')
+    .select('date, name, is_recurring');
+  
+  // Build maps for exact dates and recurring month-days
+  const exactHolidayDates = new Map<string, string>(); // date -> name
+  const recurringMonthDays = new Map<string, string>(); // MM-DD -> name
+  
+  holidays?.forEach(h => {
+    const holidayDateStr = h.date.split('T')[0];
+    if (h.is_recurring) {
+      recurringMonthDays.set(holidayDateStr.slice(5), h.name); // MM-DD
+    } else {
+      exactHolidayDates.set(holidayDateStr, h.name);
+    }
+  });
+  
+  let checkDate = new Date(today);
+  while (weekdays.length < daysAhead) {
+    const dayOfWeek = checkDate.getDay();
+    
+    // Skip weekends
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      const dateStr = formatDateLocal(checkDate);
+      const monthDay = dateStr.slice(5); // MM-DD
+      
+      // Check if holiday
+      const holidayName = exactHolidayDates.get(dateStr) || recurringMonthDays.get(monthDay);
+      const isHoliday = !!holidayName;
+      
+      weekdays.push({
+        date: new Date(checkDate),
+        dateStr,
+        isOpen: !isHoliday,
+        isHoliday,
+        holidayName
+      });
+    }
+    
+    checkDate.setDate(checkDate.getDate() + 1);
+  }
+  
+  return weekdays;
+}
+
 // Get available order dates (next 5 weekdays excluding holidays)
 export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Date[]> {
   const dates: Date[] = [];

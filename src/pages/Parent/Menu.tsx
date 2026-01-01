@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow } from 'date-fns';
-import { getProductsForDate, getCanteenStatus, getAvailableOrderDates } from '../../services/products';
+import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus } from '../../services/products';
 import { useChildren } from '../../hooks/useChildren';
 import { useFavorites } from '../../hooks/useFavorites';
 import { ProductCard } from '../../components/ProductCard';
@@ -40,34 +40,46 @@ export default function Menu() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { showToast } = useToast();
   
-  // Get available order dates (next 5 weekdays, excluding holidays)
-  const { data: availableDates } = useQuery({
-    queryKey: ['available-order-dates'],
-    queryFn: () => getAvailableOrderDates(5)
+  // Get weekdays with status (including holidays)
+  const { data: weekdaysInfo } = useQuery({
+    queryKey: ['weekdays-with-status'],
+    queryFn: () => getWeekdaysWithStatus(5)
   });
   
-  // Auto-select first available date when dates load
+  // Get selected weekday info for checking holiday status
+  const selectedWeekdayInfo = useMemo(() => {
+    if (!weekdaysInfo || !selectedDate) return null;
+    const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+    return weekdaysInfo.find(w => w.dateStr === selectedDateStr);
+  }, [weekdaysInfo, selectedDate]);
+  
+  // Auto-select first available (non-holiday) date when dates load
   useEffect(() => {
-    if (availableDates && availableDates.length > 0 && !selectedDate) {
-      setSelectedDate(availableDates[0]);
+    if (weekdaysInfo && weekdaysInfo.length > 0 && !selectedDate) {
+      // Try to select first non-holiday, otherwise first day
+      const firstOpen = weekdaysInfo.find(w => w.isOpen);
+      setSelectedDate(firstOpen?.date || weekdaysInfo[0].date);
     }
-  }, [availableDates, selectedDate]);
+  }, [weekdaysInfo, selectedDate]);
   
   // Use first available date or today as fallback
-  const effectiveDate = selectedDate || availableDates?.[0] || new Date();
+  const effectiveDate = selectedDate || weekdaysInfo?.[0]?.date || new Date();
   
-  // Check canteen status for selected date
+  // Check canteen status for selected date (use weekdayInfo if available)
   const { data: canteenStatus } = useQuery({
     queryKey: ['canteen-status', effectiveDate.toISOString()],
     queryFn: () => getCanteenStatus(effectiveDate),
-    enabled: !!selectedDate
+    enabled: !!selectedDate && !selectedWeekdayInfo // Skip if we already have weekday info
   });
+  
+  // Combine status from weekdayInfo or canteenStatus
+  const isCanteenOpen = selectedWeekdayInfo ? selectedWeekdayInfo.isOpen : canteenStatus?.isOpen !== false;
   
   // Fetch products for the selected date
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', effectiveDate.toISOString()],
     queryFn: () => getProductsForDate(effectiveDate),
-    enabled: !!selectedDate && canteenStatus?.isOpen !== false
+    enabled: !!selectedDate && isCanteenOpen
   });
 
   const { data: children } = useChildren();
@@ -149,29 +161,31 @@ export default function Menu() {
     }
   };
 
-  // Navigate to next/prev available date
+  // Navigate to next/prev date
   const handlePrevDate = () => {
-    if (!availableDates) return;
-    const currentIdx = availableDates.findIndex(d => 
-      d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
+    if (!weekdaysInfo) return;
+    const currentIdx = weekdaysInfo.findIndex(w => 
+      w.dateStr === format(effectiveDate, 'yyyy-MM-dd')
     );
     if (currentIdx > 0) {
-      setSelectedDate(availableDates[currentIdx - 1]);
+      setSelectedDate(weekdaysInfo[currentIdx - 1].date);
     }
   };
 
   const handleNextDate = () => {
-    if (!availableDates) return;
-    const currentIdx = availableDates.findIndex(d => 
-      d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
+    if (!weekdaysInfo) return;
+    const currentIdx = weekdaysInfo.findIndex(w => 
+      w.dateStr === format(effectiveDate, 'yyyy-MM-dd')
     );
-    if (currentIdx < availableDates.length - 1) {
-      setSelectedDate(availableDates[currentIdx + 1]);
+    if (currentIdx < weekdaysInfo.length - 1) {
+      setSelectedDate(weekdaysInfo[currentIdx + 1].date);
     }
   };
 
-  // Show canteen closed message for the selected date
-  if (canteenStatus && !canteenStatus.isOpen) {
+  // Show canteen closed message for the selected date (holiday)
+  if (selectedWeekdayInfo && !selectedWeekdayInfo.isOpen) {
+    const currentIdx = weekdaysInfo?.findIndex(w => w.dateStr === format(effectiveDate, 'yyyy-MM-dd')) ?? -1;
+    
     return (
       <div className="min-h-screen pb-20">
         <div className="container mx-auto px-4 py-6">
@@ -182,9 +196,7 @@ export default function Menu() {
             <div className="flex items-center justify-between">
               <button
                 onClick={handlePrevDate}
-                disabled={!availableDates || availableDates.findIndex(d => 
-                  d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
-                ) === 0}
+                disabled={currentIdx <= 0}
                 className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
               >
                 <ChevronLeft size={20} />
@@ -195,59 +207,63 @@ export default function Menu() {
               </div>
               <button
                 onClick={handleNextDate}
-                disabled={!availableDates || availableDates.findIndex(d => 
-                  d.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
-                ) === availableDates.length - 1}
+                disabled={!weekdaysInfo || currentIdx >= weekdaysInfo.length - 1}
                 className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
               >
                 <ChevronRight size={20} />
               </button>
             </div>
-            {availableDates && (
+            {weekdaysInfo && (
               <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
-                {availableDates.map((date) => (
-                  <button
-                    key={date.toISOString()}
-                    onClick={() => setSelectedDate(date)}
-                    className={`flex-1 min-w-[60px] px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
-                      date.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
-                        ? 'bg-primary-600 text-white'
-                        : isToday(date)
-                        ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    <div>{format(date, 'EEE')}</div>
-                    <div className="text-[10px] opacity-70">{format(date, 'd')}</div>
-                  </button>
-                ))}
+                {weekdaysInfo.map((dayInfo) => {
+                  const isSelected = dayInfo.dateStr === format(effectiveDate, 'yyyy-MM-dd');
+                  const isTodayDate = isToday(dayInfo.date);
+                  
+                  return (
+                    <button
+                      key={dayInfo.dateStr}
+                      onClick={() => setSelectedDate(dayInfo.date)}
+                      className={`flex-1 min-w-[60px] px-2 py-2 rounded-lg text-xs font-medium transition-colors relative ${
+                        dayInfo.isHoliday
+                          ? isSelected
+                            ? 'bg-red-600 text-white'
+                            : 'bg-red-50 text-red-600 border-2 border-red-200'
+                          : isSelected
+                          ? 'bg-primary-600 text-white'
+                          : isTodayDate
+                          ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {dayInfo.isHoliday && <CalendarOff size={10} />}
+                        {format(dayInfo.date, 'EEE')}
+                      </div>
+                      <div className={`text-[10px] ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
+                        {format(dayInfo.date, 'd')}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
           
           <div className="mt-8 text-center">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CalendarOff size={48} className="text-gray-400" />
+            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CalendarOff size={48} className="text-red-500" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {isToday(effectiveDate) ? 'Canteen Closed Today' : 'Canteen Closed'}
             </h2>
-            {canteenStatus.reason === 'weekend' && (
-              <p className="text-gray-600 mb-4">
-                The canteen is closed on weekends.<br />
-                Select a weekday above to order ahead!
-              </p>
-            )}
-            {canteenStatus.reason === 'holiday' && (
-              <p className="text-gray-600 mb-4">
-                The canteen is closed for<br />
-                <span className="font-semibold text-primary-600">{canteenStatus.holidayName}</span>
-              </p>
-            )}
+            <p className="text-gray-600 mb-4">
+              The canteen is closed for<br />
+              <span className="font-semibold text-red-600">{selectedWeekdayInfo.holidayName || 'Holiday'}</span>
+            </p>
             <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 max-w-sm mx-auto">
               <p className="text-sm text-primary-800">
-                <strong>💡 Tip:</strong> Use the date selector above<br />
-                to order ahead for future days!
+                <strong>💡 Tip:</strong> Select a different day above<br />
+                to order for other available dates!
               </p>
             </div>
           </div>
@@ -295,24 +311,38 @@ export default function Menu() {
               </span>
             )}
           </div>
-          {availableDates && (
+          {weekdaysInfo && (
             <div className="flex gap-1 overflow-x-auto pb-1">
-              {availableDates.map((date) => (
-                <button
-                  key={date.toISOString()}
-                  onClick={() => setSelectedDate(date)}
-                  className={`flex-1 min-w-[60px] px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
-                    date.toISOString().split('T')[0] === effectiveDate.toISOString().split('T')[0]
-                      ? 'bg-primary-600 text-white'
-                      : isToday(date)
-                      ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <div>{isToday(date) ? 'Today' : format(date, 'EEE')}</div>
-                  <div className="text-[10px] opacity-70">{format(date, 'd')}</div>
-                </button>
-              ))}
+              {weekdaysInfo.map((dayInfo) => {
+                const isSelected = dayInfo.dateStr === format(effectiveDate, 'yyyy-MM-dd');
+                const isTodayDate = isToday(dayInfo.date);
+                
+                return (
+                  <button
+                    key={dayInfo.dateStr}
+                    onClick={() => setSelectedDate(dayInfo.date)}
+                    className={`flex-1 min-w-[60px] px-2 py-2 rounded-lg text-xs font-medium transition-colors relative ${
+                      dayInfo.isHoliday
+                        ? isSelected
+                          ? 'bg-red-600 text-white'
+                          : 'bg-red-50 text-red-600 border-2 border-red-200'
+                        : isSelected
+                        ? 'bg-primary-600 text-white'
+                        : isTodayDate
+                        ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      {dayInfo.isHoliday && <CalendarOff size={10} />}
+                      {isTodayDate ? 'Today' : format(dayInfo.date, 'EEE')}
+                    </div>
+                    <div className={`text-[10px] ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
+                      {format(dayInfo.date, 'd')}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -363,20 +393,20 @@ export default function Menu() {
               The menu for {format(effectiveDate, 'EEEE, MMMM d')} hasn't been set yet. 
               Please check back later or try another day.
             </p>
-            {availableDates && availableDates.length > 1 && (
+            {weekdaysInfo && weekdaysInfo.length > 1 && (
               <div className="mt-4">
                 <p className="text-sm text-gray-600 mb-2">Try ordering for:</p>
                 <div className="flex gap-2 justify-center flex-wrap">
-                  {availableDates
-                    .filter(d => d.toISOString().split('T')[0] !== effectiveDate.toISOString().split('T')[0])
+                  {weekdaysInfo
+                    .filter(w => w.dateStr !== format(effectiveDate, 'yyyy-MM-dd') && w.isOpen)
                     .slice(0, 3)
-                    .map(date => (
+                    .map(dayInfo => (
                       <button
-                        key={date.toISOString()}
-                        onClick={() => setSelectedDate(date)}
+                        key={dayInfo.dateStr}
+                        onClick={() => setSelectedDate(dayInfo.date)}
                         className="px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100"
                       >
-                        {isToday(date) ? 'Today' : format(date, 'EEE, MMM d')}
+                        {isToday(dayInfo.date) ? 'Today' : format(dayInfo.date, 'EEE, MMM d')}
                       </button>
                     ))}
                 </div>
