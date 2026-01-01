@@ -1,0 +1,12 @@
+# GitHub Actions workflow for deployment
+name: Deploy
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      # Add deployment steps here
