@@ -174,14 +174,13 @@ export default function AdminWeeklyMenu() {
     }
   });
 
-  // Fetch holidays
+  // Fetch holidays (fetch ALL for recurring holiday matching)
   const { data: holidays, isLoading: holidaysLoading } = useQuery<Holiday[]>({
     queryKey: ['holidays'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('holidays')
         .select('*')
-        .gte('date', formatDateLocal(new Date()))
         .order('date');
       if (error) throw error;
       return data;
