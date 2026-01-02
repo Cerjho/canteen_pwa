@@ -623,10 +623,11 @@ export default function AdminWeeklyMenu() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-6">
-      <PageHeader title="Weekly Menu" />
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="container mx-auto px-4 py-6">
+        <PageHeader title="Weekly Menu" />
 
-      <div className="px-4 space-y-4">
+        <div className="space-y-4 mt-6">
         {/* Tabs */}
         <div className="flex gap-2">
           <button
@@ -1263,6 +1264,7 @@ export default function AdminWeeklyMenu() {
             )}
           </>
         )}
+      </div>
       </div>
 
       {/* Add Items Modal */}

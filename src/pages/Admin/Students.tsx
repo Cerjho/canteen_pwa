@@ -186,10 +186,11 @@ export default function AdminStudents() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-6">
-      <PageHeader title="Students" />
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="container mx-auto px-4 py-6">
+        <PageHeader title="Students" />
 
-      <div className="px-4 space-y-4">
+        <div className="space-y-4 mt-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl p-4 shadow-sm">
@@ -353,6 +354,7 @@ export default function AdminStudents() {
             ))
           )}
         </div>
+      </div>
       </div>
 
       {/* Add Student Modal */}
