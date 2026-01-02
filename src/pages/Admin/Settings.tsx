@@ -107,6 +107,41 @@ export default function AdminSettings() {
     onError: (err: Error) => showToast(err.message || 'Failed to save settings', 'error')
   });
 
+  // Archive old orders mutation
+  const archiveMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('manage-settings', {
+        body: { action: 'archive-orders', days: 30 }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      showToast(`Archived ${data.archived || 0} old orders`, 'success');
+    },
+    onError: (err: Error) => showToast(err.message || 'Failed to archive orders', 'error')
+  });
+
+  // Reset stock mutation
+  const resetStockMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('manage-settings', {
+        body: { action: 'reset-stock' }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+      showToast(`Reset stock for ${data.updated || 0} products`, 'success');
+    },
+    onError: (err: Error) => showToast(err.message || 'Failed to reset stock', 'error')
+  });
+
   const handleChange = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
     setHasChanges(true);
@@ -381,8 +416,16 @@ export default function AdminSettings() {
                   <p className="font-medium text-gray-900">Clear Completed Orders</p>
                   <p className="text-sm text-gray-500">Archive orders older than 30 days</p>
                 </div>
-                <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                  Archive Now
+                <button 
+                  onClick={() => {
+                    if (confirm('Archive all completed orders older than 30 days? This cannot be undone.')) {
+                      archiveMutation.mutate();
+                    }
+                  }}
+                  disabled={archiveMutation.isPending}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {archiveMutation.isPending ? 'Archiving...' : 'Archive Now'}
                 </button>
               </div>
               <div className="flex items-center justify-between pt-4 border-t border-gray-100">
@@ -390,8 +433,16 @@ export default function AdminSettings() {
                   <p className="font-medium text-gray-900">Reset Daily Stock</p>
                   <p className="text-sm text-gray-500">Restore all products to their default stock levels</p>
                 </div>
-                <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                  Reset Stock
+                <button 
+                  onClick={() => {
+                    if (confirm('Reset stock for all products to their default levels?')) {
+                      resetStockMutation.mutate();
+                    }
+                  }}
+                  disabled={resetStockMutation.isPending}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {resetStockMutation.isPending ? 'Resetting...' : 'Reset Stock'}
                 </button>
               </div>
             </div>

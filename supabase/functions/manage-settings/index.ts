@@ -44,6 +44,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('manage-settings: Starting request');
+    
     // Initialize Supabase admin client
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -51,8 +53,22 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const body: SettingsRequest = await req.json();
+    const bodyText = await req.text();
+    console.log('manage-settings: Request body:', bodyText);
+    
+    let body: SettingsRequest;
+    try {
+      body = JSON.parse(bodyText);
+    } catch (parseErr) {
+      console.error('manage-settings: JSON parse error:', parseErr);
+      return new Response(
+        JSON.stringify({ error: true, message: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const { action } = body;
+    console.log('manage-settings: Action:', action);
 
     // check-maintenance doesn't require auth (used by app to check status)
     if (action === 'check-maintenance') {
@@ -73,6 +89,7 @@ serve(async (req) => {
     // All other actions require admin auth
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.log('manage-settings: No auth header');
       return new Response(
         JSON.stringify({ error: true, message: 'Missing authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -83,18 +100,23 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
+      console.log('manage-settings: Auth error:', authError?.message);
       return new Response(
         JSON.stringify({ error: true, message: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log('manage-settings: User authenticated:', user.id);
 
     // Verify admin role
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
       .single();
+
+    console.log('manage-settings: Profile:', profile, 'Error:', profileError?.message);
 
     if (profile?.role !== 'admin') {
       return new Response(
@@ -153,6 +175,8 @@ serve(async (req) => {
 
       case 'update': {
         const { settings } = body;
+        console.log('manage-settings: Update called with settings:', JSON.stringify(settings));
+        
         if (!settings || typeof settings !== 'object') {
           return new Response(
             JSON.stringify({ error: true, message: 'Settings object required' }),
@@ -169,9 +193,11 @@ serve(async (req) => {
             continue;
           }
           if (!validator(value)) {
-            errors.push(`Invalid value for ${key}`);
+            errors.push(`Invalid value for ${key}: ${JSON.stringify(value)}`);
           }
         }
+
+        console.log('manage-settings: Validation errors:', errors);
 
         if (errors.length > 0) {
           return new Response(
@@ -233,6 +259,114 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, updated: updates.length }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'archive-orders': {
+        // Archive completed/cancelled orders older than X days
+        const days = (body as { days?: number }).days || 30;
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+
+        console.log('manage-settings: Archiving orders older than', cutoffDate.toISOString());
+
+        // Delete old completed/cancelled orders
+        const { data: oldOrders, error: fetchError } = await supabaseAdmin
+          .from('orders')
+          .select('id')
+          .in('status', ['completed', 'cancelled'])
+          .lt('created_at', cutoffDate.toISOString());
+
+        if (fetchError) {
+          console.error('Archive fetch error:', fetchError);
+          return new Response(
+            JSON.stringify({ error: true, message: 'Failed to fetch old orders' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const orderIds = oldOrders?.map(o => o.id) || [];
+        console.log('manage-settings: Found', orderIds.length, 'orders to archive');
+
+        if (orderIds.length > 0) {
+          // Delete order items first (foreign key)
+          await supabaseAdmin
+            .from('order_items')
+            .delete()
+            .in('order_id', orderIds);
+
+          // Delete orders
+          const { error: deleteError } = await supabaseAdmin
+            .from('orders')
+            .delete()
+            .in('id', orderIds);
+
+          if (deleteError) {
+            console.error('Archive delete error:', deleteError);
+            return new Response(
+              JSON.stringify({ error: true, message: 'Failed to archive orders' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          // Audit log
+          try {
+            await supabaseAdmin.from('audit_logs').insert({
+              user_id: user.id,
+              action: 'DELETE',
+              entity_type: 'orders',
+              entity_id: null,
+              new_data: { archived_count: orderIds.length, older_than_days: days },
+            });
+          } catch { /* ignore */ }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, archived: orderIds.length }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'reset-stock': {
+        // Reset all products to their default stock (or a configured default)
+        console.log('manage-settings: Resetting stock for all products');
+
+        // Get default stock from settings or use 50
+        const { data: stockSetting } = await supabaseAdmin
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'default_stock_quantity')
+          .single();
+
+        const defaultStock = (stockSetting?.value as number) || 50;
+
+        const { data: products, error: updateError } = await supabaseAdmin
+          .from('products')
+          .update({ stock_quantity: defaultStock })
+          .select('id');
+
+        if (updateError) {
+          console.error('Reset stock error:', updateError);
+          return new Response(
+            JSON.stringify({ error: true, message: 'Failed to reset stock' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Audit log
+        try {
+          await supabaseAdmin.from('audit_logs').insert({
+            user_id: user.id,
+            action: 'UPDATE',
+            entity_type: 'products',
+            entity_id: null,
+            new_data: { action: 'reset_stock', default_stock: defaultStock, products_updated: products?.length || 0 },
+          });
+        } catch { /* ignore */ }
+
+        return new Response(
+          JSON.stringify({ success: true, updated: products?.length || 0, default_stock: defaultStock }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
