@@ -110,9 +110,13 @@ export default function AdminProfile() {
         .from('parents')
         .select('*')
         .eq('id', user!.id)
-        .single();
+        .maybeSingle();
       
-      if (error || !data) {
+      if (error) {
+        console.error('Error fetching admin profile:', error);
+      }
+      
+      if (!data) {
         // Return basic info from auth user
         return {
           id: user!.id,

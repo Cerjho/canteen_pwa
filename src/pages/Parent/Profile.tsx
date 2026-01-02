@@ -50,8 +50,36 @@ export default function Profile() {
         .from('parents')
         .select('*')
         .eq('id', user!.id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      
+      // If no parent profile exists yet, create one from auth metadata
+      if (!data && user) {
+        const newProfile = {
+          id: user.id,
+          email: user.email || '',
+          first_name: user.user_metadata?.first_name || '',
+          last_name: user.user_metadata?.last_name || '',
+          phone_number: user.user_metadata?.phone_number || null,
+          balance: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        const { data: inserted, error: insertError } = await supabase
+          .from('parents')
+          .insert(newProfile)
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error('Failed to create parent profile:', insertError);
+          // Return default profile from auth metadata
+          return newProfile as Parent;
+        }
+        return inserted as Parent;
+      }
+      
       return data as Parent;
     },
     enabled: !!user

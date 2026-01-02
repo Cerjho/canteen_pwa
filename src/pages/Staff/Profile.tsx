@@ -43,10 +43,14 @@ export default function StaffProfilePage() {
         .from('parents')
         .select('*')
         .eq('id', user!.id)
-        .single();
+        .maybeSingle();
       
       if (error) {
-        // If no profile exists, create basic info from user
+        console.error('Error fetching staff profile:', error);
+      }
+      
+      // If no profile exists, create basic info from user metadata
+      if (!data) {
         return {
           id: user!.id,
           email: user!.email || '',

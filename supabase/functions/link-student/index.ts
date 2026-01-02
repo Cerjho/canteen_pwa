@@ -166,7 +166,7 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', student.id)
-        .eq('parent_id', null) // Double-check still unlinked (race condition protection)
+        .is('parent_id', null) // Use .is() for null comparison, not .eq()
         .select('id, student_id, first_name, last_name, grade_level, section, dietary_restrictions')
         .single();
 
