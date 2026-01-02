@@ -59,18 +59,39 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
       });
 
       if (error) {
+        // Try to extract the actual error message from the response
+        // FunctionsHttpError may have context with the response body
+        let errorMessage = error.message;
+        
+        // Check if the error has additional context (response body)
+        if ('context' in error && error.context) {
+          try {
+            const context = error.context as { message?: string; error?: string };
+            errorMessage = context.message || context.error || error.message;
+          } catch {
+            // Ignore parsing errors
+          }
+        }
+        
+        // Check if data contains error info (for non-2xx responses, data may still have body)
+        if (data?.message) {
+          errorMessage = data.message;
+        } else if (data?.error) {
+          errorMessage = data.error;
+        }
+        
         // Check if error is retryable
-        const isRetryable = error.message?.includes('network') || 
-                           error.message?.includes('timeout') ||
-                           error.message?.includes('503') ||
-                           error.message?.includes('502');
+        const isRetryable = errorMessage?.includes('network') || 
+                           errorMessage?.includes('timeout') ||
+                           errorMessage?.includes('503') ||
+                           errorMessage?.includes('502');
         
         if (isRetryable && attempt < MAX_RETRIES - 1) {
-          lastError = error;
+          lastError = new Error(errorMessage);
           await delay(RETRY_DELAY_MS * (attempt + 1)); // Exponential backoff
           continue;
         }
-        throw error;
+        throw new Error(errorMessage);
       }
 
       // Check for application-level errors in response

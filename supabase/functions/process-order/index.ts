@@ -127,6 +127,74 @@ serve(async (req) => {
     const orderDate = scheduled_for || todayStr;
     const isToday = orderDate === todayStr;
 
+    // ============================================
+    // VALIDATE ORDER DATE IS A SCHOOL DAY
+    // ============================================
+    const orderDateObj = new Date(orderDate + 'T00:00:00');
+    const dayOfWeek = orderDateObj.getDay(); // 0 = Sunday, 6 = Saturday
+
+    // Check if it's a Sunday (never allowed)
+    if (dayOfWeek === 0) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'INVALID_DATE', 
+          message: 'The canteen is closed on Sundays. Please select a weekday.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if it's a Saturday (only allowed if it's a makeup day)
+    if (dayOfWeek === 6) {
+      const { data: makeupDay } = await supabaseAdmin
+        .from('makeup_days')
+        .select('id, name')
+        .eq('date', orderDate)
+        .single();
+
+      if (!makeupDay) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'INVALID_DATE', 
+            message: 'The canteen is closed on regular Saturdays. Please select a weekday or a scheduled makeup Saturday.' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // Check if the order date is a holiday
+    const { data: holidays } = await supabaseAdmin
+      .from('holidays')
+      .select('id, name, date, is_recurring');
+
+    const isHoliday = holidays?.some(h => {
+      const holidayDateStr = h.date.split('T')[0];
+      if (h.is_recurring) {
+        // Check month-day match for recurring holidays
+        return holidayDateStr.slice(5) === orderDate.slice(5);
+      }
+      return holidayDateStr === orderDate;
+    });
+
+    if (isHoliday) {
+      const holiday = holidays?.find(h => {
+        const holidayDateStr = h.date.split('T')[0];
+        if (h.is_recurring) {
+          return holidayDateStr.slice(5) === orderDate.slice(5);
+        }
+        return holidayDateStr === orderDate;
+      });
+      return new Response(
+        JSON.stringify({ 
+          error: 'HOLIDAY', 
+          message: `The canteen is closed on ${holiday?.name || 'this holiday'}. Please select a different date.` 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ============================================
+
     // Check order cutoff time for same-day orders
     const orderCutoffTime = settings.get('order_cutoff_time') as string | undefined;
     if (isToday && orderCutoffTime && currentTimeStr > orderCutoffTime) {
