@@ -197,7 +197,7 @@ export default function AdminProfile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="container mx-auto px-4 py-6">
         {/* Profile Header */}
         <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-6 text-white mb-6 shadow-lg relative">
@@ -285,21 +285,21 @@ export default function AdminProfile() {
         </div>
 
         {/* Account Info Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <User size={18} className="text-gray-400" />
               Account Information
             </h2>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
             <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600">Email</span>
-              <span className="text-gray-900 font-medium">{adminInfo.email}</span>
+              <span className="text-gray-600 dark:text-gray-400">Email</span>
+              <span className="text-gray-900 dark:text-gray-100 font-medium">{adminInfo.email}</span>
             </div>
             <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600">Phone</span>
-              <span className="text-gray-900 font-medium">{adminInfo.phone}</span>
+              <span className="text-gray-600 dark:text-gray-400">Phone</span>
+              <span className="text-gray-900 dark:text-gray-100 font-medium">{adminInfo.phone}</span>
             </div>
             <div className="px-4 py-3 flex items-center justify-between">
               <span className="text-gray-600">Role</span>
@@ -309,29 +309,29 @@ export default function AdminProfile() {
               </span>
             </div>
             <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600">Member Since</span>
-              <span className="text-gray-900">{adminInfo.joinedDate}</span>
+              <span className="text-gray-600 dark:text-gray-400">Member Since</span>
+              <span className="text-gray-900 dark:text-gray-100">{adminInfo.joinedDate}</span>
             </div>
           </div>
         </div>
 
         {/* Settings Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Settings size={18} className="text-gray-400" />
               Settings
             </h2>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
             <div className="px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
                   <Bell size={18} className="text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-gray-900 font-medium">Notifications</p>
-                  <p className="text-sm text-gray-500">Push notifications for orders</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-medium">Notifications</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Push notifications for orders</p>
                 </div>
               </div>
               <button
@@ -349,12 +349,12 @@ export default function AdminProfile() {
             </div>
             <div className="px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 rounded-lg">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
                   {theme === 'dark' ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
                 </div>
                 <div>
-                  <p className="text-gray-900 font-medium">Dark Mode</p>
-                  <p className="text-sm text-gray-500">Toggle dark theme</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-medium">Dark Mode</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Toggle dark theme</p>
                 </div>
               </div>
               <button
@@ -374,20 +374,20 @@ export default function AdminProfile() {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900">Quick Actions</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Quick Actions</h2>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
             <button
               onClick={() => navigate('/admin/users')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <User size={18} className="text-blue-600" />
                 </div>
-                <span className="text-gray-900 font-medium">Manage Users</span>
+                <span className="text-gray-900 dark:text-gray-100 font-medium">Manage Users</span>
               </div>
               <ChevronRight size={18} className="text-gray-400" />
             </button>
