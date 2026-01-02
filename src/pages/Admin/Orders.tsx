@@ -91,30 +91,42 @@ export default function AdminOrders() {
     }
   });
 
-  // Update order status mutation
+  // Update order status mutation (via secure edge function)
   const updateStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
-      const updateData: { status: OrderStatus; updated_at: string; completed_at?: string } = {
-        status,
-        updated_at: new Date().toISOString()
-      };
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (status === 'completed') {
-        updateData.completed_at = new Date().toISOString();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
       }
 
-      const { error } = await supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', orderId);
-      
-      if (error) throw error;
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/admin-update-order`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            order_id: orderId,
+            status
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to update order');
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       showToast('Order status updated', 'success');
     },
-    onError: () => showToast('Failed to update order', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update order', 'error')
   });
 
   // Refund order mutation

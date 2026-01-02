@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, X, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -31,21 +31,37 @@ export default function AdminProducts() {
     }
   });
 
-  // Add/Update product mutation
+  // Add/Update product mutation (via secure edge function)
   const saveMutation = useMutation({
     mutationFn: async (product: Partial<Product>) => {
-      if (editingProduct) {
-        const { error } = await supabase
-          .from('products')
-          .update(product)
-          .eq('id', editingProduct.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('products')
-          .insert(product);
-        if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
       }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-product`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: editingProduct ? 'update' : 'create',
+            product_id: editingProduct?.id,
+            ...product
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to save product');
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] });
@@ -53,37 +69,83 @@ export default function AdminProducts() {
       setEditingProduct(null);
       showToast(editingProduct ? 'Product updated' : 'Product added', 'success');
     },
-    onError: () => showToast('Failed to save product', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to save product', 'error')
   });
 
-  // Delete product mutation
+  // Delete product mutation (via secure edge function)
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-product`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'delete',
+            product_id: id
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to delete product');
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] });
       showToast('Product deleted', 'success');
     },
-    onError: () => showToast('Failed to delete product', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to delete product', 'error')
   });
 
-  // Toggle availability mutation
+  // Toggle availability mutation (via secure edge function)
   const toggleAvailability = useMutation({
     mutationFn: async ({ id, available }: { id: string; available: boolean }) => {
-      const { error } = await supabase
-        .from('products')
-        .update({ available })
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-product`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'toggle-availability',
+            product_id: id,
+            available
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to toggle availability');
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-    }
+    },
+    onError: (error: Error) => showToast(error.message || 'Failed to update product', 'error')
   });
 
   // Filter products

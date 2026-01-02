@@ -332,7 +332,13 @@ export default function AdminDashboard() {
         .select(`id, status, total_amount, created_at, updated_at, child:students!orders_student_id_fkey(first_name, last_name), parent:user_profiles(first_name, last_name)`)
         .order('created_at', { ascending: false })
         .limit(8);
-      return data || [];
+      
+      // Map FK join arrays to single objects
+      return (data || []).map((order: any) => ({
+        ...order,
+        child: Array.isArray(order.child) ? order.child[0] || null : order.child,
+        parent: Array.isArray(order.parent) ? order.parent[0] || null : order.parent
+      }));
     },
     refetchInterval: 5000
   });

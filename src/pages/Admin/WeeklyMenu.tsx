@@ -25,7 +25,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, isSameWeek, isToday } from 'date-fns';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -226,218 +226,223 @@ export default function AdminWeeklyMenu() {
     }
   });
 
-  // Add product to schedule for a specific date
+  // Helper function to call manage-menu edge function
+  const callManageMenu = async (body: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/manage-menu`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || result.error || 'Operation failed');
+    return result;
+  };
+
+  // Helper function to call manage-calendar edge function
+  const callManageCalendar = async (body: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/manage-calendar`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || result.error || 'Operation failed');
+    return result;
+  };
+
+  // Add product to schedule for a specific date (via secure edge function)
   const addToSchedule = useMutation({
     mutationFn: async ({ productId, dayOfWeek }: { productId: string; dayOfWeek: number }) => {
-      const scheduledDate = format(getDateForDay(dayOfWeek), 'yyyy-MM-dd');
-      const { error } = await supabase
-        .from('menu_schedules')
-        .upsert({
-          product_id: productId,
-          day_of_week: dayOfWeek,
-          scheduled_date: scheduledDate,
-          is_active: true
-        }, { onConflict: 'product_id,scheduled_date' });
-      if (error) throw error;
+      return callManageMenu({
+        action: 'add',
+        product_id: productId,
+        day_of_week: dayOfWeek
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast('Product added to menu', 'success');
     },
-    onError: () => showToast('Failed to add product', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to add product', 'error')
   });
 
-  // Add multiple products at once for a specific date
+  // Add multiple products at once for a specific date (via secure edge function)
   const addBulkToSchedule = useMutation({
     mutationFn: async ({ productIds, dayOfWeek }: { productIds: string[]; dayOfWeek: number }) => {
-      const scheduledDate = format(getDateForDay(dayOfWeek), 'yyyy-MM-dd');
-      const items = productIds.map(id => ({
-        product_id: id,
-        day_of_week: dayOfWeek,
-        scheduled_date: scheduledDate,
-        is_active: true
-      }));
-      
-      const { error } = await supabase
-        .from('menu_schedules')
-        .upsert(items, { onConflict: 'product_id,scheduled_date' });
-      if (error) throw error;
+      return callManageMenu({
+        action: 'add-bulk',
+        product_ids: productIds,
+        day_of_week: dayOfWeek
+      });
     },
     onSuccess: (_, { productIds }) => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast(`Added ${productIds.length} items to menu`, 'success');
     },
-    onError: () => showToast('Failed to add products', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to add products', 'error')
   });
 
-  // Remove from schedule
+  // Remove from schedule (via secure edge function)
   const removeFromSchedule = useMutation({
     mutationFn: async (scheduleId: string) => {
-      const { error } = await supabase
-        .from('menu_schedules')
-        .delete()
-        .eq('id', scheduleId);
-      if (error) throw error;
+      return callManageMenu({
+        action: 'remove',
+        schedule_id: scheduleId
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast('Product removed from menu', 'success');
     },
-    onError: () => showToast('Failed to remove product', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to remove product', 'error')
   });
 
-  // Toggle item active status
+  // Toggle item active status (via secure edge function)
   const toggleItemActive = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      const { error } = await supabase
-        .from('menu_schedules')
-        .update({ is_active: isActive })
-        .eq('id', id);
-      if (error) throw error;
+      return callManageMenu({
+        action: 'toggle',
+        schedule_id: id,
+        is_active: isActive
+      });
     },
     onSuccess: (_, { isActive }) => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast(isActive ? 'Item activated' : 'Item deactivated', 'success');
     },
-    onError: () => showToast('Failed to update item', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update item', 'error')
   });
 
-  // Copy menu to another day (same week, date-based)
+  // Copy menu to another day (via secure edge function)
   const copyToDay = useMutation({
     mutationFn: async ({ fromDay, toDay }: { fromDay: number; toDay: number }) => {
-      const fromDate = format(getDateForDay(fromDay), 'yyyy-MM-dd');
-      const toDate = format(getDateForDay(toDay), 'yyyy-MM-dd');
-      const daySchedules = schedules?.filter(s => s.scheduled_date === fromDate) || [];
-      if (daySchedules.length === 0) throw new Error('No items to copy');
-
-      await supabase.from('menu_schedules').delete().eq('scheduled_date', toDate);
-
-      const { error } = await supabase
-        .from('menu_schedules')
-        .insert(daySchedules.map(s => ({
-          product_id: s.product_id,
-          day_of_week: toDay,
-          scheduled_date: toDate,
-          is_active: s.is_active
-        })));
-      if (error) throw error;
+      return callManageMenu({
+        action: 'copy-day',
+        from_day: fromDay,
+        to_day: toDay
+      });
     },
     onSuccess: (_, { toDay }) => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast(`Menu copied to ${WEEKDAYS.find(d => d.value === toDay)?.label}`, 'success');
     },
-    onError: () => showToast('Failed to copy menu', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to copy menu', 'error')
   });
 
-  // Copy day to all weekdays (same week, date-based)
+  // Copy day to all weekdays (via secure edge function)
   const copyToAllDays = useMutation({
     mutationFn: async (fromDay: number) => {
-      const fromDate = format(getDateForDay(fromDay), 'yyyy-MM-dd');
-      const daySchedules = schedules?.filter(s => s.scheduled_date === fromDate) || [];
-      if (daySchedules.length === 0) throw new Error('No items to copy');
-
-      const targetDays = WEEKDAYS.filter(d => d.value !== fromDay).map(d => d.value);
-      
-      // Delete and insert for each target day
-      const allItems: Array<{ product_id: string; day_of_week: number; scheduled_date: string; is_active: boolean }> = [];
-      for (const toDay of targetDays) {
-        const toDate = format(getDateForDay(toDay), 'yyyy-MM-dd');
-        await supabase.from('menu_schedules').delete().eq('scheduled_date', toDate);
-        
-        daySchedules.forEach(s => {
-          allItems.push({
-            product_id: s.product_id,
-            day_of_week: toDay,
-            scheduled_date: toDate,
-            is_active: s.is_active
-          });
-        });
-      }
-
-      const { error } = await supabase.from('menu_schedules').insert(allItems);
-      if (error) throw error;
+      return callManageMenu({
+        action: 'copy-all',
+        from_day: fromDay
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast('Menu copied to all weekdays', 'success');
     },
-    onError: () => showToast('Failed to copy menu', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to copy menu', 'error')
   });
 
-  // Clear day's menu (for specific date)
+  // Clear day's menu (via secure edge function)
   const clearDayMenu = useMutation({
     mutationFn: async (dayOfWeek: number) => {
-      const scheduledDate = format(getDateForDay(dayOfWeek), 'yyyy-MM-dd');
-      const { error } = await supabase
-        .from('menu_schedules')
-        .delete()
-        .eq('scheduled_date', scheduledDate);
-      if (error) throw error;
+      return callManageMenu({
+        action: 'clear-day',
+        day_of_week: dayOfWeek
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       setShowClearConfirm(false);
       showToast('Day menu cleared', 'success');
     },
-    onError: () => showToast('Failed to clear menu', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to clear menu', 'error')
   });
 
-  // Clear entire week (for selected week's dates)
+  // Clear entire week (via secure edge function)
   const clearWeekMenu = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from('menu_schedules')
-        .delete()
-        .gte('scheduled_date', weekStartStr)
-        .lte('scheduled_date', weekEndStr);
-      if (error) throw error;
+      return callManageMenu({
+        action: 'clear-week'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       setShowClearConfirm(false);
       showToast('Week menu cleared', 'success');
     },
-    onError: () => showToast('Failed to clear menu', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to clear menu', 'error')
   });
 
-  // Add holiday
+  // Add holiday (via secure edge function)
   const addHoliday = useMutation({
     mutationFn: async (holiday: { name: string; date: string; description?: string; is_recurring?: boolean }) => {
-      const { error } = await supabase.from('holidays').insert(holiday);
-      if (error) throw error;
+      return callManageCalendar({
+        action: 'add-holiday',
+        date: holiday.date,
+        description: holiday.name + (holiday.description ? `: ${holiday.description}` : '')
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['holidays'] });
       setShowHolidayModal(false);
       showToast('Holiday added', 'success');
     },
-    onError: (error: any) => {
-      if (error.code === '23505') {
-        showToast('Holiday already exists for this date', 'error');
-      } else {
-        showToast('Failed to add holiday', 'error');
-      }
-    }
+    onError: (error: Error) => showToast(error.message || 'Failed to add holiday', 'error')
   });
 
-  // Remove holiday
+  // Remove holiday (via secure edge function)
   const removeHoliday = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('holidays').delete().eq('id', id);
-      if (error) throw error;
+      return callManageCalendar({
+        action: 'remove-holiday',
+        id
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['holidays'] });
       showToast('Holiday removed', 'success');
     },
-    onError: () => showToast('Failed to remove holiday', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to remove holiday', 'error')
   });
 
-  // Add make-up day
+  // Add make-up day (via secure edge function)
   const addMakeupDay = useMutation({
     mutationFn: async (makeupDay: { name: string; date: string; reason?: string }) => {
-      const { error } = await supabase.from('makeup_days').insert(makeupDay);
-      if (error) throw error;
+      // Get the day of week the makeup day should act as (typically a weekday)
+      const dayOfWeek = new Date(makeupDay.date).getDay();
+      // If it's Saturday (6), let's have it act as the previous Friday (5)
+      const actsAsDay = dayOfWeek === 6 ? 5 : dayOfWeek;
+      
+      return callManageCalendar({
+        action: 'add-makeup',
+        date: makeupDay.date,
+        acts_as_day: actsAsDay,
+        description: makeupDay.name + (makeupDay.reason ? `: ${makeupDay.reason}` : '')
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['makeup-days'] });
@@ -445,29 +450,23 @@ export default function AdminWeeklyMenu() {
       setShowMakeupModal(false);
       showToast('Make-up day added', 'success');
     },
-    onError: (error: any) => {
-      if (error.code === '23505') {
-        showToast('Make-up day already exists for this date', 'error');
-      } else if (error.message?.includes('saturday')) {
-        showToast('Make-up days can only be on Saturdays', 'error');
-      } else {
-        showToast('Failed to add make-up day', 'error');
-      }
-    }
+    onError: (error: Error) => showToast(error.message || 'Failed to add make-up day', 'error')
   });
 
-  // Remove make-up day
+  // Remove make-up day (via secure edge function)
   const removeMakeupDay = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('makeup_days').delete().eq('id', id);
-      if (error) throw error;
+      return callManageCalendar({
+        action: 'remove-makeup',
+        id
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['makeup-days'] });
       queryClient.invalidateQueries({ queryKey: ['weekdays-with-status'] });
       showToast('Make-up day removed', 'success');
     },
-    onError: () => showToast('Failed to remove make-up day', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to remove make-up day', 'error')
   });
 
   // Computed values - filter by specific date
