@@ -2,6 +2,7 @@
 import type { 
   Product, 
   Child, 
+  Student,
   Order, 
   OrderWithDetails, 
   CartItem,
@@ -76,11 +77,52 @@ export const mockProducts: Product[] = [
 ];
 
 // ============================================
-// Children
+// Students (primary type)
+// ============================================
+export const mockStudents: Student[] = [
+  {
+    id: 'student-1',
+    student_id: 'STU-001',
+    first_name: 'Maria',
+    last_name: 'Santos',
+    grade_level: 'Grade 3',
+    section: 'A',
+    dietary_restrictions: 'No peanuts',
+    is_active: true,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: 'student-2',
+    student_id: 'STU-002',
+    first_name: 'Juan',
+    last_name: 'Santos',
+    grade_level: 'Grade 1',
+    section: 'B',
+    is_active: true,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z'
+  }
+];
+
+export const mockStudentWithoutSection: Student = {
+  id: 'student-3',
+  student_id: 'STU-003',
+  first_name: 'Pedro',
+  last_name: 'Cruz',
+  grade_level: 'Grade 2',
+  is_active: true,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z'
+};
+
+// ============================================
+// Children (deprecated - for backward compatibility)
 // ============================================
 export const mockChildren: Child[] = [
   {
-    id: 'child-1',
+    id: 'student-1',
+    student_id: 'STU-001',
     parent_id: 'test-user-123',
     first_name: 'Maria',
     last_name: 'Santos',
@@ -91,7 +133,8 @@ export const mockChildren: Child[] = [
     updated_at: '2024-01-01T00:00:00Z'
   },
   {
-    id: 'child-2',
+    id: 'student-2',
+    student_id: 'STU-002',
     parent_id: 'test-user-123',
     first_name: 'Juan',
     last_name: 'Santos',
@@ -103,7 +146,8 @@ export const mockChildren: Child[] = [
 ];
 
 export const mockChildWithoutSection: Child = {
-  id: 'child-3',
+  id: 'student-3',
+  student_id: 'STU-003',
   parent_id: 'test-user-123',
   first_name: 'Pedro',
   last_name: 'Cruz',
@@ -168,7 +212,7 @@ export const mockOrders: OrderWithDetails[] = [
   {
     id: 'order-1',
     parent_id: 'test-user-123',
-    child_id: 'child-1',
+    student_id: 'student-1',
     client_order_id: 'client-order-1',
     status: 'pending',
     total_amount: 155.00,
@@ -176,6 +220,10 @@ export const mockOrders: OrderWithDetails[] = [
     notes: 'No spicy please',
     created_at: '2024-01-01T10:00:00Z',
     updated_at: '2024-01-01T10:00:00Z',
+    student: {
+      first_name: 'Maria',
+      last_name: 'Santos'
+    },
     child: {
       first_name: 'Maria',
       last_name: 'Santos'
@@ -185,13 +233,17 @@ export const mockOrders: OrderWithDetails[] = [
   {
     id: 'order-2',
     parent_id: 'test-user-123',
-    child_id: 'child-2',
+    student_id: 'student-2',
     client_order_id: 'client-order-2',
     status: 'preparing',
     total_amount: 90.00,
     payment_method: 'gcash',
     created_at: '2024-01-01T09:00:00Z',
     updated_at: '2024-01-01T09:30:00Z',
+    student: {
+      first_name: 'Juan',
+      last_name: 'Santos'
+    },
     child: {
       first_name: 'Juan',
       last_name: 'Santos'
@@ -226,7 +278,7 @@ export const mockOrders: OrderWithDetails[] = [
   {
     id: 'order-3',
     parent_id: 'test-user-123',
-    child_id: 'child-1',
+    student_id: 'student-1',
     client_order_id: 'client-order-3',
     status: 'completed',
     total_amount: 65.00,
@@ -234,6 +286,10 @@ export const mockOrders: OrderWithDetails[] = [
     created_at: '2023-12-31T12:00:00Z',
     updated_at: '2023-12-31T12:30:00Z',
     completed_at: '2023-12-31T12:30:00Z',
+    student: {
+      first_name: 'Maria',
+      last_name: 'Santos'
+    },
     child: {
       first_name: 'Maria',
       last_name: 'Santos'
@@ -296,7 +352,7 @@ export const mockQueuedOrders = [
   {
     id: 'queued-1',
     parent_id: 'test-user-123',
-    child_id: 'child-1',
+    student_id: 'student-1',
     client_order_id: 'client-queued-1',
     items: [
       { product_id: 'product-1', quantity: 1, price_at_order: 65.00 }

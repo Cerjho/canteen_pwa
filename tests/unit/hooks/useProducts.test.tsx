@@ -7,12 +7,12 @@ import { ReactNode } from 'react';
 // Mock products service
 const mockGetProducts = vi.fn();
 
-vi.mock('../../src/services/products', () => ({
+vi.mock('../../../src/services/products', () => ({
   getProducts: (...args: any[]) => mockGetProducts(...args)
 }));
 
-import { useProducts } from '../../src/hooks/useProducts';
-import { mockProducts } from '../mocks/data';
+import { useProducts } from '../../../src/hooks/useProducts';
+import { mockProducts } from '../../mocks/data';
 
 describe('useProducts Hook', () => {
   let queryClient: QueryClient;

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import OrderHistory from '../../../src/pages/OrderHistory';
+import OrderHistory from '../../../src/pages/Parent/OrderHistory';
 
 // Mock the hooks and services
 vi.mock('../../../src/hooks/useAuth', () => ({
@@ -124,8 +124,9 @@ describe('OrderHistory Page', () => {
       renderOrderHistory();
       
       await waitFor(() => {
-        expect(screen.getByText('For Maria Santos')).toBeInTheDocument();
-        expect(screen.getByText('For Juan Cruz')).toBeInTheDocument();
+        // Use getAllByText since there are multiple orders for Maria Santos
+        expect(screen.getAllByText(/For Maria Santos/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/For Juan Cruz/).length).toBeGreaterThan(0);
       });
     });
 
@@ -221,7 +222,8 @@ describe('OrderHistory Page', () => {
       
       await waitFor(() => {
         // Format: "MMM d, yyyy • h:mm a"
-        expect(screen.getByText(/Jan 15, 2024/i)).toBeInTheDocument();
+        // Use getAllByText since multiple orders have the same date
+        expect(screen.getAllByText(/Jan 15, 2024/i).length).toBeGreaterThan(0);
       });
     });
   });

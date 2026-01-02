@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { ProductCard } from '../../src/components/ProductCard';
-import { ChildSelector } from '../../src/components/ChildSelector';
+import { ChildSelector } from '../../src/components/StudentSelector';
 
 // Mock Supabase client
 vi.mock('../../src/services/supabaseClient', () => ({
@@ -144,7 +144,7 @@ describe('ChildSelector', () => {
       />
     );
 
-    expect(screen.getByText('Select a child')).toBeInTheDocument();
+    expect(screen.getByText('Select a student')).toBeInTheDocument();
     expect(screen.getByText('Maria Santos - Grade 3 A')).toBeInTheDocument();
     expect(screen.getByText('Juan Santos - Grade 1 B')).toBeInTheDocument();
   });
@@ -187,7 +187,7 @@ describe('ChildSelector', () => {
     );
 
     expect(
-      screen.getByText("You haven't added any children yet. Please add a child profile first.")
+      screen.getByText("You haven't linked any students yet. Please link a student profile first.")
     ).toBeInTheDocument();
   });
 

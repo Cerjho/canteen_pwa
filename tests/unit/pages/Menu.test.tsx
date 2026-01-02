@@ -5,11 +5,11 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../../../src/components/Toast';
-import Menu from '../../../src/pages/Menu';
+import Menu from '../../../src/pages/Parent/Menu';
 
 // Mock the hooks and services
-vi.mock('../../../src/hooks/useChildren', () => ({
-  useChildren: vi.fn()
+vi.mock('../../../src/hooks/useStudents', () => ({
+  useStudents: vi.fn()
 }));
 
 vi.mock('../../../src/hooks/useFavorites', () => ({
@@ -23,7 +23,24 @@ vi.mock('../../../src/hooks/useCart', () => ({
 vi.mock('../../../src/services/products', () => ({
   getProductsForDate: vi.fn(),
   getCanteenStatus: vi.fn(),
-  getAvailableOrderDates: vi.fn()
+  getAvailableOrderDates: vi.fn(),
+  getWeekdaysWithStatus: vi.fn()
+}));
+
+vi.mock('../../../src/hooks/useAuth', () => ({
+  useAuth: vi.fn()
+}));
+
+vi.mock('../../../src/services/supabaseClient', () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({ data: { balance: 500 }, error: null })
+        })
+      })
+    })
+  }
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -35,10 +52,11 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Import mocks after mocking
-import { useChildren } from '../../../src/hooks/useChildren';
+import { useStudents } from '../../../src/hooks/useStudents';
 import { useFavorites } from '../../../src/hooks/useFavorites';
 import { useCart } from '../../../src/hooks/useCart';
-import { getProductsForDate, getCanteenStatus, getAvailableOrderDates } from '../../../src/services/products';
+import { useAuth } from '../../../src/hooks/useAuth';
+import { getProductsForDate, getCanteenStatus, getAvailableOrderDates, getWeekdaysWithStatus } from '../../../src/services/products';
 
 const mockNavigate = vi.fn();
 
@@ -72,7 +90,7 @@ const mockProducts = [
   }
 ];
 
-const mockChildren = [
+const mockStudents = [
   { id: 'child-1', first_name: 'Maria', last_name: 'Santos', grade_level: 'Grade 3', section: 'A' },
   { id: 'child-2', first_name: 'Juan', last_name: 'Cruz', grade_level: 'Grade 1', section: 'B' }
 ];
@@ -110,8 +128,8 @@ describe('Menu Page', () => {
     vi.clearAllMocks();
     
     // Setup default mocks
-    vi.mocked(useChildren).mockReturnValue({
-      data: mockChildren,
+    vi.mocked(useStudents).mockReturnValue({
+      data: mockStudents,
       isLoading: false,
       error: null,
       refetch: vi.fn()
@@ -135,13 +153,31 @@ describe('Menu Page', () => {
       total: 0
     });
 
-    vi.mocked(getProductsForDate).mockResolvedValue(mockProducts);
-    vi.mocked(getCanteenStatus).mockResolvedValue({ isOpen: true, message: '' });
-    vi.mocked(getAvailableOrderDates).mockResolvedValue([
-      new Date(),
-      new Date(Date.now() + 86400000), // Tomorrow
-      new Date(Date.now() + 86400000 * 2)
+    // Mock useAuth
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'user-123', email: 'test@example.com' },
+      loading: false,
+      signOut: vi.fn()
+    } as any);
+
+    // Create dates for testing
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(today);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+
+    // Mock getWeekdaysWithStatus - this is what the Menu component actually uses
+    vi.mocked(getWeekdaysWithStatus).mockResolvedValue([
+      { date: today, dateStr: today.toISOString().split('T')[0], isOpen: true, isHoliday: false },
+      { date: tomorrow, dateStr: tomorrow.toISOString().split('T')[0], isOpen: true, isHoliday: false },
+      { date: dayAfter, dateStr: dayAfter.toISOString().split('T')[0], isOpen: true, isHoliday: false }
     ]);
+
+    vi.mocked(getProductsForDate).mockResolvedValue(mockProducts);
+    vi.mocked(getCanteenStatus).mockResolvedValue({ isOpen: true });
+    vi.mocked(getAvailableOrderDates).mockResolvedValue([today, tomorrow, dayAfter]);
   });
 
   describe('Rendering', () => {
@@ -177,7 +213,7 @@ describe('Menu Page', () => {
       renderMenu();
       
       await waitFor(() => {
-        expect(screen.getByText(/select.*child/i)).toBeInTheDocument();
+        expect(screen.getByText(/select.*student/i)).toBeInTheDocument();
       });
     });
 
@@ -305,17 +341,13 @@ describe('Menu Page', () => {
       });
     });
 
-    it('shows canteen closed message when closed', async () => {
-      vi.mocked(getCanteenStatus).mockResolvedValue({
-        isOpen: false,
-        message: 'Canteen is closed today'
-      });
-      
+    // Canteen closed message tested in dedicated describe block below
+    it('shows date label in header', async () => {
       renderMenu();
       
       await waitFor(() => {
-        // The canteen closed state should be shown
-        expect(screen.getByText(/closed/i)).toBeInTheDocument();
+        // Should show today's date indicator
+        expect(screen.getByText(/today/i)).toBeInTheDocument();
       });
     });
   });
@@ -348,11 +380,11 @@ describe('Menu Page', () => {
       renderMenu();
       
       await waitFor(() => {
-        expect(screen.getByText(/select.*child/i)).toBeInTheDocument();
+        expect(screen.getByText(/select.*student/i)).toBeInTheDocument();
       });
 
       // Open child selector
-      const selector = screen.getByText(/select.*child/i);
+      const selector = screen.getByText(/select.*student/i);
       await user.click(selector);
       
       // Should show children
@@ -382,8 +414,14 @@ describe('Menu Page - Canteen Closed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    vi.mocked(useChildren).mockReturnValue({
-      data: mockChildren,
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'user-123', email: 'test@example.com' },
+      loading: false,
+      signOut: vi.fn()
+    } as any);
+
+    vi.mocked(useStudents).mockReturnValue({
+      data: mockStudents,
       isLoading: false,
       error: null,
       refetch: vi.fn()
@@ -407,22 +445,34 @@ describe('Menu Page - Canteen Closed', () => {
       total: 0
     });
 
+    // Create dates with holiday info - ALL dates are holidays so it can't auto-select an open day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Mock weekdays - ALL are holidays so component shows closed state
+    vi.mocked(getWeekdaysWithStatus).mockResolvedValue([
+      { date: today, dateStr: today.toISOString().split('T')[0], isOpen: false, isHoliday: true, holidayName: 'New Year' },
+      { date: tomorrow, dateStr: tomorrow.toISOString().split('T')[0], isOpen: false, isHoliday: true, holidayName: 'Holiday 2' }
+    ]);
+
     vi.mocked(getCanteenStatus).mockResolvedValue({
       isOpen: false,
-      message: 'Canteen is closed for a holiday'
+      reason: 'holiday',
+      holidayName: 'New Year'
     });
     
-    vi.mocked(getAvailableOrderDates).mockResolvedValue([
-      new Date(),
-      new Date(Date.now() + 86400000)
-    ]);
+    vi.mocked(getProductsForDate).mockResolvedValue([]);
+    vi.mocked(getAvailableOrderDates).mockResolvedValue([today, tomorrow]);
   });
 
-  it('shows closed message when canteen is closed', async () => {
+  it('shows canteen closed message when all dates are holidays', async () => {
     renderMenu();
     
     await waitFor(() => {
-      expect(screen.getByText(/closed/i)).toBeInTheDocument();
+      // The component shows "Canteen Closed" heading when selected date is a holiday
+      expect(screen.getByText(/Canteen Closed/i)).toBeInTheDocument();
     });
   });
 
@@ -441,7 +491,13 @@ describe('Menu Page - Empty States', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    vi.mocked(useChildren).mockReturnValue({
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'user-123', email: 'test@example.com' },
+      loading: false,
+      signOut: vi.fn()
+    } as any);
+
+    vi.mocked(useStudents).mockReturnValue({
       data: [],
       isLoading: false,
       error: null,
@@ -466,9 +522,15 @@ describe('Menu Page - Empty States', () => {
       total: 0
     });
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    vi.mocked(getWeekdaysWithStatus).mockResolvedValue([
+      { date: today, dateStr: today.toISOString().split('T')[0], isOpen: true, isHoliday: false }
+    ]);
     vi.mocked(getProductsForDate).mockResolvedValue([]);
-    vi.mocked(getCanteenStatus).mockResolvedValue({ isOpen: true, message: '' });
-    vi.mocked(getAvailableOrderDates).mockResolvedValue([new Date()]);
+    vi.mocked(getCanteenStatus).mockResolvedValue({ isOpen: true });
+    vi.mocked(getAvailableOrderDates).mockResolvedValue([today]);
   });
 
   it('shows empty state when no products available', async () => {

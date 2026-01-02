@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { ChildSelector } from '../../../src/components/ChildSelector';
+import { ChildSelector } from '../../../src/components/StudentSelector';
 
 describe('ChildSelector Component', () => {
   const mockChildren = [
@@ -62,7 +62,7 @@ describe('ChildSelector Component', () => {
         />
       );
 
-      expect(screen.getByText('Select a child')).toBeInTheDocument();
+      expect(screen.getByText('Select a student')).toBeInTheDocument();
     });
 
     it('renders all children options', () => {
@@ -146,7 +146,7 @@ describe('ChildSelector Component', () => {
       );
 
       expect(
-        screen.getByText("You haven't added any children yet. Please add a child profile first.")
+        screen.getByText("You haven't linked any students yet. Please link a student profile first.")
       ).toBeInTheDocument();
     });
 

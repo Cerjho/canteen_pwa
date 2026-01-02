@@ -1,32 +1,33 @@
 // useAuth Hook Tests
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useAuth } from '../../src/hooks/useAuth';
 
-// Mock supabase client
+// Mock supabase client - functions must be defined before vi.mock due to hoisting
 const mockUnsubscribe = vi.fn();
 let authChangeCallback: ((event: string, session: any) => void) | null = null;
+const mockGetSession = vi.fn();
+const mockSignOut = vi.fn();
 
-const mockSupabase = {
-  auth: {
-    getSession: vi.fn(),
-    signOut: vi.fn(),
-    onAuthStateChange: vi.fn((callback) => {
-      authChangeCallback = callback;
-      return {
-        data: {
-          subscription: {
-            unsubscribe: mockUnsubscribe
+vi.mock('../../../src/services/supabaseClient', () => ({
+  supabase: {
+    auth: {
+      getSession: () => mockGetSession(),
+      signOut: () => mockSignOut(),
+      onAuthStateChange: (callback: any) => {
+        authChangeCallback = callback;
+        return {
+          data: {
+            subscription: {
+              unsubscribe: mockUnsubscribe
+            }
           }
-        }
-      };
-    })
+        };
+      }
+    }
   }
-};
-
-vi.mock('../../src/services/supabaseClient', () => ({
-  supabase: mockSupabase
 }));
+
+import { useAuth } from '../../../src/hooks/useAuth';
 
 describe('useAuth Hook', () => {
   const mockUser = {
@@ -51,7 +52,7 @@ describe('useAuth Hook', () => {
 
   describe('Initial State', () => {
     it('should start with loading state', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: null }
       });
 
@@ -66,7 +67,7 @@ describe('useAuth Hook', () => {
     });
 
     it('should set user when session exists', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: mockSession }
       });
 
@@ -80,7 +81,7 @@ describe('useAuth Hook', () => {
     });
 
     it('should set user to null when no session', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: null }
       });
 
@@ -96,7 +97,7 @@ describe('useAuth Hook', () => {
 
   describe('Auth State Change', () => {
     it('should update user on sign in', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: null }
       });
 
@@ -119,7 +120,7 @@ describe('useAuth Hook', () => {
     });
 
     it('should update user on sign out', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: mockSession }
       });
 
@@ -140,7 +141,7 @@ describe('useAuth Hook', () => {
     });
 
     it('should handle token refresh', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: mockSession }
       });
 
@@ -168,10 +169,10 @@ describe('useAuth Hook', () => {
 
   describe('Sign Out', () => {
     it('should call supabase signOut', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: mockSession }
       });
-      mockSupabase.auth.signOut.mockResolvedValue({ error: null });
+      mockSignOut.mockResolvedValue({ error: null });
 
       const { result } = renderHook(() => useAuth());
 
@@ -183,20 +184,21 @@ describe('useAuth Hook', () => {
         await result.current.signOut();
       });
 
-      expect(mockSupabase.auth.signOut).toHaveBeenCalledTimes(1);
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('Cleanup', () => {
     it('should unsubscribe on unmount', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({
+      mockGetSession.mockResolvedValue({
         data: { session: null }
       });
 
       const { unmount } = renderHook(() => useAuth());
 
+      // Wait for hook to initialize
       await waitFor(() => {
-        expect(mockSupabase.auth.onAuthStateChange).toHaveBeenCalled();
+        expect(authChangeCallback).not.toBeNull();
       });
 
       unmount();

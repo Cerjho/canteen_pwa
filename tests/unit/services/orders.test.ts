@@ -6,7 +6,7 @@ const mockInvoke = vi.fn();
 const mockSelect = vi.fn();
 const mockFrom = vi.fn();
 
-vi.mock('../../src/services/supabaseClient', () => ({
+vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     functions: {
       invoke: (...args: any[]) => mockInvoke(...args)
@@ -16,13 +16,13 @@ vi.mock('../../src/services/supabaseClient', () => ({
 }));
 
 // Mock localQueue
-vi.mock('../../src/services/localQueue', () => ({
+vi.mock('../../../src/services/localQueue', () => ({
   isOnline: vi.fn(() => true),
   queueOrder: vi.fn()
 }));
 
-import { createOrder, getOrderHistory } from '../../src/services/orders';
-import { isOnline, queueOrder } from '../../src/services/localQueue';
+import { createOrder, getOrderHistory } from '../../../src/services/orders';
+import { isOnline, queueOrder } from '../../../src/services/localQueue';
 
 describe('Orders Service', () => {
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe('Orders Service', () => {
   describe('createOrder', () => {
     const mockOrderData = {
       parent_id: 'parent-123',
-      child_id: 'child-1',
+      student_id: 'child-1',
       client_order_id: 'client-order-1',
       items: [
         { product_id: 'product-1', quantity: 2, price_at_order: 65.00 }
@@ -117,7 +117,7 @@ describe('Orders Service', () => {
 
       await getOrderHistory('parent-123');
 
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('child:children'));
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('child:students'));
       expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('items:order_items'));
     });
 

@@ -7,6 +7,8 @@ import { afterEach, beforeEach, vi } from 'vitest';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.clearAllTimers();
+  vi.useRealTimers();
   localStorage.clear();
 });
 
@@ -74,5 +76,5 @@ Object.defineProperty(navigator, 'onLine', {
 });
 
 // Mock scroll functions
-window.scrollTo = vi.fn();
+window.scrollTo = vi.fn() as any;
 Element.prototype.scrollIntoView = vi.fn();

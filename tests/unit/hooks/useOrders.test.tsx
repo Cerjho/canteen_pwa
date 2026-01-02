@@ -6,12 +6,12 @@ import { ReactNode } from 'react';
 
 // Mock toast
 const mockShowToast = vi.fn();
-vi.mock('../../src/components/Toast', () => ({
+vi.mock('../../../src/components/Toast', () => ({
   useToast: () => ({ showToast: mockShowToast })
 }));
 
 // Mock useAuth
-vi.mock('../../src/hooks/useAuth', () => ({
+vi.mock('../../../src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'test-user-123' }
   })
@@ -21,13 +21,13 @@ vi.mock('../../src/hooks/useAuth', () => ({
 const mockGetOrderHistory = vi.fn();
 const mockCreateOrder = vi.fn();
 
-vi.mock('../../src/services/orders', () => ({
+vi.mock('../../../src/services/orders', () => ({
   getOrderHistory: (...args: any[]) => mockGetOrderHistory(...args),
   createOrder: (...args: any[]) => mockCreateOrder(...args)
 }));
 
-import { useOrders } from '../../src/hooks/useOrders';
-import { mockOrders } from '../mocks/data';
+import { useOrders } from '../../../src/hooks/useOrders';
+import { mockOrders } from '../../mocks/data';
 
 describe('useOrders Hook', () => {
   let queryClient: QueryClient;
@@ -289,11 +289,11 @@ describe('useOrders Hook - Unauthenticated', () => {
   });
 
   it('should not fetch orders without user', async () => {
-    vi.doMock('../../src/hooks/useAuth', () => ({
+    vi.doMock('../../../src/hooks/useAuth', () => ({
       useAuth: () => ({ user: null })
     }));
 
-    const { useOrders: useOrdersNoAuth } = await import('../../src/hooks/useOrders');
+    const { useOrders: useOrdersNoAuth } = await import('../../../src/hooks/useOrders');
 
     function Wrapper({ children }: { children: ReactNode }) {
       return (

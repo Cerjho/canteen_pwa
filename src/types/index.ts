@@ -12,16 +12,43 @@ export interface Parent {
   updated_at: string;
 }
 
-export interface Child {
+// Student - matches 'students' table
+export interface Student {
   id: string;
-  parent_id: string;
+  student_id: string;  // School-assigned student ID
   first_name: string;
   last_name: string;
   grade_level: string;
   section?: string;
   dietary_restrictions?: string;
+  is_active: boolean;
+  created_by?: string;
   created_at: string;
   updated_at: string;
+}
+
+// Parent-Student relationship - matches 'parent_students' join table
+export interface ParentStudent {
+  id: string;
+  parent_id: string;
+  student_id: string;
+  relationship?: string;
+  is_primary: boolean;
+  linked_at: string;
+}
+
+// @deprecated Use Student instead - kept for backward compatibility
+export interface Child {
+  id: string;
+  student_id?: string;
+  parent_id?: string;  // No longer in students table, exists in parent_students join
+  first_name: string;
+  last_name: string;
+  grade_level: string;
+  section?: string;
+  dietary_restrictions?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Product {
@@ -105,7 +132,9 @@ export interface CreateOrderRequest {
 }
 
 export interface OrderWithDetails extends Order {
-  child: Pick<Child, 'first_name' | 'last_name'>;
+  student?: Pick<Student, 'first_name' | 'last_name'>;
+  // @deprecated Use 'student' instead - kept for backward compatibility
+  child?: Pick<Child, 'first_name' | 'last_name'>;
   items: Array<OrderItem & {
     product: Pick<Product, 'name' | 'image_url'>;
   }>;

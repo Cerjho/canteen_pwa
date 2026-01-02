@@ -1,10 +1,10 @@
 // useCart Hook Tests
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useCart } from '../../src/hooks/useCart';
+import { useCart } from '../../../src/hooks/useCart';
 
 // Mock useAuth
-vi.mock('../../src/hooks/useAuth', () => ({
+vi.mock('../../../src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'test-user-123' }
   })
@@ -12,7 +12,7 @@ vi.mock('../../src/hooks/useAuth', () => ({
 
 // Mock createOrder
 const mockCreateOrder = vi.fn();
-vi.mock('../../src/services/orders', () => ({
+vi.mock('../../../src/services/orders', () => ({
   createOrder: (data: any) => mockCreateOrder(data)
 }));
 
@@ -289,7 +289,7 @@ describe('useCart Hook', () => {
       expect(mockCreateOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           parent_id: 'test-user-123',
-          child_id: 'child-1',
+          student_id: 'child-1',
           items: expect.arrayContaining([
             expect.objectContaining({
               product_id: 'product-1',

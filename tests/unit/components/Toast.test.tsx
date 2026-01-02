@@ -205,18 +205,17 @@ describe('Toast Component', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Show Success' }));
       expect(screen.getByText('Success message')).toBeInTheDocument();
 
-      // Find and click dismiss button (the X button inside the toast)
-      const dismissButtons = screen.getAllByRole('button');
-      const dismissButton = dismissButtons.find(btn => btn.closest('[class*="animate-slide-in"]'));
+      // Find the toast container and the dismiss button inside it
+      // The dismiss button has an X icon inside, it's a button without text
+      const toastElement = screen.getByText('Success message').closest('div');
+      const dismissButton = toastElement?.querySelector('button');
       
       if (dismissButton) {
         fireEvent.click(dismissButton);
       }
 
-      // Toast should be removed
-      await waitFor(() => {
-        expect(screen.queryByText('Success message')).not.toBeInTheDocument();
-      });
+      // Toast should be removed immediately after clicking dismiss
+      expect(screen.queryByText('Success message')).not.toBeInTheDocument();
     });
 
     it('auto-dismisses after 4 seconds', async () => {

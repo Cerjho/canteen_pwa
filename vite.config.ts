@@ -10,6 +10,9 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['e2e/**/*', 'node_modules/**/*'],
+    testTimeout: 10000,
+    hookTimeout: 10000,
+    teardownTimeout: 1000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

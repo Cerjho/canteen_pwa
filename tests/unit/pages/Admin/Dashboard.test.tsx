@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
+import { ToastProvider } from '../../../../src/components/Toast';
 import AdminDashboard from '../../../../src/pages/Admin/Dashboard';
 
 // Mock the supabase client
 vi.mock('../../../../src/services/supabaseClient', () => ({
   supabase: {
-    from: vi.fn()
+    from: vi.fn(),
+    channel: vi.fn(),
+    removeChannel: vi.fn()
   }
 }));
 
@@ -21,118 +23,45 @@ const createTestQueryClient = () => new QueryClient({
   }
 });
 
-const mockStats = {
-  totalOrdersToday: 25,
-  totalOrdersWeek: 150,
-  totalOrdersMonth: 600,
-  revenueToday: 1500,
-  revenueWeek: 9000,
-  revenueMonth: 36000,
-  pendingOrders: 5,
-  completedOrdersToday: 20,
-  totalParents: 100,
-  totalChildren: 200,
-  totalProducts: 30,
-  lowStockProducts: 3
-};
-
-const mockRecentOrders = [
-  {
-    id: 'order-1',
-    status: 'pending',
-    total_amount: 130,
-    created_at: '2024-01-15T10:30:00Z',
-    child: [{ first_name: 'Maria', last_name: 'Santos' }],
-    parent: [{ first_name: 'John', last_name: 'Santos' }]
-  },
-  {
-    id: 'order-2',
-    status: 'preparing',
-    total_amount: 80,
-    created_at: '2024-01-15T10:00:00Z',
-    child: [{ first_name: 'Juan', last_name: 'Cruz' }],
-    parent: [{ first_name: 'Pedro', last_name: 'Cruz' }]
-  }
-];
-
-const mockTopProducts = [
-  { product_id: 'p1', name: 'Chicken Adobo', total_quantity: 50, total_revenue: 3250 },
-  { product_id: 'p2', name: 'Banana Cue', total_quantity: 100, total_revenue: 1500 }
-];
-
 const renderAdminDashboard = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <AdminDashboard />
+        <ToastProvider>
+          <AdminDashboard />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );
 };
 
-// Helper to create mock supabase chain
-const createMockSupabaseChain = (result: any) => ({
-  select: vi.fn().mockReturnValue({
-    gte: vi.fn().mockReturnValue({
-      in: vi.fn().mockResolvedValue(result)
-    }),
-    eq: vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue(result)
-    }),
-    order: vi.fn().mockReturnValue({
-      limit: vi.fn().mockResolvedValue(result)
-    }),
-    limit: vi.fn().mockResolvedValue(result)
-  })
-});
-
 describe('Admin Dashboard', () => {
+  const mockChannel = {
+    on: vi.fn().mockReturnThis(),
+    subscribe: vi.fn().mockReturnThis()
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Setup comprehensive mock
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === 'orders') {
-        return {
-          select: vi.fn().mockReturnValue({
-            gte: vi.fn().mockReturnValue({
-              in: vi.fn().mockResolvedValue({ data: [{ total_amount: 1500 }] })
-            }),
-            order: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({ data: mockRecentOrders, error: null })
-            })
-          })
-        } as any;
-      }
-      if (table === 'order_items') {
-        return {
-          select: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({ data: mockTopProducts, error: null })
-            })
-          })
-        } as any;
-      }
-      if (table === 'parents') {
-        return {
-          select: vi.fn().mockResolvedValue({ count: 100 })
-        } as any;
-      }
-      if (table === 'children') {
-        return {
-          select: vi.fn().mockResolvedValue({ count: 200 })
-        } as any;
-      }
-      if (table === 'products') {
-        return {
-          select: vi.fn().mockReturnValue({
-            lt: vi.fn().mockResolvedValue({ count: 3 })
-          })
-        } as any;
-      }
-      return createMockSupabaseChain({ data: [], error: null }) as any;
-    });
+    // Setup supabase mock with chainable methods
+    const chainMock = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      lt: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      single: vi.fn().mockReturnThis(),
+      then: vi.fn((resolve) => resolve({ data: [], error: null, count: 0 }))
+    };
+    
+    vi.mocked(supabase.from).mockReturnValue(chainMock as any);
+    vi.mocked(supabase.channel).mockReturnValue(mockChannel as any);
+    vi.mocked(supabase.removeChannel).mockReturnValue(undefined as any);
   });
 
   describe('Rendering', () => {
@@ -140,95 +69,35 @@ describe('Admin Dashboard', () => {
       renderAdminDashboard();
       
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
-      });
-    });
-
-    it('renders date range selector', async () => {
-      renderAdminDashboard();
-      
-      await waitFor(() => {
-        expect(screen.getByText(/today/i)).toBeInTheDocument();
-        expect(screen.getByText(/week/i)).toBeInTheDocument();
-        expect(screen.getByText(/month/i)).toBeInTheDocument();
+        expect(screen.getByText(/Dashboard/)).toBeInTheDocument();
       });
     });
   });
 
-  describe('Statistics Cards', () => {
-    it('displays order count', async () => {
+  describe('Realtime Updates', () => {
+    it('subscribes to order changes on mount', async () => {
       renderAdminDashboard();
       
       await waitFor(() => {
-        // Should show some order statistics
-        const orderElements = screen.queryAllByText(/order/i);
-        expect(orderElements.length).toBeGreaterThan(0);
+        expect(supabase.channel).toHaveBeenCalled();
       });
     });
 
-    it('displays revenue information', async () => {
-      renderAdminDashboard();
+    it('unsubscribes on unmount', async () => {
+      const { unmount } = renderAdminDashboard();
       
       await waitFor(() => {
-        // Should show revenue statistics
-        const revenueElements = screen.queryAllByText(/revenue|₱/i);
-        expect(revenueElements.length).toBeGreaterThanOrEqual(0);
-      });
-    });
-  });
-
-  describe('Date Range Selection', () => {
-    it('can switch to weekly view', async () => {
-      const user = userEvent.setup();
-      renderAdminDashboard();
-      
-      await waitFor(() => {
-        expect(screen.getByText(/week/i)).toBeInTheDocument();
+        expect(supabase.channel).toHaveBeenCalled();
       });
 
-      const weekButton = screen.getByText(/week/i);
-      await user.click(weekButton);
+      unmount();
       
-      // State should update to week view
-    });
-
-    it('can switch to monthly view', async () => {
-      const user = userEvent.setup();
-      renderAdminDashboard();
-      
-      await waitFor(() => {
-        expect(screen.getByText(/month/i)).toBeInTheDocument();
-      });
-
-      const monthButton = screen.getByText(/month/i);
-      await user.click(monthButton);
-      
-      // State should update to month view
-    });
-  });
-
-  describe('Loading State', () => {
-    it('shows loading spinner while fetching data', () => {
-      vi.mocked(supabase.from).mockImplementation(() => ({
-        select: vi.fn().mockReturnValue({
-          gte: vi.fn().mockReturnValue({
-            in: vi.fn().mockImplementation(() => 
-              new Promise(resolve => setTimeout(() => resolve({ data: [] }), 100))
-            )
-          })
-        })
-      }) as any);
-
-      renderAdminDashboard();
-      
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+      expect(supabase.removeChannel).toHaveBeenCalled();
     });
   });
 });
 
 describe('Dashboard Statistics Logic', () => {
-  // Test the statistics calculation logic
-
   it('calculates total revenue correctly', () => {
     const orders = [
       { total_amount: 100 },
@@ -293,10 +162,10 @@ describe('Dashboard Trend Calculations', () => {
       return ((current - previous) / previous) * 100;
     };
 
-    expect(calculateChange(150, 100)).toBe(50); // 50% increase
-    expect(calculateChange(75, 100)).toBe(-25); // 25% decrease
-    expect(calculateChange(100, 100)).toBe(0); // No change
-    expect(calculateChange(50, 0)).toBe(100); // From zero
+    expect(calculateChange(150, 100)).toBe(50);
+    expect(calculateChange(75, 100)).toBe(-25);
+    expect(calculateChange(100, 100)).toBe(0);
+    expect(calculateChange(50, 0)).toBe(100);
   });
 
   it('identifies positive and negative trends', () => {

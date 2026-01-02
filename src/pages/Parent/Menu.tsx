@@ -4,10 +4,10 @@ import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, Calenda
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus } from '../../services/products';
-import { useChildren } from '../../hooks/useChildren';
+import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
 import { ProductCard } from '../../components/ProductCard';
-import { ChildSelector } from '../../components/ChildSelector';
+import { StudentSelector } from '../../components/StudentSelector';
 import { CartDrawer } from '../../components/CartDrawer';
 import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
@@ -104,7 +104,7 @@ export default function Menu() {
     enabled: !!selectedDate && isCanteenOpen
   });
 
-  const { data: children } = useChildren();
+  const { data: students } = useStudents();
   const { items, addItem, updateQuantity, checkout, total } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
 
@@ -156,7 +156,7 @@ export default function Menu() {
       return;
     }
 
-    const selectedChild = children?.find(c => c.id === selectedChildId);
+    const selectedStudent = students?.find(c => c.id === selectedChildId);
     const scheduledFor = effectiveDate.toISOString().split('T')[0];
     const isFutureOrder = !isToday(effectiveDate);
 
@@ -175,7 +175,7 @@ export default function Menu() {
         state: {
           orderId: result?.order_id || crypto.randomUUID(),
           totalAmount: total,
-          childName: selectedChild ? `${selectedChild.first_name} ${selectedChild.last_name}` : 'Your child',
+          childName: selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : 'Your child',
           itemCount: items.length,
           isOffline: result?.queued || false,
           paymentMethod,
@@ -385,8 +385,8 @@ export default function Menu() {
           )}
         </div>
 
-        <ChildSelector
-          children={children || []}
+        <StudentSelector
+          students={students || []}
           selectedChildId={selectedChildId}
           onSelect={setSelectedChildId}
         />

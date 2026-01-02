@@ -51,7 +51,7 @@ interface DashboardStats {
   completedOrdersToday: number;
   cancelledOrdersToday: number;
   totalParents: number;
-  totalChildren: number;
+  totalStudents: number;
   totalProducts: number;
   lowStockProducts: number;
   outOfStockProducts: number;
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
       const monthStart = startOfMonth(new Date());
 
       // Batch queries for better performance
-      const [ordersResult, parentsResult, childrenResult, productsResult] = await Promise.all([
+      const [ordersResult, parentsResult, studentsResult, productsResult] = await Promise.all([
         supabase
           .from('orders')
           .select('id, status, total_amount, created_at, updated_at, parent_id')
@@ -192,7 +192,7 @@ export default function AdminDashboard() {
       
       const allOrders = ordersResult.data || [];
       const totalParents = parentsResult.count || 0;
-      const totalChildren = childrenResult.count || 0;
+      const totalStudents = studentsResult.count || 0;
       const products = productsResult.data || [];
 
       const totalProducts = products.length;
@@ -234,7 +234,7 @@ export default function AdminDashboard() {
         completedOrdersToday: completedToday.length,
         cancelledOrdersToday: todayOrders.filter(o => o.status === 'cancelled').length,
         totalParents: totalParents || 0,
-        totalChildren: totalChildren || 0,
+        totalStudents: totalStudents || 0,
         totalProducts,
         lowStockProducts,
         outOfStockProducts,

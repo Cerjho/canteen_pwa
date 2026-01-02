@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
 // Mock useAuth
-vi.mock('../../src/hooks/useAuth', () => ({
+vi.mock('../../../src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'test-user-123' }
   })
@@ -14,12 +14,12 @@ vi.mock('../../src/hooks/useAuth', () => ({
 // Mock children service
 const mockGetChildren = vi.fn();
 
-vi.mock('../../src/services/children', () => ({
+vi.mock('../../../src/services/students', () => ({
   getChildren: (...args: any[]) => mockGetChildren(...args)
 }));
 
-import { useChildren } from '../../src/hooks/useChildren';
-import { mockChildren } from '../mocks/data';
+import { useChildren } from '../../../src/hooks/useStudents';
+import { mockChildren } from '../../mocks/data';
 
 describe('useChildren Hook', () => {
   let queryClient: QueryClient;
@@ -139,11 +139,11 @@ describe('useChildren Hook - Unauthenticated', () => {
   });
 
   it('should not fetch children without user', async () => {
-    vi.doMock('../../src/hooks/useAuth', () => ({
+    vi.doMock('../../../src/hooks/useAuth', () => ({
       useAuth: () => ({ user: null })
     }));
 
-    const { useChildren: useChildrenNoAuth } = await import('../../src/hooks/useChildren');
+    const { useChildren: useChildrenNoAuth } = await import('../../../src/hooks/useStudents');
 
     function Wrapper({ children }: { children: ReactNode }) {
       return (

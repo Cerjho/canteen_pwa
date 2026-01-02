@@ -15,7 +15,7 @@ vi.mock('idb', () => ({
 }));
 
 // We need to reset the module to get fresh state
-let localQueueModule: typeof import('../../src/services/localQueue');
+let localQueueModule: typeof import('../../../src/services/localQueue');
 
 describe('LocalQueue Service', () => {
   beforeEach(async () => {
@@ -23,7 +23,7 @@ describe('LocalQueue Service', () => {
     vi.resetModules();
     
     // Re-import the module to get fresh state
-    localQueueModule = await import('../../src/services/localQueue');
+    localQueueModule = await import('../../../src/services/localQueue');
     
     // Reset navigator.onLine
     Object.defineProperty(navigator, 'onLine', {
@@ -50,7 +50,7 @@ describe('LocalQueue Service', () => {
   describe('queueOrder', () => {
     const mockOrderData = {
       parent_id: 'parent-123',
-      child_id: 'child-1',
+      student_id: 'child-1',
       client_order_id: 'client-order-1',
       items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
       payment_method: 'cash',
@@ -179,7 +179,7 @@ describe('LocalQueue Service', () => {
   describe('processQueue', () => {
     beforeEach(() => {
       // Mock supabase for processQueue
-      vi.doMock('../../src/services/supabaseClient', () => ({
+      vi.doMock('../../../src/services/supabaseClient', () => ({
         supabase: {
           auth: {
             getSession: vi.fn().mockResolvedValue({

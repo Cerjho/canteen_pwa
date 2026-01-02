@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
-import { getChildren, linkStudent, unlinkStudent, updateChild, Child } from '../../services/children';
+import { getStudents, linkStudent, unlinkStudent, updateStudent, Student } from '../../services/students';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -33,12 +33,12 @@ export default function Profile() {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const [showLinkChild, setShowLinkChild] = useState(false);
-  const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [showLinkStudent, setShowLinkStudent] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [unlinkingChild, setUnlinkingChild] = useState<Child | null>(null);
+  const [unlinkingStudent, setUnlinkingStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -121,10 +121,10 @@ export default function Profile() {
     enabled: !!user
   });
 
-  // Fetch children
-  const { data: children, isLoading: childrenLoading } = useQuery({
-    queryKey: ['children', user?.id],
-    queryFn: () => getChildren(user!.id),
+  // Fetch students
+  const { data: students, isLoading: studentsLoading } = useQuery({
+    queryKey: ['students', user?.id],
+    queryFn: () => getStudents(user!.id),
     enabled: !!user
   });
 
@@ -165,38 +165,38 @@ export default function Profile() {
     }
   });
 
-  // Link child mutation (via Edge Function)
-  const linkChildMutation = useMutation({
+  // Link student mutation (via Edge Function)
+  const linkStudentMutation = useMutation({
     mutationFn: (studentId: string) => linkStudent(studentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['children'] });
-      setShowLinkChild(false);
-      showToast('Child linked successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setShowLinkStudent(false);
+      showToast('Student linked successfully', 'success');
     },
     onError: (error: Error) => showToast(error.message, 'error')
   });
 
-  // Unlink child mutation (via Edge Function)
-  const unlinkChildMutation = useMutation({
+  // Unlink student mutation (via Edge Function)
+  const unlinkStudentMutation = useMutation({
     mutationFn: unlinkStudent,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['children'] });
-      setUnlinkingChild(null);
-      showToast('Child unlinked successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setUnlinkingStudent(null);
+      showToast('Student unlinked successfully', 'success');
     },
     onError: (error: Error) => {
-      setUnlinkingChild(null);
-      showToast(error.message || 'Failed to unlink child', 'error');
+      setUnlinkingStudent(null);
+      showToast(error.message || 'Failed to unlink student', 'error');
     }
   });
 
-  // Update child mutation (dietary info only, via Edge Function)
-  const updateChildMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Child> }) =>
-      updateChild(id, data),
+  // Update student mutation (dietary info only, via Edge Function)
+  const updateStudentMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Student> }) =>
+      updateStudent(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['children'] });
-      setEditingChild(null);
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setEditingStudent(null);
       showToast('Info updated successfully', 'success');
     },
     onError: (error: Error) => showToast(error.message || 'Failed to update info', 'error')
@@ -371,16 +371,16 @@ export default function Profile() {
           </div>
         </section>
 
-        {/* Children Section */}
+        {/* Students Section */}
         <section className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">My Children</h3>
+            <h3 className="text-lg font-semibold">My Students</h3>
             <button
-              onClick={() => setShowLinkChild(true)}
+              onClick={() => setShowLinkStudent(true)}
               className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-medium"
             >
               <Link2 size={20} />
-              Link Child
+              Link Student
             </button>
           </div>
 
@@ -394,35 +394,35 @@ export default function Profile() {
             </div>
           </div>
 
-          {childrenLoading ? (
+          {studentsLoading ? (
             <LoadingSpinner size="sm" />
-          ) : children && children.length > 0 ? (
+          ) : students && students.length > 0 ? (
             <div className="space-y-3">
-              {children.map((child) => (
+              {students.map((student) => (
                 <div
-                  key={child.id}
+                  key={student.id}
                   className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
                 >
                   <div>
                     <p className="font-medium">
-                      {child.first_name} {child.last_name}
+                      {student.first_name} {student.last_name}
                     </p>
                     <p className="text-sm text-gray-600">
                       <span className="font-mono bg-gray-200 px-1.5 py-0.5 rounded text-xs mr-2">
-                        {child.student_id}
+                        {student.student_id}
                       </span>
-                      {child.grade_level}
-                      {child.section && ` - Section ${child.section}`}
+                      {student.grade_level}
+                      {student.section && ` - Section ${student.section}`}
                     </p>
-                    {child.dietary_restrictions && (
+                    {student.dietary_restrictions && (
                       <p className="text-xs text-amber-600 mt-1">
-                        ⚠️ {child.dietary_restrictions}
+                        ⚠️ {student.dietary_restrictions}
                       </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setEditingChild(child)}
+                      onClick={() => setEditingStudent(student)}
                       className="p-2 hover:bg-gray-200 rounded-lg"
                       aria-label="Edit dietary info"
                       title="Edit dietary info"
@@ -430,10 +430,10 @@ export default function Profile() {
                       <Edit2 size={18} className="text-gray-600" />
                     </button>
                     <button
-                      onClick={() => setUnlinkingChild(child)}
+                      onClick={() => setUnlinkingStudent(student)}
                       className="p-2 hover:bg-amber-100 rounded-lg"
-                      aria-label="Unlink child"
-                      title="Unlink child"
+                      aria-label="Unlink student"
+                      title="Unlink student"
                     >
                       <Unlink size={18} className="text-amber-600" />
                     </button>
@@ -443,7 +443,7 @@ export default function Profile() {
             </div>
           ) : (
             <p className="text-gray-500 text-center py-4">
-              No children linked yet. Click "Link Child" and enter the Student ID to connect.
+              No students linked yet. Click "Link Student" and enter the Student ID to connect.
             </p>
           )}
         </section>
@@ -467,37 +467,37 @@ export default function Profile() {
         </button>
       </div>
 
-      {/* Link Child Modal */}
-      {showLinkChild && (
-        <LinkChildModal
-          onClose={() => setShowLinkChild(false)}
-          onSubmit={(studentId) => linkChildMutation.mutate(studentId)}
-          isLoading={linkChildMutation.isPending}
+      {/* Link Student Modal */}
+      {showLinkStudent && (
+        <LinkStudentModal
+          onClose={() => setShowLinkStudent(false)}
+          onSubmit={(studentId) => linkStudentMutation.mutate(studentId)}
+          isLoading={linkStudentMutation.isPending}
         />
       )}
 
-      {/* Edit Child Modal (dietary info only) */}
-      {editingChild && (
+      {/* Edit Student Modal (dietary info only) */}
+      {editingStudent && (
         <EditDietaryModal
-          child={editingChild}
-          onClose={() => setEditingChild(null)}
+          student={editingStudent}
+          onClose={() => setEditingStudent(null)}
           onSubmit={(data) =>
-            updateChildMutation.mutate({ id: editingChild.id, data })
+            updateStudentMutation.mutate({ id: editingStudent.id, data })
           }
-          isLoading={updateChildMutation.isPending}
+          isLoading={updateStudentMutation.isPending}
         />
       )}
 
-      {/* Unlink Child Confirmation */}
-      {unlinkingChild && (
+      {/* Unlink Student Confirmation */}
+      {unlinkingStudent && (
         <ConfirmDialog
           isOpen={true}
-          title="Unlink Child"
-          message={`Are you sure you want to unlink ${unlinkingChild.first_name} ${unlinkingChild.last_name} from your account? You can link them again later using their Student ID.`}
-          confirmLabel={unlinkChildMutation.isPending ? 'Unlinking...' : 'Unlink'}
+          title="Unlink Student"
+          message={`Are you sure you want to unlink ${unlinkingStudent.first_name} ${unlinkingStudent.last_name} from your account? You can link them again later using their Student ID.`}
+          confirmLabel={unlinkStudentMutation.isPending ? 'Unlinking...' : 'Unlink'}
           type="warning"
-          onConfirm={() => unlinkChildMutation.mutate(unlinkingChild.id)}
-          onCancel={() => setUnlinkingChild(null)}
+          onConfirm={() => unlinkStudentMutation.mutate(unlinkingStudent.id)}
+          onCancel={() => setUnlinkingStudent(null)}
         />
       )}
 
@@ -522,14 +522,14 @@ export default function Profile() {
   );
 }
 
-// Link Child Modal Component
-interface LinkChildModalProps {
+// Link Student Modal Component
+interface LinkStudentModalProps {
   onClose: () => void;
   onSubmit: (studentId: string) => void;
   isLoading: boolean;
 }
 
-function LinkChildModal({ onClose, onSubmit, isLoading }: LinkChildModalProps) {
+function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProps) {
   const [studentId, setStudentId] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -543,11 +543,11 @@ function LinkChildModal({ onClose, onSubmit, isLoading }: LinkChildModalProps) {
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
           <Link2 size={24} className="text-primary-600" />
-          Link Your Child
+          Link Your Student
         </h2>
 
         <p className="text-gray-600 mb-4">
-          Enter the Student ID provided by the school to link your child to your account.
+          Enter the Student ID provided by the school to link your student to your account.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -586,7 +586,7 @@ function LinkChildModal({ onClose, onSubmit, isLoading }: LinkChildModalProps) {
               disabled={isLoading || !studentId.trim()}
               className="flex-1 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:bg-gray-300"
             >
-              {isLoading ? 'Linking...' : 'Link Child'}
+              {isLoading ? 'Linking...' : 'Link Student'}
             </button>
           </div>
         </form>
@@ -597,15 +597,15 @@ function LinkChildModal({ onClose, onSubmit, isLoading }: LinkChildModalProps) {
 
 // Edit Dietary Info Modal
 interface EditDietaryModalProps {
-  child: Child;
+  student: Student;
   onClose: () => void;
-  onSubmit: (data: Partial<Child>) => void;
+  onSubmit: (data: Partial<Student>) => void;
   isLoading: boolean;
 }
 
-function EditDietaryModal({ child, onClose, onSubmit, isLoading }: EditDietaryModalProps) {
+function EditDietaryModal({ student, onClose, onSubmit, isLoading }: EditDietaryModalProps) {
   const [dietaryRestrictions, setDietaryRestrictions] = useState(
-    child?.dietary_restrictions || ''
+    student?.dietary_restrictions || ''
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -620,7 +620,7 @@ function EditDietaryModal({ child, onClose, onSubmit, isLoading }: EditDietaryMo
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
         <h2 className="text-xl font-bold mb-2">Edit Dietary Info</h2>
         <p className="text-sm text-gray-600 mb-4">
-          For {child.first_name} {child.last_name}
+          For {student.first_name} {student.last_name}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

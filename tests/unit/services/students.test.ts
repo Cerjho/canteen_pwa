@@ -6,7 +6,7 @@ const mockInvoke = vi.fn();
 const mockSelect = vi.fn();
 const mockFrom = vi.fn();
 
-vi.mock('../../src/services/supabaseClient', () => ({
+vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     functions: {
       invoke: (...args: any[]) => mockInvoke(...args)
@@ -23,7 +23,7 @@ import {
   updateChildDietary,
   addChild,
   deleteChild
-} from '../../src/services/children';
+} from '../../../src/services/students';
 
 describe('Children Service', () => {
   beforeEach(() => {
@@ -33,60 +33,54 @@ describe('Children Service', () => {
   describe('getChildren', () => {
     const mockQueryBuilder = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [], error: null })
+      eq: vi.fn().mockResolvedValue({ data: [], error: null })
     };
 
     beforeEach(() => {
       mockFrom.mockReturnValue(mockQueryBuilder);
     });
 
-    it('queries children table', async () => {
-      mockQueryBuilder.order.mockResolvedValue({ data: [], error: null });
+    it('queries parent_students table', async () => {
+      mockQueryBuilder.eq.mockResolvedValue({ data: [], error: null });
 
       await getChildren('parent-123');
 
-      expect(mockFrom).toHaveBeenCalledWith('children');
+      expect(mockFrom).toHaveBeenCalledWith('parent_students');
     });
 
-    it('selects all fields', async () => {
-      mockQueryBuilder.order.mockResolvedValue({ data: [], error: null });
+    it('selects with join to students table', async () => {
+      mockQueryBuilder.eq.mockResolvedValue({ data: [], error: null });
 
       await getChildren('parent-123');
 
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith('*');
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('students:student_id'));
     });
 
     it('filters by parent_id', async () => {
-      mockQueryBuilder.order.mockResolvedValue({ data: [], error: null });
+      mockQueryBuilder.eq.mockResolvedValue({ data: [], error: null });
 
       await getChildren('parent-123');
 
       expect(mockQueryBuilder.eq).toHaveBeenCalledWith('parent_id', 'parent-123');
     });
 
-    it('orders by first_name ascending', async () => {
-      mockQueryBuilder.order.mockResolvedValue({ data: [], error: null });
-
-      await getChildren('parent-123');
-
-      expect(mockQueryBuilder.order).toHaveBeenCalledWith('first_name', { ascending: true });
-    });
-
-    it('returns children data', async () => {
-      const mockChildren = [
-        { id: 'child-1', first_name: 'Maria', last_name: 'Santos' },
-        { id: 'child-2', first_name: 'Juan', last_name: 'Santos' }
+    it('returns children data flattened from join', async () => {
+      const mockJoinData = [
+        { student_id: 'stu-1', students: { id: 'child-1', student_id: 'STU-001', first_name: 'Maria', last_name: 'Santos', grade_level: '5', section: 'A' } },
+        { student_id: 'stu-2', students: { id: 'child-2', student_id: 'STU-002', first_name: 'Juan', last_name: 'Santos', grade_level: '3', section: 'B' } }
       ];
-      mockQueryBuilder.order.mockResolvedValue({ data: mockChildren, error: null });
+      mockQueryBuilder.eq.mockResolvedValue({ data: mockJoinData, error: null });
 
       const result = await getChildren('parent-123');
 
-      expect(result).toEqual(mockChildren);
+      expect(result).toHaveLength(2);
+      expect(result[0].first_name).toBe('Maria');
+      expect(result[1].first_name).toBe('Juan');
+      expect(result[0].parent_id).toBe('parent-123');
     });
 
     it('returns empty array when no children', async () => {
-      mockQueryBuilder.order.mockResolvedValue({ data: null, error: null });
+      mockQueryBuilder.eq.mockResolvedValue({ data: null, error: null });
 
       const result = await getChildren('parent-123');
 
@@ -94,7 +88,7 @@ describe('Children Service', () => {
     });
 
     it('throws error on failure', async () => {
-      mockQueryBuilder.order.mockResolvedValue({ data: null, error: { message: 'Database error' } });
+      mockQueryBuilder.eq.mockResolvedValue({ data: null, error: { message: 'Database error' } });
 
       await expect(getChildren('parent-123')).rejects.toEqual({ message: 'Database error' });
     });
@@ -111,24 +105,25 @@ describe('Children Service', () => {
       mockFrom.mockReturnValue(mockQueryBuilder);
     });
 
-    it('queries children table', async () => {
+    it('queries students table', async () => {
       await findStudentById('STU-001');
 
-      expect(mockFrom).toHaveBeenCalledWith('children');
+      expect(mockFrom).toHaveBeenCalledWith('students');
     });
 
     it('selects specific fields', async () => {
       await findStudentById('STU-001');
 
       expect(mockQueryBuilder.select).toHaveBeenCalledWith(
-        'id, student_id, first_name, last_name, grade_level, section, parent_id'
+        'id, student_id, first_name, last_name, grade_level, section, dietary_restrictions, is_active, created_at, updated_at'
       );
     });
 
-    it('filters by student_id (uppercase trimmed)', async () => {
+    it('filters by student_id (uppercase trimmed) and is_active', async () => {
       await findStudentById('  stu-001  ');
 
       expect(mockQueryBuilder.eq).toHaveBeenCalledWith('student_id', 'STU-001');
+      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('is_active', true);
     });
 
     it('returns student data', async () => {
@@ -234,22 +229,24 @@ describe('Children Service', () => {
 
   describe('updateChildDietary', () => {
     it('calls update-dietary function', async () => {
-      mockInvoke.mockResolvedValue({ data: { child: { id: 'child-1' } }, error: null });
+      mockInvoke.mockResolvedValue({ data: { student: { id: 'child-1', student_id: 'STU-001', first_name: 'Test', last_name: 'Child', grade_level: 'Grade 1', is_active: true, created_at: '', updated_at: '' } }, error: null });
 
       await updateChildDietary('child-1', 'No peanuts');
 
       expect(mockInvoke).toHaveBeenCalledWith('update-dietary', {
-        body: { child_id: 'child-1', dietary_restrictions: 'No peanuts' }
+        body: { student_id: 'child-1', dietary_restrictions: 'No peanuts' }
       });
     });
 
     it('returns updated child data', async () => {
-      const mockChild = { id: 'child-1', dietary_restrictions: 'No peanuts' };
-      mockInvoke.mockResolvedValue({ data: { child: mockChild }, error: null });
+      const mockStudent = { id: 'child-1', student_id: 'STU-001', first_name: 'Test', last_name: 'Child', grade_level: 'Grade 1', dietary_restrictions: 'No peanuts', is_active: true, created_at: '2024-01-01', updated_at: '2024-01-01' };
+      mockInvoke.mockResolvedValue({ data: { student: mockStudent }, error: null });
 
       const result = await updateChildDietary('child-1', 'No peanuts');
 
-      expect(result).toEqual(mockChild);
+      // Returns Child type for backward compatibility
+      expect(result.id).toEqual('child-1');
+      expect(result.dietary_restrictions).toEqual('No peanuts');
     });
 
     it('throws error on function error', async () => {
@@ -266,11 +263,11 @@ describe('Children Service', () => {
         first_name: 'Test',
         last_name: 'Child',
         grade_level: 'Grade 1'
-      })).rejects.toThrow('Adding children is no longer supported');
+      })).rejects.toThrow('Adding students is no longer supported');
     });
 
     it('deleteChild throws error', async () => {
-      await expect(deleteChild('child-1')).rejects.toThrow('Removing children is no longer supported');
+      await expect(deleteChild('child-1')).rejects.toThrow('Removing students is no longer supported');
     });
   });
 });
