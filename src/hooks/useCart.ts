@@ -54,13 +54,13 @@ export function useCart() {
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const checkout = async (childId: string, method?: PaymentMethod, orderNotes?: string, scheduledFor?: string) => {
+  const checkout = async (studentId: string, method?: PaymentMethod, orderNotes?: string, scheduledFor?: string) => {
     if (!user) throw new Error('User not authenticated');
     if (items.length === 0) throw new Error('Cart is empty');
 
     const orderData = {
       parent_id: user.id,
-      child_id: childId,
+      student_id: studentId,
       client_order_id: crypto.randomUUID(),
       items: items.map((item) => ({
         product_id: item.product_id,

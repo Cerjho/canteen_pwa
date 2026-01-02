@@ -17,12 +17,12 @@ interface OrderItem {
 
 interface OrderRequest {
   parent_id: string;
-  child_id: string;
+  student_id: string;
   client_order_id: string;
   items: OrderItem[];
   payment_method: string;
   notes?: string;
-  scheduled_for?: string; // Date string YYYY-MM-DD for future orders
+  scheduled_for?: string;
 }
 
 serve(async (req) => {
@@ -63,10 +63,10 @@ serve(async (req) => {
 
     // Parse request body
     const body: OrderRequest = await req.json();
-    const { parent_id, child_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
+    const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
 
     // Validate request
-    if (!parent_id || !child_id || !client_order_id || !items || items.length === 0) {
+    if (!parent_id || !student_id || !client_order_id || !items || items.length === 0) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -85,7 +85,7 @@ serve(async (req) => {
     const { data: studentLink, error: linkError } = await supabaseAdmin
       .from('parent_students')
       .select('student_id')
-      .eq('student_id', child_id)
+      .eq('student_id', student_id)
       .eq('parent_id', parent_id)
       .single();
 
@@ -202,7 +202,7 @@ serve(async (req) => {
       .from('orders')
       .insert({
         parent_id,
-        student_id: child_id, // child_id from request maps to student_id column
+        student_id,
         client_order_id,
         status: 'pending',
         total_amount: totalAmount,

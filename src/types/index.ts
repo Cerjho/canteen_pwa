@@ -46,12 +46,13 @@ export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymongo';
 export interface Order {
   id: string;
   parent_id: string;
-  child_id: string;
+  student_id: string;
   client_order_id: string;
   status: OrderStatus;
   total_amount: number;
   payment_method: PaymentMethod;
   notes?: string;
+  scheduled_for?: string;
   created_at: string;
   updated_at: string;
   completed_at?: string;
@@ -91,7 +92,7 @@ export interface CartItem {
 // API types
 export interface CreateOrderRequest {
   parent_id: string;
-  child_id: string;
+  student_id: string;
   client_order_id: string;
   items: Array<{
     product_id: string;
@@ -100,6 +101,7 @@ export interface CreateOrderRequest {
   }>;
   payment_method: string;
   notes?: string;
+  scheduled_for?: string;
 }
 
 export interface OrderWithDetails extends Order {

@@ -3,7 +3,7 @@ import { openDB, DBSchema, IDBPDatabase } from 'idb';
 interface QueuedOrder {
   id: string;
   parent_id: string;
-  child_id: string;
+  student_id: string;
   client_order_id: string;
   items: Array<{
     product_id: string;
@@ -12,6 +12,7 @@ interface QueuedOrder {
   }>;
   payment_method: string;
   notes?: string;
+  scheduled_for?: string;
   queued_at: Date;
   retry_count: number;
   last_error?: string;
@@ -21,7 +22,7 @@ interface CanteenDB extends DBSchema {
   'order-queue': {
     key: string;
     value: QueuedOrder;
-    indexes: { 'by-child': string; 'by-queued': Date };
+    indexes: { 'by-student': string; 'by-queued': Date };
   };
 }
 
@@ -30,12 +31,16 @@ let db: IDBPDatabase<CanteenDB> | null = null;
 async function getDB() {
   if (db) return db;
 
-  db = await openDB<CanteenDB>('canteen-offline', 1, {
-    upgrade(database) {
+  db = await openDB<CanteenDB>('canteen-offline', 2, {
+    upgrade(database, oldVersion) {
+      // Delete old store if upgrading from v1
+      if (oldVersion < 2 && database.objectStoreNames.contains('order-queue')) {
+        database.deleteObjectStore('order-queue');
+      }
       const store = database.createObjectStore('order-queue', {
         keyPath: 'id'
       });
-      store.createIndex('by-child', 'child_id');
+      store.createIndex('by-student', 'student_id');
       store.createIndex('by-queued', 'queued_at');
     }
   });
@@ -141,11 +146,12 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
       const { data, error } = await supabase.functions.invoke('process-order', {
         body: {
           parent_id: order.parent_id,
-          child_id: order.child_id,
+          student_id: order.student_id,
           client_order_id: order.client_order_id,
           items: order.items,
           payment_method: order.payment_method,
-          notes: order.notes
+          notes: order.notes,
+          scheduled_for: order.scheduled_for
         }
       });
 
@@ -248,11 +254,12 @@ export async function retryFailedOrder(clientOrderId: string): Promise<void> {
     // Re-queue the order
     await queueOrder({
       parent_id: orderToRetry.parent_id,
-      child_id: orderToRetry.child_id,
+      student_id: orderToRetry.student_id,
       client_order_id: orderToRetry.client_order_id, // Keep same ID for idempotency
       items: orderToRetry.items,
       payment_method: orderToRetry.payment_method,
-      notes: orderToRetry.notes
+      notes: orderToRetry.notes,
+      scheduled_for: orderToRetry.scheduled_for
     });
 
     // Remove from failed queue

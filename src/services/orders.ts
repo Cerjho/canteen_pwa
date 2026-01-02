@@ -3,7 +3,7 @@ import { queueOrder, isOnline } from './localQueue';
 
 export interface CreateOrderRequest {
   parent_id: string;
-  child_id: string;
+  student_id: string;
   client_order_id: string;
   items: Array<{
     product_id: string;
@@ -12,7 +12,7 @@ export interface CreateOrderRequest {
   }>;
   payment_method: string;
   notes?: string;
-  scheduled_for?: string; // Date string YYYY-MM-DD for future orders
+  scheduled_for?: string;
 }
 
 export async function createOrder(orderData: CreateOrderRequest) {

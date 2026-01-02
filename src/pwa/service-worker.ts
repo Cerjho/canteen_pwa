@@ -122,11 +122,12 @@ async function syncQueuedOrders(): Promise<void> {
           },
           body: JSON.stringify({
             parent_id: order.parent_id,
-            child_id: order.child_id,
+            student_id: order.student_id,
             client_order_id: order.client_order_id,
             items: order.items,
             payment_method: order.payment_method,
-            notes: order.notes
+            notes: order.notes,
+            scheduled_for: order.scheduled_for
           })
         });
 
@@ -170,16 +171,18 @@ async function syncQueuedOrders(): Promise<void> {
 // IndexedDB helpers for service worker
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('canteen-offline', 1);
+    const request = indexedDB.open('canteen-offline', 2);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains('order-queue')) {
-        const store = db.createObjectStore('order-queue', { keyPath: 'id' });
-        store.createIndex('by-child', 'child_id');
-        store.createIndex('by-queued', 'queued_at');
+      // Delete old store if exists
+      if (db.objectStoreNames.contains('order-queue')) {
+        db.deleteObjectStore('order-queue');
       }
+      const store = db.createObjectStore('order-queue', { keyPath: 'id' });
+      store.createIndex('by-student', 'student_id');
+      store.createIndex('by-queued', 'queued_at');
     };
   });
 }
