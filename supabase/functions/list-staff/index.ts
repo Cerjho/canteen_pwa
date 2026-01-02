@@ -22,6 +22,9 @@ serve(async (req) => {
       );
     }
 
+    // Extract token from Bearer header
+    const token = authHeader.replace('Bearer ', '');
+
     // Create Supabase client with service role for admin operations
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -29,16 +32,11 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Verify requesting user is admin
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user: requestingUser }, error: authError } = await supabaseClient.auth.getUser();
+    // Get user from token using admin client
+    const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !requestingUser) {
+      console.log('Auth error:', authError?.message);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
