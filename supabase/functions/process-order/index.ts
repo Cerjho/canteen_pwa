@@ -58,9 +58,12 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Get auth token from Authorization header (standard Supabase auth flow)
+    // Get auth token from Authorization header
     const authHeader = req.headers.get('Authorization');
+    console.log('Authorization header present:', !!authHeader);
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('Missing or invalid Authorization header');
       return new Response(
         JSON.stringify({ error: 'UNAUTHORIZED', message: 'Missing or invalid authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -68,10 +71,12 @@ serve(async (req) => {
     }
     
     const token = authHeader.replace('Bearer ', '');
+    console.log('Token length:', token.length, 'prefix:', token.substring(0, 25));
     
     // Validate token is a proper JWT (basic structure check)
     const tokenParts = token.split('.');
     if (tokenParts.length !== 3) {
+      console.error('Invalid JWT structure, parts:', tokenParts.length);
       return new Response(
         JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token format' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -79,10 +84,11 @@ serve(async (req) => {
     }
 
     // Verify user with Supabase Auth (server-side validation)
+    console.log('Calling getUser with token...');
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
-      console.error('Auth verification failed:', authError?.message);
+      console.error('Auth verification failed:', authError?.message, 'code:', authError?.code);
       return new Response(
         JSON.stringify({ 
           error: 'UNAUTHORIZED', 
@@ -91,6 +97,8 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log('User authenticated:', user.id);
 
     // Parse and validate request body
     const body: OrderRequest = await req.json();
