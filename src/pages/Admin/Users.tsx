@@ -106,39 +106,49 @@ export default function AdminUsers() {
     }
   });
 
-  // Fetch parents
+  // Fetch parents (users who have children or wallets)
   const { data: parents, isLoading: parentsLoading } = useQuery<Parent[]>({
     queryKey: ['admin-parents'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('parents')
+      // Get user profiles with their wallets
+      const { data: profiles, error } = await supabase
+        .from('user_profiles')
         .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
+      // Get wallets for balance
+      const { data: wallets } = await supabase
+        .from('wallets')
+        .select('user_id, balance');
+      
+      const walletMap = new Map((wallets || []).map(w => [w.user_id, w.balance]));
+      
       // Get children and orders count for each parent
       const enrichedParents = await Promise.all(
-        data.map(async (parent) => {
+        profiles.map(async (profile) => {
           const { count: childrenCount } = await supabase
             .from('children')
             .select('*', { count: 'exact', head: true })
-            .eq('parent_id', parent.id);
+            .eq('parent_id', profile.id);
 
           const { count: ordersCount } = await supabase
             .from('orders')
             .select('*', { count: 'exact', head: true })
-            .eq('parent_id', parent.id);
+            .eq('parent_id', profile.id);
 
           return {
-            ...parent,
+            ...profile,
+            balance: walletMap.get(profile.id) || 0,
             children_count: childrenCount || 0,
             orders_count: ordersCount || 0
           };
         })
       );
 
-      return enrichedParents;
+      // Filter to only show users who have children (actual parents)
+      return enrichedParents.filter(p => p.children_count > 0 || p.orders_count > 0);
     }
   });
 
@@ -175,18 +185,30 @@ export default function AdminUsers() {
   // Top up balance mutation
   const topUpMutation = useMutation({
     mutationFn: async ({ parentId, amount }: { parentId: string; amount: number }) => {
-      const { data: parent } = await supabase
-        .from('parents')
+      // Get or create wallet
+      let { data: wallet } = await supabase
+        .from('wallets')
         .select('balance')
-        .eq('id', parentId)
-        .single();
+        .eq('user_id', parentId)
+        .maybeSingle();
 
-      const newBalance = (parent?.balance || 0) + amount;
+      if (!wallet) {
+        // Create wallet if doesn't exist
+        const { data: newWallet, error: createError } = await supabase
+          .from('wallets')
+          .insert({ user_id: parentId, balance: 0 })
+          .select('balance')
+          .single();
+        if (createError) throw createError;
+        wallet = newWallet;
+      }
+
+      const newBalance = (wallet?.balance || 0) + amount;
 
       const { error: updateError } = await supabase
-        .from('parents')
+        .from('wallets')
         .update({ balance: newBalance })
-        .eq('id', parentId);
+        .eq('user_id', parentId);
 
       if (updateError) throw updateError;
 

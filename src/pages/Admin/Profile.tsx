@@ -105,9 +105,8 @@ export default function AdminProfile() {
   const { data: profile } = useQuery({
     queryKey: ['admin-profile', user?.id],
     queryFn: async () => {
-      // Try to get from parents table first
       const { data, error } = await supabase
-        .from('parents')
+        .from('user_profiles')
         .select('*')
         .eq('id', user!.id)
         .maybeSingle();
@@ -135,9 +134,9 @@ export default function AdminProfile() {
   // Update profile mutation
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<AdminProfileData>) => {
-      // Update in parents table
+      // Update in user_profiles table
       const { error: dbError } = await supabase
-        .from('parents')
+        .from('user_profiles')
         .upsert({
           id: user!.id,
           email: user!.email,

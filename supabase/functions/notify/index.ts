@@ -102,14 +102,14 @@ serve(async (req) => {
 
     // Get parent details
     const { data: parent, error: parentError } = await supabaseAdmin
-      .from('parents')
+      .from('user_profiles')
       .select('id, first_name, phone_number, email')
       .eq('id', parent_id)
       .single();
 
     if (parentError || !parent) {
       return new Response(
-        JSON.stringify({ error: 'NOT_FOUND', message: 'Parent not found' }),
+        JSON.stringify({ error: 'NOT_FOUND', message: 'User not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

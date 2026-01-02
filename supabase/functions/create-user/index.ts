@@ -110,18 +110,27 @@ serve(async (req) => {
           if (createError) {
             results.push({ email: trimmedEmail, success: false, error: createError.message });
           } else {
-            // For parent role, create entry in parents table
-            if (role === 'parent' && newUser.user) {
+            // Create user profile for all roles
+            if (newUser.user) {
               await supabaseAdmin
-                .from('parents')
+                .from('user_profiles')
                 .insert({
                   id: newUser.user.id,
                   email: trimmedEmail,
                   first_name: '',
                   last_name: '',
                   phone_number: null,
-                  balance: 0,
                 });
+              
+              // Create wallet for parent role
+              if (role === 'parent') {
+                await supabaseAdmin
+                  .from('wallets')
+                  .insert({
+                    user_id: newUser.user.id,
+                    balance: 0,
+                  });
+              }
             }
             results.push({ email: trimmedEmail, success: true });
           }
@@ -187,21 +196,34 @@ serve(async (req) => {
       );
     }
 
-    // If parent, create entry in parents table
-    if (role === 'parent' && newUser.user) {
-      const { error: parentError } = await supabaseAdmin
-        .from('parents')
+    // Create user profile for all roles
+    if (newUser.user) {
+      const { error: profileError } = await supabaseAdmin
+        .from('user_profiles')
         .insert({
           id: newUser.user.id,
           email,
           first_name: firstName,
           last_name: lastName,
           phone_number: phoneNumber || null,
-          balance: 0,
         });
 
-      if (parentError) {
-        console.error('Error creating parent record:', parentError);
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+      }
+
+      // Create wallet for parent role
+      if (role === 'parent') {
+        const { error: walletError } = await supabaseAdmin
+          .from('wallets')
+          .insert({
+            user_id: newUser.user.id,
+            balance: 0,
+          });
+
+        if (walletError) {
+          console.error('Error creating wallet:', walletError);
+        }
       }
     }
 

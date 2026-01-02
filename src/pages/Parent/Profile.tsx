@@ -47,13 +47,13 @@ export default function Profile() {
     queryKey: ['profile', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('parents')
+        .from('user_profiles')
         .select('*')
         .eq('id', user!.id)
         .maybeSingle();
       if (error) throw error;
       
-      // If no parent profile exists yet, create one from auth metadata
+      // If no profile exists yet, create one from auth metadata
       if (!data && user) {
         const newProfile = {
           id: user.id,
@@ -61,26 +61,32 @@ export default function Profile() {
           first_name: user.user_metadata?.first_name || '',
           last_name: user.user_metadata?.last_name || '',
           phone_number: user.user_metadata?.phone_number || null,
-          balance: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
         
         const { data: inserted, error: insertError } = await supabase
-          .from('parents')
+          .from('user_profiles')
           .insert(newProfile)
           .select()
           .single();
         
         if (insertError) {
-          console.error('Failed to create parent profile:', insertError);
+          console.error('Failed to create profile:', insertError);
           // Return default profile from auth metadata
-          return newProfile as Parent;
+          return { ...newProfile, balance: 0 } as Parent;
         }
-        return inserted as Parent;
+        return { ...inserted, balance: 0 } as Parent;
       }
       
-      return data as Parent;
+      // Fetch balance from wallets table
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      
+      return { ...data, balance: wallet?.balance || 0 } as Parent;
     },
     enabled: !!user
   });
@@ -96,7 +102,7 @@ export default function Profile() {
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { first_name: string; last_name: string; phone_number: string }) => {
       const { error: dbError } = await supabase
-        .from('parents')
+        .from('user_profiles')
         .update({
           first_name: data.first_name,
           last_name: data.last_name,

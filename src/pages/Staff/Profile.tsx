@@ -34,13 +34,12 @@ export default function StaffProfilePage() {
   // Get user role
   const userRole = user?.user_metadata?.role || 'staff';
 
-  // Fetch staff profile from parents table (staff also stored there)
+  // Fetch staff profile from user_profiles table
   const { data: profile, isLoading } = useQuery({
     queryKey: ['staff-profile', user?.id],
     queryFn: async () => {
-      // Staff profile is stored in parents table
       const { data, error } = await supabase
-        .from('parents')
+        .from('user_profiles')
         .select('*')
         .eq('id', user!.id)
         .maybeSingle();
@@ -69,7 +68,7 @@ export default function StaffProfilePage() {
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<StaffProfile>) => {
       const { error } = await supabase
-        .from('parents')
+        .from('user_profiles')
         .upsert({
           id: user!.id,
           email: user!.email,

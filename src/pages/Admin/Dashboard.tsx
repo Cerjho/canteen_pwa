@@ -178,7 +178,7 @@ export default function AdminDashboard() {
           .select('id, status, total_amount, created_at, updated_at, parent_id')
           .gte('created_at', monthStart.toISOString()),
         supabase
-          .from('parents')
+          .from('user_profiles')
           .select('*', { count: 'exact', head: true }),
         supabase
           .from('children')

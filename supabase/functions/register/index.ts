@@ -176,22 +176,32 @@ serve(async (req) => {
       );
     }
 
-    // Create parent record if role is parent
+    // Create user profile record for all roles
+    const { error: profileError } = await supabaseAdmin
+      .from('user_profiles')
+      .insert({
+        id: newUser.user.id,
+        email: invitation.email,
+        first_name: sanitizedFirstName,
+        last_name: sanitizedLastName,
+        phone_number: sanitizedPhone,
+      });
+
+    if (profileError) {
+      console.error('Error creating user profile:', profileError);
+    }
+
+    // Create wallet for parents
     if (invitation.role === 'parent') {
-      const { error: parentError } = await supabaseAdmin
-        .from('parents')
+      const { error: walletError } = await supabaseAdmin
+        .from('wallets')
         .insert({
-          id: newUser.user.id,
-          email: invitation.email,
-          first_name: sanitizedFirstName,
-          last_name: sanitizedLastName,
-          phone_number: sanitizedPhone,
+          user_id: newUser.user.id,
           balance: 0,
         });
 
-      if (parentError) {
-        console.error('Error creating parent record:', parentError);
-        // Don't fail registration, but log the error
+      if (walletError) {
+        console.error('Error creating wallet:', walletError);
       }
     }
 

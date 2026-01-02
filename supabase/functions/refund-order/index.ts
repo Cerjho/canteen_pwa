@@ -164,17 +164,17 @@ serve(async (req) => {
 
     // If payment was from balance, restore parent balance
     if (order.payment_method === 'balance') {
-      const { data: parent } = await supabaseAdmin
-        .from('parents')
+      const { data: wallet } = await supabaseAdmin
+        .from('wallets')
         .select('balance')
-        .eq('id', order.parent_id)
+        .eq('user_id', order.parent_id)
         .single();
 
-      if (parent) {
+      if (wallet) {
         await supabaseAdmin
-          .from('parents')
-          .update({ balance: parent.balance + order.total_amount })
-          .eq('id', order.parent_id);
+          .from('wallets')
+          .update({ balance: wallet.balance + order.total_amount })
+          .eq('user_id', order.parent_id);
       }
     }
 

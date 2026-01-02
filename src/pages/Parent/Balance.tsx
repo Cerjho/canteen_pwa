@@ -21,17 +21,18 @@ interface Transaction {
 export default function Balance() {
   const { user } = useAuth();
 
-  const { data: parentData, isLoading: loadingParent, refetch } = useQuery({
+  const { data: walletData, isLoading: loadingParent, refetch } = useQuery({
     queryKey: ['parent-balance', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('parents')
-        .select('id, balance')
-        .eq('id', user!.id)
-        .single();
+        .from('wallets')
+        .select('user_id, balance')
+        .eq('user_id', user!.id)
+        .maybeSingle();
       
       if (error) throw error;
-      return data;
+      // If no wallet exists, return default
+      return data || { user_id: user!.id, balance: 0 };
     },
     enabled: !!user
   });
@@ -112,7 +113,7 @@ export default function Balance() {
             {loadingParent ? (
               <div className="h-10 w-32 bg-white/20 rounded animate-pulse" />
             ) : (
-              `₱${(parentData?.balance || 0).toFixed(2)}`
+              `₱${(walletData?.balance || 0).toFixed(2)}`
             )}
           </div>
           <p className="text-sm opacity-75">
