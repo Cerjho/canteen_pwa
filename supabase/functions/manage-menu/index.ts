@@ -25,18 +25,21 @@ interface ManageMenuRequest {
   is_active?: boolean;
 }
 
-// Helper to add days to a date string
+// Helper to add days to a date string (timezone-safe)
 function addDays(dateStr: string, days: number): string {
-  const date = new Date(dateStr + 'T00:00:00');
-  date.setDate(date.getDate() + days);
+  // Parse as UTC to avoid timezone issues
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().split('T')[0];
 }
 
-// Helper to get day of week from date string (1=Mon, 5=Fri)
+// Helper to get day of week from date string (1=Mon, 5=Fri) - timezone-safe
 function getDayOfWeek(dateStr: string): number {
-  const date = new Date(dateStr + 'T00:00:00');
-  const day = date.getDay();
-  return day === 0 ? 7 : day; // Convert Sunday=0 to 7
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const dayOfWeek = date.getUTCDay();
+  return dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday=0 to 7
 }
 
 // Helper to check if a date is a holiday
@@ -414,6 +417,8 @@ serve(async (req) => {
           );
         }
 
+        console.log(`[DEBUG copy-week] Starting copy from ${from_date}, week_start: ${week_start}`);
+
         // Get source menu
         const { data: sourceMenu } = await supabaseAdmin
           .from('menu_schedules')
@@ -427,20 +432,48 @@ serve(async (req) => {
           );
         }
 
+        // Fetch all holidays once for efficiency
+        const { data: allHolidays } = await supabaseAdmin
+          .from('holidays')
+          .select('name, date, is_recurring');
+        
+        console.log(`[DEBUG copy-week] Found ${allHolidays?.length || 0} holidays in database`);
+
         // Copy to all weekdays (Mon-Fri) of the week, skipping holidays
         const targetDates: string[] = [];
         const skippedHolidays: string[] = [];
         
         for (let i = 0; i < 5; i++) {
           const targetDate = addDays(week_start, i);
+          console.log(`[DEBUG copy-week] Checking day ${i}: ${targetDate}`);
+          
           if (targetDate !== from_date) {
-            // Check if target date is a holiday
-            const holidayCheck = await isHoliday(supabaseAdmin, targetDate);
-            if (holidayCheck.isHoliday) {
-              skippedHolidays.push(`${targetDate} (${holidayCheck.holidayName})`);
+            // Check if target date is a holiday (inline check for better debugging)
+            const targetMonthDay = targetDate.slice(5); // MM-DD
+            
+            const matchedHoliday = allHolidays?.find(h => {
+              const holidayDateStr = h.date.split('T')[0];
+              const holidayMonthDay = holidayDateStr.slice(5);
+              
+              if (h.is_recurring) {
+                const match = holidayMonthDay === targetMonthDay;
+                if (match) console.log(`[DEBUG copy-week] Recurring holiday match: ${h.name} (${holidayMonthDay} === ${targetMonthDay})`);
+                return match;
+              }
+              const match = holidayDateStr === targetDate;
+              if (match) console.log(`[DEBUG copy-week] Exact holiday match: ${h.name} (${holidayDateStr} === ${targetDate})`);
+              return match;
+            });
+            
+            if (matchedHoliday) {
+              console.log(`[DEBUG copy-week] SKIPPING ${targetDate} - holiday: ${matchedHoliday.name}`);
+              skippedHolidays.push(`${targetDate} (${matchedHoliday.name})`);
             } else {
+              console.log(`[DEBUG copy-week] COPYING to ${targetDate}`);
               targetDates.push(targetDate);
             }
+          } else {
+            console.log(`[DEBUG copy-week] Skipping source date: ${targetDate}`);
           }
         }
 
