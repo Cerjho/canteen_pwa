@@ -438,6 +438,9 @@ serve(async (req) => {
           .select('name, date, is_recurring');
         
         console.log(`[DEBUG copy-week] Found ${allHolidays?.length || 0} holidays in database`);
+        if (allHolidays && allHolidays.length > 0) {
+          console.log(`[DEBUG copy-week] Holidays: ${JSON.stringify(allHolidays.map(h => ({ name: h.name, date: h.date, is_recurring: h.is_recurring })))}`);
+        }
 
         // Copy to all weekdays (Mon-Fri) of the week, skipping holidays
         const targetDates: string[] = [];
@@ -445,23 +448,25 @@ serve(async (req) => {
         
         for (let i = 0; i < 5; i++) {
           const targetDate = addDays(week_start, i);
-          console.log(`[DEBUG copy-week] Checking day ${i}: ${targetDate}`);
+          const targetMonthDay = targetDate.slice(5); // MM-DD
+          console.log(`[DEBUG copy-week] Day ${i}: targetDate=${targetDate}, targetMonthDay=${targetMonthDay}`);
           
           if (targetDate !== from_date) {
             // Check if target date is a holiday (inline check for better debugging)
-            const targetMonthDay = targetDate.slice(5); // MM-DD
             
             const matchedHoliday = allHolidays?.find(h => {
               const holidayDateStr = h.date.split('T')[0];
               const holidayMonthDay = holidayDateStr.slice(5);
               
+              console.log(`[DEBUG copy-week] Comparing with holiday: ${h.name}, holidayDateStr=${holidayDateStr}, holidayMonthDay=${holidayMonthDay}, is_recurring=${h.is_recurring}`);
+              
               if (h.is_recurring) {
                 const match = holidayMonthDay === targetMonthDay;
-                if (match) console.log(`[DEBUG copy-week] Recurring holiday match: ${h.name} (${holidayMonthDay} === ${targetMonthDay})`);
+                console.log(`[DEBUG copy-week] Recurring check: ${holidayMonthDay} === ${targetMonthDay} ? ${match}`);
                 return match;
               }
               const match = holidayDateStr === targetDate;
-              if (match) console.log(`[DEBUG copy-week] Exact holiday match: ${h.name} (${holidayDateStr} === ${targetDate})`);
+              console.log(`[DEBUG copy-week] Exact check: ${holidayDateStr} === ${targetDate} ? ${match}`);
               return match;
             });
             

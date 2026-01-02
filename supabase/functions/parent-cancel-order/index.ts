@@ -5,6 +5,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { handleCorsPrefllight, jsonResponse } from '../_shared/cors.ts';
 
+// Helper to get today's date in Philippines timezone (UTC+8)
+function getTodayPhilippines(): string {
+  const now = new Date();
+  // Add 8 hours for UTC+8
+  const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  return phTime.toISOString().split('T')[0];
+}
+
 interface CancelOrderRequest {
   order_id: string;
 }
@@ -105,7 +113,8 @@ serve(async (req) => {
     }
 
     // Check if order is for today and already being prepared (extra validation)
-    const today = new Date().toISOString().split('T')[0];
+    // Use Philippines timezone (UTC+8)
+    const today = getTodayPhilippines();
     if (order.scheduled_for === today) {
       // Double check status is still pending
       const { data: currentOrder } = await supabaseAdmin

@@ -9,6 +9,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper to get today's date in Philippines timezone (UTC+8)
+function getTodayPhilippines(): string {
+  const now = new Date();
+  // Add 8 hours for UTC+8
+  const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  return phTime.toISOString().split('T')[0];
+}
+
 interface OrderItem {
   product_id: string;
   quantity: number;
@@ -256,7 +264,7 @@ serve(async (req) => {
         total_amount: totalAmount,
         payment_method,
         notes: notes || null,
-        scheduled_for: scheduled_for || new Date().toISOString().split('T')[0]
+        scheduled_for: scheduled_for || getTodayPhilippines()
       })
       .select()
       .single();
