@@ -132,12 +132,12 @@ export default function StaffProfilePage() {
   }
 
   return (
-    <div className="min-h-screen pb-24 bg-gray-50">
+    <div className="min-h-screen pb-24 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <PageHeader title="Profile" subtitle="Your account settings" />
 
         {/* Profile Card */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
               <User size={40} className="text-primary-600" />
@@ -162,7 +162,7 @@ export default function StaffProfilePage() {
                 </div>
               ) : (
                 <>
-                  <h2 className="text-xl font-bold">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                     {profile?.first_name} {profile?.last_name}
                   </h2>
                   <div className="flex items-center gap-2 text-primary-600">
@@ -175,7 +175,7 @@ export default function StaffProfilePage() {
             {!isEditing ? (
               <button
                 onClick={handleEdit}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                 title="Edit profile"
               >
                 <Edit2 size={20} />
@@ -184,14 +184,14 @@ export default function StaffProfilePage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                 >
                   <X size={20} />
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={updateProfileMutation.isPending}
-                  className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg"
+                  className="p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg"
                 >
                   <Save size={20} />
                 </button>
@@ -201,45 +201,45 @@ export default function StaffProfilePage() {
 
           <div className="space-y-4">
             {/* Email */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-full">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-full">
                 <Mail size={18} className="text-blue-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Email</p>
-                <p className="font-medium">{profile?.email}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Email</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{profile?.email}</p>
               </div>
             </div>
 
             {/* Phone */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-green-100 rounded-full">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
                 <Phone size={18} className="text-green-600" />
               </div>
               <div className="flex-1">
-                <p className="text-xs text-gray-500">Phone Number</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Phone Number</p>
                 {isEditing ? (
                   <input
                     type="tel"
                     value={formData.phone_number}
                     onChange={(e) => setFormData(prev => ({ ...prev, phone_number: e.target.value }))}
                     placeholder="09XX XXX XXXX"
-                    className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   />
                 ) : (
-                  <p className="font-medium">{profile?.phone_number || 'Not set'}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{profile?.phone_number || 'Not set'}</p>
                 )}
               </div>
             </div>
 
             {/* Member Since */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-purple-100 rounded-full">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-full">
                 <Clock size={18} className="text-purple-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Member Since</p>
-                <p className="font-medium">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Member Since</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
                   {profile?.created_at 
                     ? new Date(profile.created_at).toLocaleDateString('en-PH', { 
                         year: 'numeric', 
@@ -255,19 +255,19 @@ export default function StaffProfilePage() {
         </section>
 
         {/* Security Section */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Security</h3>
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Security</h3>
           <button
             onClick={() => setShowPasswordModal(true)}
-            className="w-full flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-full">
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
                 <Key size={18} className="text-green-600" />
               </div>
               <div className="text-left">
-                <p className="font-medium">Change Password</p>
-                <p className="text-xs text-gray-500">Update your account password</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">Change Password</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Update your account password</p>
               </div>
             </div>
             <ChevronRight size={18} className="text-gray-400" />
@@ -275,16 +275,16 @@ export default function StaffProfilePage() {
         </section>
 
         {/* Settings Section */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Settings</h3>
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Settings</h3>
+          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-full">
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-900 rounded-full">
                 {theme === 'dark' ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
               </div>
               <div>
-                <p className="font-medium">Dark Mode</p>
-                <p className="text-xs text-gray-500">Toggle dark theme</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">Dark Mode</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Toggle dark theme</p>
               </div>
             </div>
             <button
@@ -306,9 +306,9 @@ export default function StaffProfilePage() {
         </section>
 
         {/* App Info */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">About</h3>
-          <div className="space-y-2 text-sm text-gray-600">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">About</h3>
+          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
             <p><strong>Canteen PWA</strong> - Staff Portal</p>
             <p>Version 1.0.0</p>
           </div>
@@ -317,7 +317,7 @@ export default function StaffProfilePage() {
         {/* Logout Button */}
         <button
           onClick={() => setShowLogoutConfirm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors bg-white shadow"
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg font-medium transition-colors bg-white dark:bg-gray-800 shadow"
         >
           <LogOut size={20} />
           Sign Out

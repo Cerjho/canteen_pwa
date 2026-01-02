@@ -165,7 +165,7 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <PageHeader
@@ -200,10 +200,10 @@ export default function AdminSettings() {
 
         <div className="space-y-6">
           {/* General Settings */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
               <Store size={20} className="text-gray-400" />
-              <h2 className="font-semibold text-gray-900">General</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">General</h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -216,7 +216,7 @@ export default function AdminSettings() {
                   onChange={(e) => handleChange('canteen_name', e.target.value)}
                   className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
-                <p className="text-sm text-gray-500 mt-1">Displayed in the app header and notifications</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Displayed in the app header and notifications</p>
               </div>
 
               <div className="flex items-center gap-4">

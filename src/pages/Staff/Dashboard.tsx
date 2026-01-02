@@ -441,7 +441,7 @@ export default function StaffDashboard() {
   };
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <PageHeader
@@ -458,7 +458,7 @@ export default function StaffDashboard() {
             </button>
             <button
               onClick={() => refetch()}
-              className="p-2 text-gray-600 hover:bg-gray-200 rounded-full"
+              className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"
             >
               <RefreshCw size={20} />
             </button>
@@ -487,7 +487,7 @@ export default function StaffDashboard() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 dateFilter === key
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
               }`}
             >
               {label}
@@ -499,31 +499,31 @@ export default function StaffDashboard() {
         <div className="grid grid-cols-4 gap-2 mb-4">
           <button 
             onClick={() => setStatusFilter('awaiting_payment')}
-            className={`bg-white rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500' : ''}`}
           >
             <div className="text-xl font-bold text-orange-600">{awaitingPaymentCount}</div>
-            <div className="text-xs text-gray-500">Awaiting Pay</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Awaiting Pay</div>
           </button>
           <button 
             onClick={() => setStatusFilter('pending')}
-            className={`bg-white rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-primary-500' : ''}`}
           >
-            <div className="text-xl font-bold text-gray-700">{pendingCount}</div>
-            <div className="text-xs text-gray-500">Pending</div>
+            <div className="text-xl font-bold text-gray-700 dark:text-gray-300">{pendingCount}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
           </button>
           <button 
             onClick={() => setStatusFilter('preparing')}
-            className={`bg-white rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-primary-500' : ''}`}
           >
             <div className="text-xl font-bold text-yellow-600">{preparingCount}</div>
-            <div className="text-xs text-gray-500">Preparing</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Preparing</div>
           </button>
           <button 
             onClick={() => setStatusFilter('ready')}
-            className={`bg-white rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-primary-500' : ''}`}
           >
             <div className="text-xl font-bold text-green-600">{readyCount}</div>
-            <div className="text-xs text-gray-500">Ready</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Ready</div>
           </button>
         </div>
 
@@ -536,7 +536,7 @@ export default function StaffDashboard() {
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 statusFilter === status
                   ? status === 'awaiting_payment' ? 'bg-orange-600 text-white' : 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
               {status === 'awaiting_payment' ? 'Awaiting Pay' : status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -578,7 +578,7 @@ export default function StaffDashboard() {
         ) : filteredOrders?.length === 0 ? (
           <div className="text-center py-12">
             <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               {searchQuery ? 'No orders match your search' : 'No orders in this category'}
             </p>
             {searchQuery && (
@@ -601,8 +601,8 @@ export default function StaffDashboard() {
               return (
                 <div 
                   key={order.id} 
-                  className={`bg-white rounded-lg shadow-sm p-5 border-2 transition-all ${
-                    isSelected ? 'border-primary-500 bg-primary-50' : 'border-gray-100'
+                  className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 border-2 transition-all ${
+                    isSelected ? 'border-primary-500 bg-primary-50 dark:bg-primary-900' : 'border-gray-100 dark:border-gray-700'
                   } ${isAwaitingPayment ? 'border-l-4 border-l-orange-500' : ''} ${waitTime.category === 'critical' && order.status === 'pending' ? 'border-l-4 border-l-red-500' : ''}`}
                 >
                   {/* Order Header */}
@@ -619,10 +619,10 @@ export default function StaffDashboard() {
                         {getStatusIcon(order.status, order.payment_status)}
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg">
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
                           {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                         </h3>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           {order.child?.grade_level || '-'} - {order.child?.section || '-'}
                         </p>
                       </div>
@@ -667,7 +667,7 @@ export default function StaffDashboard() {
                   )}
 
                   {/* Parent Info */}
-                  <p className="text-xs text-gray-500 mb-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                     Parent: {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                     {order.parent?.phone_number && ` • ${order.parent.phone_number}`}
                     {order.payment_method && ` • `}
@@ -694,7 +694,7 @@ export default function StaffDashboard() {
                   )}
 
                   {/* Order Items */}
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
                     {order.items.map((item) => (
                       <div key={item.id} className="flex justify-between py-1">
                         <div className="flex items-center gap-2">
@@ -705,9 +705,9 @@ export default function StaffDashboard() {
                               className="w-8 h-8 rounded object-cover"
                             />
                           )}
-                          <span className="text-sm">{item.product.name}</span>
+                          <span className="text-sm text-gray-900 dark:text-gray-100">{item.product.name}</span>
                         </div>
-                        <span className="font-medium text-sm">x{item.quantity}</span>
+                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">x{item.quantity}</span>
                       </div>
                     ))}
                   </div>
@@ -725,7 +725,7 @@ export default function StaffDashboard() {
                         </button>
                         <button
                           onClick={() => setShowCancelDialog(order.id)}
-                          className="p-3 text-red-600 hover:bg-red-50 rounded-lg"
+                          className="p-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg"
                           title="Cancel order"
                         >
                           <X size={18} />
@@ -753,7 +753,7 @@ export default function StaffDashboard() {
                     {!isAwaitingPayment && (
                       <button
                         onClick={() => printOrder(order)}
-                        className="p-3 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        className="p-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                         title="Print order"
                       >
                         <Printer size={18} />

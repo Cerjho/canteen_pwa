@@ -75,11 +75,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const getBgColor = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return 'bg-green-50 border-green-200';
+        return 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700';
       case 'error':
-        return 'bg-red-50 border-red-200';
+        return 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700';
       default:
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700';
     }
   };
 
@@ -101,13 +101,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role="alert"
           >
             {getIcon(toast.type)}
-            <span className="text-gray-800 font-medium">{toast.message}</span>
+            <span className="text-gray-800 dark:text-gray-200 font-medium">{toast.message}</span>
             <button
               onClick={() => dismissToast(toast.id)}
-              className="ml-2 p-1 hover:bg-gray-200 rounded"
+              className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
               aria-label="Dismiss notification"
             >
-              <X size={16} />
+              <X size={16} className="text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         ))}

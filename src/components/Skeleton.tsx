@@ -4,13 +4,13 @@ interface SkeletonProps {
 
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
-    <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
+    <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`} />
   );
 }
 
 export function ProductCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
       <Skeleton className="w-full h-48" />
       <div className="p-4">
         <Skeleton className="h-5 w-3/4 mb-2" />
@@ -27,7 +27,7 @@ export function ProductCardSkeleton() {
 
 export function OrderCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <Skeleton className="h-6 w-48 mb-2" />
@@ -56,7 +56,7 @@ export function OrderCardSkeleton() {
 export function ProfileSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <div className="flex items-center gap-4 mb-4">
           <Skeleton className="w-16 h-16 rounded-full" />
           <div>
@@ -71,7 +71,7 @@ export function ProfileSkeleton() {
           </div>
         </div>
       </div>
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <Skeleton className="h-6 w-32 mb-4" />
         <div className="space-y-3">
           <Skeleton className="h-20 w-full rounded-lg" />

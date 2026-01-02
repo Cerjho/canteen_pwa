@@ -241,12 +241,12 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <PageHeader title="Profile" subtitle="Manage your account" />
 
         {/* Account Info */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
@@ -281,12 +281,12 @@ export default function Profile() {
                   </div>
                 ) : (
                   <>
-                    <h2 className="text-xl font-bold">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                       {profile?.first_name} {profile?.last_name}
                     </h2>
-                    <p className="text-gray-600">{profile?.email}</p>
+                    <p className="text-gray-600 dark:text-gray-400">{profile?.email}</p>
                     {profile?.phone_number && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
                         <Phone size={14} />
                         {profile.phone_number}
                       </p>
@@ -300,7 +300,7 @@ export default function Profile() {
               <div className="flex gap-2">
                 <button
                   onClick={handleCancelEdit}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                   title="Cancel"
                 >
                   <X size={20} />
@@ -308,7 +308,7 @@ export default function Profile() {
                 <button
                   onClick={handleSaveProfile}
                   disabled={updateProfileMutation.isPending}
-                  className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg"
+                  className="p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg"
                   title="Save"
                 >
                   <Save size={20} />
@@ -317,7 +317,7 @@ export default function Profile() {
             ) : (
               <button
                 onClick={handleEditProfile}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                 title="Edit profile"
               >
                 <Edit2 size={20} />
@@ -326,16 +326,16 @@ export default function Profile() {
           </div>
 
           {/* Account Details */}
-          <div className="space-y-3 border-t pt-4">
+          <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
             <Link 
               to="/balance" 
-              className="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-2 rounded-lg transition-colors"
+              className="flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 -mx-2 px-2 py-2 rounded-lg transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-full">
+                <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
                   <Wallet size={18} className="text-green-600" />
                 </div>
-                <span className="text-gray-600">Account Balance</span>
+                <span className="text-gray-600 dark:text-gray-400">Account Balance</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-green-600">
@@ -347,24 +347,24 @@ export default function Profile() {
 
             <button
               onClick={() => setShowPasswordModal(true)}
-              className="w-full flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-2 rounded-lg transition-colors"
+              className="w-full flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 -mx-2 px-2 py-2 rounded-lg transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-full">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-full">
                   <Key size={18} className="text-blue-600" />
                 </div>
-                <span className="text-gray-600">Change Password</span>
+                <span className="text-gray-600 dark:text-gray-400">Change Password</span>
               </div>
               <ChevronRight size={20} className="text-gray-400" />
             </button>
 
             <div className="flex items-center gap-3 px-2 py-2">
-              <div className="p-2 bg-purple-100 rounded-full">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-full">
                 <Clock size={18} className="text-purple-600" />
               </div>
               <div className="flex-1">
-                <span className="text-gray-600 text-sm">Member Since</span>
-                <p className="font-medium">
+                <span className="text-gray-600 dark:text-gray-400 text-sm">Member Since</span>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
                   {profile?.created_at 
                     ? new Date(profile.created_at).toLocaleDateString('en-PH', {
                         year: 'numeric',
@@ -380,12 +380,12 @@ export default function Profile() {
         </section>
 
         {/* Students Section */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">My Students</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">My Students</h3>
             <button
               onClick={() => setShowLinkStudent(true)}
-              className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-medium"
+              className="flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
             >
               <Link2 size={20} />
               Link Student
@@ -409,13 +409,13 @@ export default function Profile() {
               {students.map((student) => (
                 <div
                   key={student.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
                 >
                   <div>
-                    <p className="font-medium">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">
                       {student.first_name} {student.last_name}
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       <span className="font-mono bg-gray-200 px-1.5 py-0.5 rounded text-xs mr-2">
                         {student.student_id}
                       </span>
@@ -431,15 +431,15 @@ export default function Profile() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setEditingStudent(student)}
-                      className="p-2 hover:bg-gray-200 rounded-lg"
+                      className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
                       aria-label="Edit dietary info"
                       title="Edit dietary info"
                     >
-                      <Edit2 size={18} className="text-gray-600" />
+                      <Edit2 size={18} className="text-gray-600 dark:text-gray-400" />
                     </button>
                     <button
                       onClick={() => setUnlinkingStudent(student)}
-                      className="p-2 hover:bg-amber-100 rounded-lg"
+                      className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900 rounded-lg"
                       aria-label="Unlink student"
                       title="Unlink student"
                     >
@@ -450,24 +450,24 @@ export default function Profile() {
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-4">
+            <p className="text-gray-500 dark:text-gray-400 text-center py-4">
               No students linked yet. Click "Link Student" and enter the Student ID to connect.
             </p>
           )}
         </section>
 
         {/* Settings Section */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-3">Settings</h3>
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Settings</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 rounded-full">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900 rounded-full">
                   {theme === 'dark' ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
                 </div>
                 <div>
-                  <p className="font-medium">Dark Mode</p>
-                  <p className="text-sm text-gray-500">Toggle dark theme</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">Dark Mode</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Toggle dark theme</p>
                 </div>
               </div>
               <button
@@ -490,9 +490,9 @@ export default function Profile() {
         </section>
 
         {/* App Info */}
-        <section className="bg-white rounded-lg shadow p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-3">About</h3>
-          <div className="space-y-1 text-sm text-gray-600">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">About</h3>
+          <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
             <p><strong>Canteen PWA</strong> - Parent Portal</p>
             <p>Version 1.0.0</p>
           </div>
@@ -501,7 +501,7 @@ export default function Profile() {
         {/* Logout Button */}
         <button
           onClick={() => setShowLogoutConfirm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors bg-white shadow"
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg font-medium transition-colors bg-white dark:bg-gray-800 shadow"
         >
           <LogOut size={20} />
           Sign Out
@@ -581,19 +581,19 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-gray-100">
           <Link2 size={24} className="text-primary-600" />
           Link Your Student
         </h2>
 
-        <p className="text-gray-600 mb-4">
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
           Enter the Student ID provided by the school to link your student to your account.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Student ID
             </label>
             <input
@@ -602,7 +602,7 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
               onChange={(e) => setStudentId(e.target.value.toUpperCase())}
               placeholder="e.g., 26-00001"
               required
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-lg text-center"
+              className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-lg text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               autoFocus
             />
           </div>
@@ -618,7 +618,7 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
+              className="flex-1 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
             >
               Cancel
             </button>
@@ -658,9 +658,9 @@ function EditDietaryModal({ student, onClose, onSubmit, isLoading }: EditDietary
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <h2 className="text-xl font-bold mb-2">Edit Dietary Info</h2>
-        <p className="text-sm text-gray-600 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Edit Dietary Info</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           For {student.first_name} {student.last_name}
         </p>
 
@@ -674,11 +674,11 @@ function EditDietaryModal({ student, onClose, onSubmit, isLoading }: EditDietary
               onChange={(e) => setDietaryRestrictions(e.target.value)}
               placeholder="e.g., No peanuts, vegetarian, lactose intolerant"
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             This information will be shown to staff when preparing orders.
           </p>
 

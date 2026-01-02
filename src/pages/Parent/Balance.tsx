@@ -88,7 +88,7 @@ export default function Balance() {
   const isLoading = loadingParent || loadingTx;
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <PageHeader
@@ -97,7 +97,7 @@ export default function Balance() {
           />
           <button
             onClick={() => refetch()}
-            className="p-2 text-gray-600 hover:bg-gray-200 rounded-full"
+            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"
           >
             <RefreshCw size={20} />
           </button>
@@ -125,24 +125,24 @@ export default function Balance() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <button className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex flex-col items-center gap-2 hover:bg-gray-50 transition-colors">
+          <button className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
             <div className="p-3 bg-green-100 rounded-full">
               <TrendingUp size={20} className="text-green-600" />
             </div>
-            <span className="text-sm font-medium text-gray-700">Top Up</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Top Up</span>
           </button>
-          <button className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex flex-col items-center gap-2 hover:bg-gray-50 transition-colors">
+          <button className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
             <div className="p-3 bg-blue-100 rounded-full">
               <RefreshCw size={20} className="text-blue-600" />
             </div>
-            <span className="text-sm font-medium text-gray-700">Transfer</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Transfer</span>
           </button>
         </div>
 
         {/* Transaction History */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Transaction History</h3>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Transaction History</h3>
           </div>
 
           {isLoading ? (
@@ -156,21 +156,21 @@ export default function Balance() {
               description="Your transaction history will appear here"
             />
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
               {transactions.map((tx) => (
                 <div key={tx.id} className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-shrink-0">
                     {getTransactionIcon(tx.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 capitalize">
+                    <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">
                       {tx.type === 'topup' ? 'Top Up' : tx.type}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {format(new Date(tx.created_at), 'MMM d, yyyy • h:mm a')}
                     </p>
                     {tx.reference_id && (
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
                         Ref: {tx.reference_id}
                       </p>
                     )}
@@ -179,7 +179,7 @@ export default function Balance() {
                     <p className={`font-semibold ${getTransactionColor(tx.type)}`}>
                       {formatAmount(tx.type, tx.amount)}
                     </p>
-                    <p className="text-xs text-gray-500 capitalize">{tx.method}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tx.method}</p>
                   </div>
                 </div>
               ))}

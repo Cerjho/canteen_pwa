@@ -623,7 +623,7 @@ export default function AdminWeeklyMenu() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="container mx-auto px-4 py-6">
         <PageHeader title="Weekly Menu" />
 
@@ -664,7 +664,7 @@ export default function AdminWeeklyMenu() {
         {activeTab === 'menu' && (
           <>
             {/* Week Navigator */}
-            <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
               <div className="flex items-center justify-between mb-2">
                 <button onClick={goToPrevWeek} className="p-2 hover:bg-gray-100 rounded-lg">
                   <ChevronLeft size={20} />
@@ -672,7 +672,7 @@ export default function AdminWeeklyMenu() {
                 <div className="text-center flex-1">
                   <div className="flex items-center justify-center gap-2">
                     <CalendarDays size={18} className="text-primary-500" />
-                    <span className="font-semibold text-gray-900">{getWeekLabel(selectedWeek)}</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{getWeekLabel(selectedWeek)}</span>
                     {isCurrentWeek(selectedWeek) && (
                       <span className="px-2 py-0.5 bg-primary-100 text-primary-700 text-xs rounded-full">
                         This Week
@@ -715,13 +715,13 @@ export default function AdminWeeklyMenu() {
             {viewMode === 'day' ? (
               <>
                 {/* Day Selector */}
-                <div className="bg-white rounded-xl shadow-sm p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
                   <div className="flex items-center justify-between mb-4">
                     <button onClick={handlePrevDay} className="p-2 hover:bg-gray-100 rounded-lg">
                       <ChevronLeft size={20} />
                     </button>
                     <div className="text-center">
-                      <h2 className="text-xl font-bold text-gray-900">
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                         {dynamicWeekdays.find(d => d.value === selectedDay)?.label || WEEKDAYS.find(d => d.value === selectedDay)?.label}
                       </h2>
                       <p className="text-sm text-gray-500">
@@ -932,15 +932,15 @@ export default function AdminWeeklyMenu() {
                       const activeCount = items.filter(i => i.is_active).length;
 
                       return (
-                        <div key={category} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                          <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                        <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-gray-500">{CATEGORY_ICONS[category]}</span>
-                              <h3 className="font-semibold text-gray-900 capitalize">{category}</h3>
-                              <span className="text-sm text-gray-400">({activeCount}/{items.length})</span>
+                              <h3 className="font-semibold text-gray-900 dark:text-gray-100 capitalize">{category}</h3>
+                              <span className="text-sm text-gray-400 dark:text-gray-500">({activeCount}/{items.length})</span>
                             </div>
                           </div>
-                          <div className="divide-y divide-gray-100">
+                          <div className="divide-y divide-gray-100 dark:divide-gray-700">
                             {items.map(schedule => (
                               <div
                                 key={schedule.id}
@@ -959,7 +959,7 @@ export default function AdminWeeklyMenu() {
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <p className="font-medium text-gray-900 truncate">
+                                    <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
                                       {schedule.product?.name}
                                     </p>
                                     {!schedule.is_active && (
@@ -1478,9 +1478,9 @@ function HolidayModal({
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-bold">Add Holiday</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Add Holiday</h2>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
               <X size={20} />
             </button>

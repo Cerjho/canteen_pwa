@@ -597,13 +597,13 @@ export default function AdminDashboard() {
   // ==================== ERROR STATE ====================
   if (statsError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-            <AlertTriangle size={32} className="text-red-600" />
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+            <AlertTriangle size={32} className="text-red-600 dark:text-red-400" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to load dashboard</h2>
-          <p className="text-gray-500 mb-4">There was an error fetching the dashboard data. Please check your connection and try again.</p>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Failed to load dashboard</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">There was an error fetching the dashboard data. Please check your connection and try again.</p>
           <button
             onClick={() => refetchStats()}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
@@ -617,7 +617,7 @@ export default function AdminDashboard() {
 
   // ==================== RENDER ====================
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       {/* Offline Banner */}
       {!isOnline && (
         <div className="bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2">
@@ -630,11 +630,11 @@ export default function AdminDashboard() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Activity className="text-primary-600" />
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Activity className="text-primary-600 dark:text-primary-400" />
               Admin Dashboard
             </h1>
-            <p className="text-gray-500 mt-1 flex items-center gap-2">
+            <p className="text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
               <Clock size={14} />
               {format(currentTime, 'EEEE, MMMM d, yyyy')} • {formatTime(currentTime)}
             </p>
@@ -669,7 +669,7 @@ export default function AdminDashboard() {
             
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500'}`}
+              className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
               title={soundEnabled ? 'Mute notifications' : 'Enable notifications'}
             >
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -678,10 +678,10 @@ export default function AdminDashboard() {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing || !isOnline}
-              className="p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               title="Refresh data"
             >
-              <RefreshCw size={18} className={`text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw size={18} className={`text-gray-600 dark:text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -722,12 +722,12 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div 
             className={`rounded-xl p-4 border-2 cursor-pointer transition-all hover:shadow-md ${
-              (stats?.pendingOrders || 0) > 0 ? 'bg-amber-50 border-amber-300 animate-pulse-subtle' : 'bg-gray-50 border-gray-200'
+              (stats?.pendingOrders || 0) > 0 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 animate-pulse-subtle' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
             }`}
             onClick={() => navigate('/admin/orders?status=pending')}
           >
             <div className="flex items-center justify-between mb-2">
-              <div className={`p-2 rounded-lg ${(stats?.pendingOrders || 0) > 0 ? 'bg-amber-200 text-amber-700' : 'bg-gray-200 text-gray-600'}`}>
+              <div className={`p-2 rounded-lg ${(stats?.pendingOrders || 0) > 0 ? 'bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                 <Clock size={20} />
               </div>
               {(stats?.pendingOrders || 0) > 0 && (
@@ -737,26 +737,26 @@ export default function AdminDashboard() {
                 </span>
               )}
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats?.pendingOrders || 0}</p>
-            <p className="text-sm text-gray-600">Pending Orders</p>
-            {(stats?.preparingOrders || 0) > 0 && <p className="text-xs text-amber-600 mt-1">{stats?.preparingOrders} preparing</p>}
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.pendingOrders || 0}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Pending Orders</p>
+            {(stats?.preparingOrders || 0) > 0 && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{stats?.preparingOrders} preparing</p>}
           </div>
 
           <div 
             className={`rounded-xl p-4 border-2 cursor-pointer transition-all hover:shadow-md ${
-              (stats?.readyOrders || 0) > 0 ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+              (stats?.readyOrders || 0) > 0 ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
             }`}
             onClick={() => navigate('/admin/orders?status=ready')}
           >
             <div className="flex items-center justify-between mb-2">
-              <div className={`p-2 rounded-lg ${(stats?.readyOrders || 0) > 0 ? 'bg-green-200 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+              <div className={`p-2 rounded-lg ${(stats?.readyOrders || 0) > 0 ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                 <CheckCircle size={20} />
               </div>
-              {(stats?.readyOrders || 0) > 0 && <Bell size={16} className="text-green-600 animate-bounce" />}
+              {(stats?.readyOrders || 0) > 0 && <Bell size={16} className="text-green-600 dark:text-green-400 animate-bounce" />}
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats?.readyOrders || 0}</p>
-            <p className="text-sm text-gray-600">Ready for Pickup</p>
-            <p className="text-xs text-green-600 mt-1">{stats?.completedOrdersToday || 0} completed today</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.readyOrders || 0}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Ready for Pickup</p>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1">{stats?.completedOrdersToday || 0} completed today</p>
           </div>
 
           <div className="rounded-xl p-4 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg">
@@ -796,20 +796,20 @@ export default function AdminDashboard() {
 
         {/* Date Range Selector */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="flex gap-2 bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+          <div className="flex gap-2 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
             {(['today', 'week', 'month'] as const).map((range) => (
               <button
                 key={range}
                 onClick={() => setDateRange(range)}
                 className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
-                  dateRange === range ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+                  dateRange === range ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
                 {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
               </button>
             ))}
           </div>
-          <div className="text-sm text-gray-500 flex items-center gap-1">
+          <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
             <Calendar size={14} />
             {dateRange === 'today' && format(new Date(), 'MMM d')}
             {dateRange === 'week' && `${format(startOfWeek(new Date()), 'MMM d')} - ${format(new Date(), 'MMM d')}`}
@@ -819,10 +819,10 @@ export default function AdminDashboard() {
 
         {/* Charts & Analytics Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <PieChart size={18} className="text-gray-400" />
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <PieChart size={18} className="text-gray-400 dark:text-gray-500" />
                 Order Status (Today)
               </h3>
             </div>
@@ -831,10 +831,10 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <BarChart3 size={18} className="text-gray-400" />
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <BarChart3 size={18} className="text-gray-400 dark:text-gray-500" />
                 Orders by Hour (Today)
               </h3>
               {peakHour && (
@@ -853,31 +853,31 @@ export default function AdminDashboard() {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Products */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Award size={18} className="text-amber-500" />
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Award size={18} className="text-amber-500 dark:text-amber-400" />
                 Top Products
               </h3>
-              <span className="text-xs text-gray-500 capitalize">{dateRange}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">{dateRange}</span>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
               {topProducts?.length === 0 ? (
-                <p className="p-4 text-center text-gray-500">No sales data yet</p>
+                <p className="p-4 text-center text-gray-500 dark:text-gray-400">No sales data yet</p>
               ) : (
                 topProducts?.map((product, index) => (
-                  <div key={product.product_id} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+                  <div key={product.product_id} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                      index === 0 ? 'bg-amber-100 text-amber-700 ring-2 ring-amber-300' :
-                      index === 1 ? 'bg-gray-100 text-gray-700' :
-                      index === 2 ? 'bg-orange-100 text-orange-700' :
-                      'bg-gray-50 text-gray-500'
+                      index === 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ring-2 ring-amber-300 dark:ring-amber-700' :
+                      index === 1 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' :
+                      index === 2 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                      'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
                     }`}>
                       {index === 0 ? <Star size={16} /> : index + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{product.name}</p>
-                      <p className="text-xs text-gray-500">{product.total_quantity} sold</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{product.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{product.total_quantity} sold</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-green-600">P{product.total_revenue.toFixed(0)}</p>
@@ -886,18 +886,18 @@ export default function AdminDashboard() {
                 ))
               )}
             </div>
-            <div className="px-4 py-2 border-t border-gray-100">
-              <button onClick={() => navigate('/admin/reports')} className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center justify-center gap-1">
+            <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => navigate('/admin/reports')} className="w-full text-center text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center justify-center gap-1">
                 View Full Report <ChevronRight size={14} />
               </button>
             </div>
           </div>
 
           {/* Recent Orders */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <ShoppingBag size={18} className="text-blue-500" />
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <ShoppingBag size={18} className="text-blue-500 dark:text-blue-400" />
                 Recent Orders
               </h3>
               <span className="flex h-2 w-2">
@@ -905,15 +905,15 @@ export default function AdminDashboard() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
             </div>
-            <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-96 overflow-y-auto">
               {recentOrders?.map((order) => {
                 const childName = order.child ? `${order.child.first_name} ${order.child.last_name}` : 'Unknown Student';
                 return (
-                  <div key={order.id} className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/admin/orders?id=${order.id}`)}>
+                  <div key={order.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer" onClick={() => navigate(`/admin/orders?id=${order.id}`)}>
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900 text-sm">{childName}</p>
-                        <span className="text-xs text-gray-400">#{order.id.slice(-6).toUpperCase()}</span>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{childName}</p>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">#{order.id.slice(-6).toUpperCase()}</span>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1 ${getStatusColor(order.status)}`}>
                         {getStatusIcon(order.status)}
@@ -921,25 +921,25 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
-                      <p className="text-gray-500">{format(new Date(order.created_at), 'h:mm a')}</p>
-                      <p className="font-semibold text-gray-700">P{order.total_amount.toFixed(2)}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{format(new Date(order.created_at), 'h:mm a')}</p>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">P{order.total_amount.toFixed(2)}</p>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="px-4 py-2 border-t border-gray-100">
-              <button onClick={() => navigate('/admin/orders')} className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center justify-center gap-1">
+            <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => navigate('/admin/orders')} className="w-full text-center text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center justify-center gap-1">
                 View All Orders <ChevronRight size={14} />
               </button>
             </div>
           </div>
 
           {/* Live Activity Feed */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Activity size={18} className="text-purple-500" />
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Activity size={18} className="text-purple-500 dark:text-purple-400" />
                 Live Activity
               </h3>
               <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex items-center gap-1">
@@ -947,12 +947,12 @@ export default function AdminDashboard() {
                 Real-time
               </span>
             </div>
-            <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-96 overflow-y-auto">
               {liveActivities.length === 0 ? (
                 <div className="p-8 text-center">
-                  <Activity size={32} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-gray-500 text-sm">Waiting for activity...</p>
-                  <p className="text-gray-400 text-xs mt-1">New orders will appear here</p>
+                  <Activity size={32} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">Waiting for activity...</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">New orders will appear here</p>
                 </div>
               ) : (
                 liveActivities.map((activity) => (
@@ -967,10 +967,10 @@ export default function AdminDashboard() {
                         {activity.type === 'order' ? <ShoppingBag size={14} /> : activity.type === 'user' ? <Users size={14} /> : <Activity size={14} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                        <p className="text-xs text-gray-500 truncate">{activity.message}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{activity.title}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{activity.message}</p>
                       </div>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{format(activity.timestamp, 'h:mm a')}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{format(activity.timestamp, 'h:mm a')}</span>
                     </div>
                   </div>
                 ))
@@ -988,9 +988,9 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap size={18} className="text-amber-500" />
+        <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Zap size={18} className="text-amber-500 dark:text-amber-400" />
             Quick Actions
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1018,16 +1018,16 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon: Icon, color, subtitle, onClick, clickable }: StatCardProps) {
   const colorStyles: Record<string, string> = {
-    yellow: 'bg-amber-50 text-amber-600 border-amber-200',
-    green: 'bg-green-50 text-green-600 border-green-200',
-    blue: 'bg-blue-50 text-blue-600 border-blue-200',
-    red: 'bg-red-50 text-red-600 border-red-200',
-    gray: 'bg-gray-50 text-gray-600 border-gray-200',
-    purple: 'bg-purple-50 text-purple-600 border-purple-200',
-    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200'
+    yellow: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700',
+    green: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-700',
+    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700',
+    red: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-700',
+    gray: 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+    purple: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-700',
+    indigo: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-700'
   };
   const iconBg: Record<string, string> = {
-    yellow: 'bg-amber-100', green: 'bg-green-100', blue: 'bg-blue-100', red: 'bg-red-100', gray: 'bg-gray-100', purple: 'bg-purple-100', indigo: 'bg-indigo-100'
+    yellow: 'bg-amber-100 dark:bg-amber-800', green: 'bg-green-100 dark:bg-green-800', blue: 'bg-blue-100 dark:bg-blue-800', red: 'bg-red-100 dark:bg-red-800', gray: 'bg-gray-100 dark:bg-gray-700', purple: 'bg-purple-100 dark:bg-purple-800', indigo: 'bg-indigo-100 dark:bg-indigo-800'
   };
 
   return (
@@ -1052,12 +1052,12 @@ interface QuickStatCardProps {
 
 function QuickStatCard({ icon, label, value, onClick }: QuickStatCardProps) {
   return (
-    <div className={`bg-white rounded-xl p-4 shadow-sm border border-gray-100 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} onClick={onClick}>
-      <div className="flex items-center gap-2 text-gray-500 mb-2">
+    <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} onClick={onClick}>
+      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 mb-2">
         {icon}
         <span className="text-sm">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
     </div>
   );
 }
@@ -1071,10 +1071,10 @@ interface QuickActionButtonProps {
 
 function QuickActionButton({ icon, label, onClick, color }: QuickActionButtonProps) {
   const colors = {
-    blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200',
-    green: 'bg-green-50 text-green-600 hover:bg-green-100 border-green-200',
-    purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-200',
-    amber: 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-200'
+    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-700',
+    green: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-700',
+    purple: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 border-purple-200 dark:border-purple-700',
+    amber: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-amber-200 dark:border-amber-700'
   };
   return (
     <button onClick={onClick} className={`flex items-center justify-center gap-2 p-3 rounded-lg border font-medium transition-colors ${colors[color]}`}>

@@ -251,7 +251,7 @@ export default function ParentDashboard() {
   const orders = activeTab === 'today' ? todayOrders : scheduledOrders;
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <PullToRefresh onRefresh={handleRefresh} className="min-h-screen">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between mb-4">
@@ -261,7 +261,7 @@ export default function ParentDashboard() {
             />
             <button
               onClick={handleRefresh}
-              className="p-2 text-gray-600 hover:bg-gray-200 rounded-full"
+              className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"
             >
               <RefreshCw size={20} />
             </button>
@@ -274,7 +274,7 @@ export default function ParentDashboard() {
               className={`flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'today'
                   ? 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
               }`}
             >
               <Bell size={18} />
@@ -292,7 +292,7 @@ export default function ParentDashboard() {
               className={`flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'scheduled'
                   ? 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
               }`}
             >
               <CalendarClock size={18} />
@@ -319,7 +319,7 @@ export default function ParentDashboard() {
                 return (
                   <div 
                     key={order.id} 
-                    className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
+                    className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
                       isFutureOrder ? 'border-amber-200' : status.color
                     } ${order.status === 'ready' ? 'animate-pulse-subtle ring-2 ring-green-400' : ''}`}
                   >
@@ -377,10 +377,10 @@ export default function ParentDashboard() {
                     <div className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h3 className="font-semibold text-lg">
+                          <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
                             For {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                           </h3>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
                             {isFutureOrder 
                               ? format(parseISO(order.scheduled_for), 'EEEE, MMMM d')
                               : `Ordered at ${format(new Date(order.created_at), 'h:mm a')}`
@@ -411,15 +411,15 @@ export default function ParentDashboard() {
                               />
                             )}
                             <div className="flex-1">
-                              <p className="font-medium text-sm">{item.product.name}</p>
+                              <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{item.product.name}</p>
                             </div>
-                            <span className="text-sm text-gray-600">×{item.quantity}</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">×{item.quantity}</span>
                           </div>
                         ))}
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex gap-2 pt-2 border-t border-gray-100">
+                      <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                         {/* Reorder button - available for all orders */}
                         <button
                           onClick={() => handleReorder(order)}

@@ -136,7 +136,7 @@ export default function AdminAuditLogs() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <PageHeader
@@ -152,7 +152,7 @@ export default function AdminAuditLogs() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -161,7 +161,7 @@ export default function AdminAuditLogs() {
                 placeholder="Search logs..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
             <div className="flex gap-2">
@@ -190,9 +190,9 @@ export default function AdminAuditLogs() {
         </div>
 
         {/* Logs List */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
           {filteredLogs && filteredLogs.length > 0 ? (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
               {filteredLogs.map((log) => (
                 <div
                   key={log.id}
@@ -210,10 +210,10 @@ export default function AdminAuditLogs() {
                         </span>
                         <span className="text-xs text-gray-500 capitalize">{log.entity_type}</span>
                       </div>
-                      <p className="text-gray-900 font-medium truncate">
+                      <p className="text-gray-900 dark:text-gray-100 font-medium truncate">
                         {formatChangeDescription(log)}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {format(new Date(log.created_at), 'MMM d, yyyy h:mm a')}
                       </p>
                     </div>

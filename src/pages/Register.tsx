@@ -201,14 +201,14 @@ export default function Register() {
   // Step 1: Enter invitation code
   if (step === 'code') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
         <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Shield size={32} className="text-primary-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Join School Canteen</h1>
-            <p className="text-gray-600 mt-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Join School Canteen</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
               Enter your invitation code to register
             </p>
           </div>
@@ -222,7 +222,7 @@ export default function Register() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Invitation Code
               </label>
               <input
@@ -230,13 +230,13 @@ export default function Register() {
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                 maxLength={6}
-                className="w-full px-4 py-3 text-center text-2xl tracking-widest font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 uppercase"
+                className="w-full px-4 py-3 text-center text-2xl tracking-widest font-mono border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 uppercase bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 placeholder="ABC123"
                 autoFocus
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className="text-xs text-gray-500 mt-2 text-center">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
                 You should have received this from your school admin
               </p>
             </div>
@@ -259,7 +259,7 @@ export default function Register() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-600 mt-6">
+          <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
             Already have an account?{' '}
             <Link to="/login" className="text-primary-600 hover:text-primary-700 font-medium">
               Login
@@ -273,14 +273,14 @@ export default function Register() {
   // Step 2: Registration form
   if (step === 'form') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
         <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <User size={32} className="text-primary-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Complete Registration</h1>
-            <p className="text-gray-600 mt-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Complete Registration</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
               Set up your account for <strong>{invitation?.email}</strong>
             </p>
             <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full capitalize">
@@ -298,7 +298,7 @@ export default function Register() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   First Name *
                 </label>
                 <input
@@ -307,13 +307,13 @@ export default function Register() {
                   onChange={(e) => setFirstName(e.target.value)}
                   required
                   maxLength={50}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   placeholder="Juan"
                   autoComplete="given-name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Last Name *
                 </label>
                 <input
@@ -322,7 +322,7 @@ export default function Register() {
                   onChange={(e) => setLastName(e.target.value)}
                   required
                   maxLength={50}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   placeholder="Dela Cruz"
                   autoComplete="family-name"
                 />
@@ -331,7 +331,7 @@ export default function Register() {
 
             {invitation?.role === 'parent' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Phone Number
                 </label>
                 <div className="relative">
@@ -341,17 +341,17 @@ export default function Register() {
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     maxLength={15}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     placeholder="09171234567"
                     autoComplete="tel"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Format: 09XXXXXXXXX</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Format: 09XXXXXXXXX</p>
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Password *
               </label>
               <div className="relative">
@@ -362,14 +362,14 @@ export default function Register() {
                   required
                   minLength={6}
                   maxLength={72}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   placeholder="Min. 6 characters"
                   autoComplete="new-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -378,7 +378,7 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Confirm Password *
               </label>
               <input
@@ -388,7 +388,7 @@ export default function Register() {
                 required
                 minLength={6}
                 maxLength={72}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 placeholder="Confirm your password"
                 autoComplete="new-password"
               />
@@ -417,7 +417,7 @@ export default function Register() {
               setPassword('');
               setConfirmPassword('');
             }}
-            className="w-full mt-4 text-gray-600 hover:text-gray-800 text-sm"
+            className="w-full mt-4 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 text-sm"
           >
             ← Use a different code
           </button>
@@ -428,13 +428,13 @@ export default function Register() {
 
   // Step 3: Success
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle size={32} className="text-green-600" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h1>
-        <p className="text-gray-600 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Account Created!</h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
           Welcome to School Canteen! Your account has been set up successfully.
         </p>
         <button

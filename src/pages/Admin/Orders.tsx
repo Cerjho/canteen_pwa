@@ -230,7 +230,7 @@ export default function AdminOrders() {
   }
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <PageHeader
@@ -264,7 +264,7 @@ export default function AdminOrders() {
               placeholder="Search by name or order ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
 
@@ -277,7 +277,7 @@ export default function AdminOrders() {
                 className={`px-3 py-2 rounded-lg text-sm font-medium capitalize ${
                   dateFilter === range
                     ? 'bg-primary-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
                 }`}
               >
                 {range === 'all' ? 'All Time' : range}
@@ -289,7 +289,7 @@ export default function AdminOrders() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as OrderStatus | 'all')}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           >
             <option value="all">All Statuses</option>
             {STATUS_OPTIONS.map(status => (
@@ -299,55 +299,55 @@ export default function AdminOrders() {
         </div>
 
         {/* Orders Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Order</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Child</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Parent</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Items</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Total</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Order</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Child</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Parent</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Items</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Total</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredOrders?.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
+                  <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 text-sm">
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">
                         #{order.id.substring(0, 8)}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         {format(new Date(order.created_at), 'MMM d, h:mm a')}
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">
                         {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         {order.child?.grade_level || '-'} {order.child?.section && `- ${order.child.section}`}
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm text-gray-900">
+                      <p className="text-sm text-gray-900 dark:text-gray-100">
                         {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                       </p>
                       {order.parent?.phone_number && (
-                        <p className="text-xs text-gray-500">{order.parent.phone_number}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{order.parent.phone_number}</p>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm text-gray-700">
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
                         {order.items.length} item{order.items.length !== 1 ? 's' : ''}
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-gray-900">₱{order.total_amount.toFixed(2)}</p>
-                      <p className="text-xs text-gray-500 capitalize">{order.payment_method}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">₱{order.total_amount.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{order.payment_method}</p>
                     </td>
                     <td className="px-4 py-3">
                       <select
@@ -391,7 +391,7 @@ export default function AdminOrders() {
 
           {filteredOrders?.length === 0 && (
             <div className="text-center py-12">
-              <p className="text-gray-500">No orders found</p>
+              <p className="text-gray-500 dark:text-gray-400">No orders found</p>
             </div>
           )}
         </div>
@@ -456,24 +456,24 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Order Details</h2>
-              <span className="text-sm text-gray-500">#{order.id.substring(0, 8)}</span>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Order Details</h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">#{order.id.substring(0, 8)}</span>
             </div>
 
             {/* Order Info */}
             <div className="space-y-4 mb-6">
               <div className="flex justify-between">
-                <span className="text-gray-500">Date</span>
-                <span className="font-medium">
+                <span className="text-gray-500 dark:text-gray-400">Date</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
                   {format(new Date(order.created_at), 'MMM d, yyyy h:mm a')}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Child</span>
-                <span className="font-medium">
+                <span className="text-gray-500 dark:text-gray-400">Child</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
                   {order.child.first_name} {order.child.last_name}
                 </span>
               </div>
@@ -509,8 +509,8 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
             )}
 
             {/* Items */}
-            <div className="border-t border-b border-gray-200 py-4 mb-4">
-              <h3 className="font-semibold mb-3">Items</h3>
+            <div className="border-t border-b border-gray-200 dark:border-gray-700 py-4 mb-4">
+              <h3 className="font-semibold mb-3 text-gray-900 dark:text-gray-100">Items</h3>
               <div className="space-y-3">
                 {order.items.map((item) => (
                   <div key={item.id} className="flex items-center gap-3">
@@ -522,12 +522,12 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
                       />
                     )}
                     <div className="flex-1">
-                      <p className="font-medium">{item.product.name}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{item.product.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
                         ₱{item.price_at_order.toFixed(2)} × {item.quantity}
                       </p>
                     </div>
-                    <p className="font-semibold">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">
                       ₱{(item.price_at_order * item.quantity).toFixed(2)}
                     </p>
                   </div>

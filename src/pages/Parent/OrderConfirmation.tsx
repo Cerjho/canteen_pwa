@@ -25,7 +25,7 @@ export default function OrderConfirmation() {
   if (!state) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 pb-24">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4 pb-24">
       <div className="max-w-md w-full text-center">
         {/* Success Icon */}
         <div className="mb-6">
@@ -35,11 +35,11 @@ export default function OrderConfirmation() {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           {state.isOffline ? 'Order Saved!' : 'Order Placed!'}
         </h1>
         
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
           {state.isOffline 
             ? 'Your order has been saved and will be submitted when you\'re back online.'
             : 'Your order has been received and is being processed.'
@@ -47,34 +47,34 @@ export default function OrderConfirmation() {
         </p>
 
         {/* Order Summary Card */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6 text-left">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 text-left">
           <div className="flex items-center gap-3 pb-4 border-b mb-4">
             <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
               <User className="text-primary-600" size={20} />
             </div>
             <div>
-              <p className="font-medium text-gray-900">Order for {state.childName}</p>
-              <p className="text-sm text-gray-500">{state.itemCount} item(s)</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">Order for {state.childName}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{state.itemCount} item(s)</p>
             </div>
           </div>
 
           <div className="flex justify-between items-center mb-4">
-            <span className="text-gray-600">Order ID</span>
-            <span className="font-mono text-sm text-gray-900">
+            <span className="text-gray-600 dark:text-gray-400">Order ID</span>
+            <span className="font-mono text-sm text-gray-900 dark:text-gray-100">
               #{state.orderId.slice(0, 8).toUpperCase()}
             </span>
           </div>
 
           <div className="flex justify-between items-center mb-4">
-            <span className="text-gray-600">Status</span>
+            <span className="text-gray-600 dark:text-gray-400">Status</span>
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
               <Clock size={14} />
               Pending
             </span>
           </div>
 
-          <div className="flex justify-between items-center pt-4 border-t">
-            <span className="text-lg font-medium text-gray-900">Total</span>
+          <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
+            <span className="text-lg font-medium text-gray-900 dark:text-gray-100">Total</span>
             <span className="text-2xl font-bold text-primary-600">
               ₱{state.totalAmount.toFixed(2)}
             </span>
@@ -103,7 +103,7 @@ export default function OrderConfirmation() {
           
           <Link
             to="/menu"
-            className="block w-full py-3 text-primary-600 font-medium hover:bg-primary-50 rounded-lg transition-colors"
+            className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
             Continue Ordering
           </Link>

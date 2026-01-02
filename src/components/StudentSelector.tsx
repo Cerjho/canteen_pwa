@@ -42,14 +42,14 @@ export function ChildSelector({
   
   return (
     <div className="mb-6">
-      <label htmlFor="student-selector" className="block text-sm font-medium text-gray-700 mb-2">
-        Order for:{required && <span className="text-red-500 ml-1">*</span>}
+      <label htmlFor="student-selector" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        Order for:{required && <span className="text-red-500 dark:text-red-400 ml-1">*</span>}
       </label>
       <select
         id="student-selector"
         value={selectedId || ''}
         onChange={handleChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         required={required}
         aria-required={required}
       >
@@ -62,7 +62,7 @@ export function ChildSelector({
         ))}
       </select>
       {studentList.length === 0 && (
-        <p className="text-sm text-amber-600 mt-2" role="alert">
+        <p className="text-sm text-amber-600 dark:text-amber-400 mt-2" role="alert">
           You haven't linked any students yet. Please link a student profile first.
         </p>
       )}

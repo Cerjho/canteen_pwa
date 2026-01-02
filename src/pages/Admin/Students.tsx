@@ -186,7 +186,7 @@ export default function AdminStudents() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="container mx-auto px-4 py-6">
         <PageHeader title="Students" />
 
@@ -280,12 +280,12 @@ export default function AdminStudents() {
             filteredStudents?.map(student => (
               <div
                 key={student.id}
-                className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                         {student.first_name} {student.last_name}
                       </h3>
                       {student.parent ? (
@@ -300,8 +300,8 @@ export default function AdminStudents() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500">
-                      <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs mr-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs mr-2">
                         {student.student_id}
                       </span>
                       {student.grade_level}
@@ -431,9 +431,9 @@ function StudentModal({
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-          <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-bold">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {student ? 'Edit Student' : 'Add Student'}
             </h2>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">

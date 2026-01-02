@@ -26,10 +26,10 @@ export function ConfirmDialog({
   if (!isOpen) return null;
 
   const iconConfig = {
-    danger: { Icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
-    warning: { Icon: AlertTriangle, bg: 'bg-yellow-100', color: 'text-yellow-600' },
-    success: { Icon: CheckCircle, bg: 'bg-green-100', color: 'text-green-600' },
-    info: { Icon: Info, bg: 'bg-blue-100', color: 'text-blue-600' }
+    danger: { Icon: XCircle, bg: 'bg-red-100 dark:bg-red-900/30', color: 'text-red-600 dark:text-red-400' },
+    warning: { Icon: AlertTriangle, bg: 'bg-yellow-100 dark:bg-yellow-900/30', color: 'text-yellow-600 dark:text-yellow-400' },
+    success: { Icon: CheckCircle, bg: 'bg-green-100 dark:bg-green-900/30', color: 'text-green-600 dark:text-green-400' },
+    info: { Icon: Info, bg: 'bg-blue-100 dark:bg-blue-900/30', color: 'text-blue-600 dark:text-blue-400' }
   };
 
   const buttonConfig = {
@@ -52,20 +52,20 @@ export function ConfirmDialog({
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div 
-          className="bg-white rounded-2xl shadow-xl max-w-sm w-full transform transition-all"
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full transform transition-all"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6 text-center">
             <div className={`inline-flex p-4 rounded-full ${bg} mb-4`}>
               <Icon size={32} className={color} />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-            <div className="text-gray-600 mb-6">{message}</div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
+            <div className="text-gray-600 dark:text-gray-400 mb-6">{message}</div>
             
             <div className="flex gap-3">
               <button
                 onClick={onCancel}
-                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 {cancelLabel}
               </button>

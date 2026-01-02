@@ -163,23 +163,23 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
         aria-labelledby="change-password-title"
       >
         <div 
-          className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <Key size={20} className="text-primary-600" />
+              <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                <Key size={20} className="text-primary-600 dark:text-primary-400" />
               </div>
-              <h2 id="change-password-title" className="text-lg font-semibold">Change Password</h2>
+              <h2 id="change-password-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">Change Password</h2>
             </div>
             <button
               onClick={handleClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               aria-label="Close modal"
             >
-              <X size={20} className="text-gray-500" />
+              <X size={20} className="text-gray-500 dark:text-gray-400" />
             </button>
           </div>
 
@@ -187,13 +187,13 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
             {success ? (
               <div className="text-center py-8">
-                <div className="inline-flex p-4 bg-green-100 rounded-full mb-4">
-                  <CheckCircle size={40} className="text-green-600" />
+                <div className="inline-flex p-4 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
+                  <CheckCircle size={40} className="text-green-600 dark:text-green-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   Password Changed!
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-gray-600 dark:text-gray-400">
                   Your password has been updated successfully.
                 </p>
               </div>
@@ -201,7 +201,7 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
               <>
                 {/* Current Password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Current Password
                   </label>
                   <div className="relative">
@@ -210,13 +210,13 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       required
-                      className="w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       placeholder="Enter current password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                     >
                       {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -225,7 +225,7 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
 
                 {/* New Password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     New Password
                   </label>
                   <div className="relative">
@@ -234,25 +234,25 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       required
-                      className="w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       placeholder="Enter new password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                     >
                       {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Must be 8+ characters with uppercase, lowercase, and number
                   </p>
                 </div>
 
                 {/* Confirm Password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Confirm New Password
                   </label>
                   <div className="relative">
@@ -261,13 +261,13 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
-                      className="w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       placeholder="Confirm new password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                     >
                       {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -276,8 +276,8 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
 
                 {/* Error Message */}
                 {error && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-600">{error}</p>
+                  <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg">
+                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                   </div>
                 )}
 
@@ -287,7 +287,7 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
                     type="button"
                     onClick={handleClose}
                     disabled={isLoading}
-                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    className="flex-1 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>

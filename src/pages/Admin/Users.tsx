@@ -357,7 +357,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <PageHeader
           title="User Management"
@@ -439,7 +439,7 @@ export default function AdminUsers() {
               filteredParents?.map((parent) => (
                 <div
                   key={parent.id}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                  className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -447,10 +447,10 @@ export default function AdminUsers() {
                         <User size={24} className="text-primary-600" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                           {parent.first_name} {parent.last_name}
                         </h3>
-                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-1">
                           <span className="flex items-center gap-1">
                             <Mail size={14} />
                             {parent.email}

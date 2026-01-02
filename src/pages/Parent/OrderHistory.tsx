@@ -70,7 +70,7 @@ export default function OrderHistory() {
   }
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <PageHeader
           title="Order History"
@@ -93,16 +93,16 @@ export default function OrderHistory() {
               return (
                 <div
                   key={order.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden"
                 >
                   {/* Order Header */}
-                  <div className="p-4 border-b border-gray-100">
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
                           {format(new Date(order.created_at), 'MMM d, yyyy • h:mm a')}
                         </p>
-                        <h3 className="font-semibold text-gray-900">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                           For {child?.first_name || 'Unknown'} {child?.last_name || 'Student'}
                         </h3>
                       </div>
@@ -126,21 +126,21 @@ export default function OrderHistory() {
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                               {item.product.name}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
                               ₱{item.price_at_order.toFixed(2)} × {item.quantity}
                             </p>
                           </div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             ₱{(item.price_at_order * item.quantity).toFixed(2)}
                           </p>
                         </div>
                       ))}
                       
                       {order.items.length > 3 && (
-                        <p className="text-sm text-gray-500 text-center pt-2">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center pt-2">
                           +{order.items.length - 3} more item(s)
                         </p>
                       )}
@@ -148,14 +148,14 @@ export default function OrderHistory() {
                   </div>
 
                   {/* Order Footer */}
-                  <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
+                  <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
                     <div>
-                      <span className="text-sm text-gray-500">Total</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Total</span>
                       <p className="text-lg font-bold text-primary-600">
                         ₱{order.total_amount.toFixed(2)}
                       </p>
                     </div>
-                    <div className="text-xs text-gray-500 capitalize">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">
                       Paid via {order.payment_method || 'cash'}
                     </div>
                   </div>

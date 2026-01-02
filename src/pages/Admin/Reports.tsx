@@ -235,7 +235,7 @@ export default function AdminReports() {
   const maxRevenue = Math.max(...(revenueData?.daily.map(d => d.revenue) || [1]));
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <PageHeader
@@ -253,9 +253,9 @@ export default function AdminReports() {
 
         {/* Comparison Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-500">Today's Revenue</span>
+              <span className="text-gray-500 dark:text-gray-400">Today's Revenue</span>
               {comparisonStats && comparisonStats.todayChange !== 0 && (
                 <span className={`flex items-center gap-1 text-sm font-medium ${
                   comparisonStats.todayChange > 0 ? 'text-green-600' : 'text-red-600'
@@ -315,7 +315,7 @@ export default function AdminReports() {
         </div>
 
         {/* Revenue Chart (Simple Bar Chart) */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
           <div className="flex items-end gap-1 h-48 overflow-x-auto pb-2">
             {revenueData?.daily.map((day) => (
               <div
@@ -340,16 +340,16 @@ export default function AdminReports() {
               </div>
             ))}
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-2">
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
             <span>{revenueData?.daily[0] && format(new Date(revenueData.daily[0].date), 'MMM d')}</span>
             <span>{revenueData?.daily[revenueData.daily.length - 1] && format(new Date(revenueData.daily[revenueData.daily.length - 1].date), 'MMM d')}</span>
           </div>
-          <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-gray-100">
+          <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 ₱{(revenueData?.total || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-sm text-gray-500">Total Revenue</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900">{revenueData?.orderCount || 0}</p>

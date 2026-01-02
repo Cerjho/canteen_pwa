@@ -38,13 +38,13 @@ export default function AdminLayout() {
   const userRole = user?.user_metadata?.role;
   if (userRole !== 'admin') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X size={32} className="text-red-600" />
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <X size={32} className="text-red-600 dark:text-red-400" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600 mb-4">You don't have permission to access this area.</p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">You don't have permission to access this area.</p>
           <a href="/menu" className="text-primary-600 hover:underline">
             Return to Menu
           </a>
@@ -54,16 +54,16 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-40 flex items-center px-4">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-40 flex items-center px-4">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+          className="p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
         >
           <Menu size={24} />
         </button>
-        <span className="ml-3 font-semibold text-gray-900">Admin Panel</span>
+        <span className="ml-3 font-semibold text-gray-900 dark:text-gray-100">Admin Panel</span>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -76,15 +76,15 @@ export default function AdminLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-white border-r border-gray-200 z-50 transform transition-transform lg:translate-x-0 ${
+        className={`fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-50 transform transition-transform lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200">
-          <span className="font-bold text-primary-600">Canteen Admin</span>
+        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
+          <span className="font-bold text-primary-600 dark:text-primary-400">Canteen Admin</span>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+            className="lg:hidden p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
           >
             <X size={20} />
           </button>
@@ -100,8 +100,8 @@ export default function AdminLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${
                   isActive
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`
               }
             >
@@ -114,7 +114,7 @@ export default function AdminLayout() {
         <div className="absolute bottom-4 left-4 right-4">
           <a
             href="/menu"
-            className="flex items-center gap-2 px-3 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
             <ChevronLeft size={20} />
             View as Parent

@@ -225,23 +225,23 @@ export default function Menu() {
           <PageHeader title="Menu" />
           
           {/* Date selector even when closed - to select another date */}
-          <div className="bg-white rounded-xl shadow-sm p-3 mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-4">
             <div className="flex items-center justify-between">
               <button
                 onClick={handlePrevDate}
                 disabled={currentIdx <= 0}
-                className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-30"
               >
                 <ChevronLeft size={20} />
               </button>
               <div className="text-center">
-                <p className="font-semibold text-gray-900">{getDateLabel(effectiveDate)}</p>
-                <p className="text-xs text-gray-500">{format(effectiveDate, 'MMMM d, yyyy')}</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{getDateLabel(effectiveDate)}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{format(effectiveDate, 'MMMM d, yyyy')}</p>
               </div>
               <button
                 onClick={handleNextDate}
                 disabled={!weekdaysInfo || currentIdx >= weekdaysInfo.length - 1}
-                className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-30"
               >
                 <ChevronRight size={20} />
               </button>
@@ -311,7 +311,7 @@ export default function Menu() {
   }
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <PageHeader
           title="Menu"
@@ -337,9 +337,9 @@ export default function Menu() {
         />
 
         {/* Date Selector for Advance Ordering */}
-        <div className="bg-white rounded-xl shadow-sm p-3 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700 flex items-center gap-1">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
               <Calendar size={16} className="text-primary-500" />
               Order for:
             </span>
@@ -405,7 +405,7 @@ export default function Menu() {
               className={`px-4 py-2 rounded-full font-medium whitespace-nowrap transition-colors ${
                 selectedCategory === cat.value
                   ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               {cat.label}
@@ -431,14 +431,14 @@ export default function Menu() {
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar size={40} className="text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">No Menu Available</h3>
-            <p className="text-gray-500 max-w-sm mx-auto">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">No Menu Available</h3>
+            <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
               The menu for {format(effectiveDate, 'EEEE, MMMM d')} hasn't been set yet. 
               Please check back later or try another day.
             </p>
             {weekdaysInfo && weekdaysInfo.length > 1 && (
               <div className="mt-4">
-                <p className="text-sm text-gray-600 mb-2">Try ordering for:</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Try ordering for:</p>
                 <div className="flex gap-2 justify-center flex-wrap">
                   {weekdaysInfo
                     .filter(w => w.dateStr !== format(effectiveDate, 'yyyy-MM-dd') && w.isOpen)
@@ -458,7 +458,7 @@ export default function Menu() {
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">
+            <p className="text-gray-500 dark:text-gray-400 text-lg">
               {searchQuery ? 'No items found matching your search.' : 'No items in this category.'}
             </p>
           </div>

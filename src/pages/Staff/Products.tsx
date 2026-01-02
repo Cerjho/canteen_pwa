@@ -144,7 +144,7 @@ export default function StaffProducts() {
   }
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <PageHeader
@@ -153,7 +153,7 @@ export default function StaffProducts() {
           />
           <button
             onClick={() => refetch()}
-            className="p-2 text-gray-600 hover:bg-gray-200 rounded-full"
+            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"
           >
             <RefreshCw size={20} />
           </button>
@@ -161,17 +161,17 @@ export default function StaffProducts() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-white rounded-lg p-4 shadow-sm text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-green-600">{products?.filter(p => p.available).length || 0}</div>
-            <div className="text-xs text-gray-500">Available</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Available</div>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-red-600">{unavailableCount}</div>
-            <div className="text-xs text-gray-500">Unavailable</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Unavailable</div>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-amber-600">{lowStockCount}</div>
-            <div className="text-xs text-gray-500">Low Stock</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Low Stock</div>
           </div>
         </div>
 
@@ -196,7 +196,7 @@ export default function StaffProducts() {
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           
@@ -204,7 +204,7 @@ export default function StaffProducts() {
             <button
               onClick={() => setCategoryFilter('all')}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
-                categoryFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700'
+                categoryFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
               }`}
             >
               All
@@ -214,7 +214,7 @@ export default function StaffProducts() {
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap capitalize ${
-                  categoryFilter === cat ? 'bg-primary-600 text-white' : 'bg-white text-gray-700'
+                  categoryFilter === cat ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                 }`}
               >
                 {cat}
@@ -222,7 +222,7 @@ export default function StaffProducts() {
             ))}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <input
               type="checkbox"
               checked={showOnlyUnavailable}
@@ -238,7 +238,7 @@ export default function StaffProducts() {
           {filteredProducts?.map(product => (
             <div
               key={product.id}
-              className={`bg-white rounded-lg p-4 shadow-sm border-l-4 ${
+              className={`bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border-l-4 ${
                 product.available ? 'border-green-500' : 'border-red-500'
               }`}
             >
@@ -258,8 +258,8 @@ export default function StaffProducts() {
                 <div className="flex-1">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-semibold">{product.name}</h3>
-                      <p className="text-sm text-gray-500 capitalize">{product.category}</p>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">{product.name}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{product.category}</p>
                     </div>
                     <span className="text-lg font-bold text-primary-600">₱{product.price.toFixed(2)}</span>
                   </div>
@@ -268,7 +268,7 @@ export default function StaffProducts() {
                   <div className="flex items-center gap-3 mt-3">
                     {/* Stock Input */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Stock:</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Stock:</span>
                       <input
                         type="number"
                         min="0"
@@ -277,7 +277,7 @@ export default function StaffProducts() {
                           const value = parseInt(e.target.value) || 0;
                           updateStock.mutate({ id: product.id, stock_quantity: value });
                         }}
-                        className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                        className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                     

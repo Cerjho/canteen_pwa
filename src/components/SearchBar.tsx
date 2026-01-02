@@ -18,7 +18,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', id = 'se
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         placeholder={placeholder}
         aria-label={placeholder}
       />
@@ -29,7 +29,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', id = 'se
           aria-label="Clear search"
           type="button"
         >
-          <X className="h-5 w-5 text-gray-400 hover:text-gray-600" aria-hidden="true" />
+          <X className="h-5 w-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" aria-hidden="true" />
         </button>
       )}
     </div>

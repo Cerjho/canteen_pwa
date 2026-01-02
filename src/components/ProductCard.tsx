@@ -31,7 +31,7 @@ export function ProductCard({
   const imageSrc = imageError || !image_url ? DEFAULT_PRODUCT_IMAGE : image_url;
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow relative">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow relative">
       {/* Favorite button */}
       {onToggleFavorite && (
         <button
@@ -39,7 +39,7 @@ export function ProductCard({
             e.stopPropagation();
             onToggleFavorite();
           }}
-          className="absolute top-2 right-2 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-colors z-10"
+          className="absolute top-2 right-2 p-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white dark:hover:bg-gray-800 transition-colors z-10"
           aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Heart
@@ -57,8 +57,8 @@ export function ProductCard({
         onError={() => setImageError(true)}
       />
       <div className="p-4">
-        <h3 className="text-lg font-semibold mb-1 line-clamp-1">{name}</h3>
-        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{description}</p>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 line-clamp-1">{name}</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{description}</p>
         <div className="flex items-center justify-between">
           <span className="text-2xl font-bold text-primary-600">
             ₱{price.toFixed(2)}
