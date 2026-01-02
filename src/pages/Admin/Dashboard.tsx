@@ -181,7 +181,7 @@ export default function AdminDashboard() {
           .from('user_profiles')
           .select('*', { count: 'exact', head: true }),
         supabase
-          .from('children')
+          .from('students')
           .select('*', { count: 'exact', head: true }),
         supabase
           .from('products')
