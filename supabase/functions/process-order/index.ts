@@ -231,6 +231,18 @@ serve(async (req) => {
       }
     }
 
+    // Determine payment status and order status based on payment method
+    // Cash: awaiting_payment until cashier confirms, with timeout
+    // Balance: paid immediately, order goes to pending
+    const isCashPayment = payment_method === 'cash';
+    const CASH_PAYMENT_TIMEOUT_MINUTES = 15; // 15 minutes to pay at cashier
+    
+    const paymentStatus = isCashPayment ? 'awaiting_payment' : 'paid';
+    const orderStatus = isCashPayment ? 'awaiting_payment' : 'pending';
+    const paymentDueAt = isCashPayment 
+      ? new Date(Date.now() + CASH_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString()
+      : null;
+
     // Insert order
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -238,7 +250,9 @@ serve(async (req) => {
         parent_id,
         student_id,
         client_order_id,
-        status: 'pending',
+        status: orderStatus,
+        payment_status: paymentStatus,
+        payment_due_at: paymentDueAt,
         total_amount: totalAmount,
         payment_method,
         notes: notes || null,
@@ -307,13 +321,18 @@ serve(async (req) => {
         status: payment_method === 'cash' ? 'pending' : 'completed'
       });
 
-    // Return success response
+    // Return success response with payment info
     return new Response(
       JSON.stringify({
         success: true,
         order_id: order.id,
         status: order.status,
-        total_amount: totalAmount
+        payment_status: paymentStatus,
+        payment_due_at: paymentDueAt,
+        total_amount: totalAmount,
+        message: isCashPayment 
+          ? `Please pay ₱${totalAmount.toFixed(2)} at the cashier within ${CASH_PAYMENT_TIMEOUT_MINUTES} minutes`
+          : 'Order placed successfully'
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
