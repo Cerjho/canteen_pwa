@@ -76,8 +76,8 @@ interface RecentOrder {
   total_amount: number;
   created_at: string;
   updated_at?: string;
-  child: { first_name: string; last_name: string }[] | null;
-  parent: { first_name: string; last_name: string }[] | null;
+  child: { first_name: string; last_name: string } | null;
+  parent: { first_name: string; last_name: string } | null;
 }
 
 interface OrderStatusDistribution {
