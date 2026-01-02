@@ -24,6 +24,7 @@ import { supabase } from '../../services/supabaseClient';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { useToast } from '../../components/Toast';
+import { useTheme } from '../../hooks/useTheme';
 
 interface AdminProfileData {
   id: string;
@@ -36,13 +37,13 @@ interface AdminProfileData {
 
 // Notification preferences key for localStorage
 const NOTIFICATION_PREFS_KEY = 'canteen_admin_notifications';
-const DARK_MODE_KEY = 'canteen_dark_mode';
 
 export default function AdminProfile() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { theme, toggleTheme } = useTheme();
   
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -59,11 +60,6 @@ export default function AdminProfile() {
     const saved = localStorage.getItem(NOTIFICATION_PREFS_KEY);
     return saved !== null ? JSON.parse(saved) : true;
   });
-  
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem(DARK_MODE_KEY);
-    return saved !== null ? JSON.parse(saved) : false;
-  });
 
   // Persist notification preference
   const handleNotificationToggle = () => {
@@ -78,28 +74,11 @@ export default function AdminProfile() {
     }
   };
 
-  // Persist dark mode preference
-  const handleDarkModeToggle = () => {
-    const newValue = !darkMode;
-    setDarkMode(newValue);
-    localStorage.setItem(DARK_MODE_KEY, JSON.stringify(newValue));
-    
-    // Apply dark mode to document (for future full dark mode implementation)
-    if (newValue) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    
-    showToast(newValue ? 'Dark mode enabled' : 'Dark mode disabled', 'success');
+  // Handle theme toggle
+  const handleThemeToggle = () => {
+    toggleTheme();
+    showToast(theme === 'light' ? 'Dark mode enabled' : 'Light mode enabled', 'success');
   };
-
-  // Apply dark mode on mount
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    }
-  }, [darkMode]);
 
   // Fetch admin profile
   const { data: profile } = useQuery({
@@ -371,7 +350,7 @@ export default function AdminProfile() {
             <div className="px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-100 rounded-lg">
-                  {darkMode ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
+                  {theme === 'dark' ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
                 </div>
                 <div>
                   <p className="text-gray-900 font-medium">Dark Mode</p>
@@ -379,14 +358,14 @@ export default function AdminProfile() {
                 </div>
               </div>
               <button
-                onClick={handleDarkModeToggle}
+                onClick={handleThemeToggle}
                 className={`relative w-11 h-6 rounded-full transition-colors ${
-                  darkMode ? 'bg-primary-600' : 'bg-gray-300'
+                  theme === 'dark' ? 'bg-primary-600' : 'bg-gray-300'
                 }`}
               >
                 <span
                   className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                    darkMode ? 'translate-x-5' : ''
+                    theme === 'dark' ? 'translate-x-5' : ''
                   }`}
                 />
               </button>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LogOut, User, Mail, Phone, Clock, Shield, Save, X, Key, ChevronRight, Edit2 } from 'lucide-react';
+import { LogOut, User, Mail, Phone, Clock, Shield, Save, X, Key, ChevronRight, Edit2, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
@@ -8,6 +8,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
+import { useTheme } from '../../hooks/useTheme';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -25,6 +26,7 @@ export default function StaffProfilePage() {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { theme, toggleTheme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -270,6 +272,37 @@ export default function StaffProfilePage() {
             </div>
             <ChevronRight size={18} className="text-gray-400" />
           </button>
+        </section>
+
+        {/* Settings Section */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Settings</h3>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-100 rounded-full">
+                {theme === 'dark' ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
+              </div>
+              <div>
+                <p className="font-medium">Dark Mode</p>
+                <p className="text-xs text-gray-500">Toggle dark theme</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                toggleTheme();
+                showToast(theme === 'light' ? 'Dark mode enabled' : 'Light mode enabled', 'success');
+              }}
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                theme === 'dark' ? 'bg-primary-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  theme === 'dark' ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
         </section>
 
         {/* App Info */}
