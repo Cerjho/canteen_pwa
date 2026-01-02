@@ -108,9 +108,13 @@ serve(async (req) => {
     const currentTimeStr = phTime.toISOString().substring(11, 16); // HH:MM
     const todayStr = getTodayPhilippines();
 
-    // Check operating hours
+    // Determine effective order date FIRST (needed for operating hours check)
+    const orderDate = scheduled_for || todayStr;
+    const isToday = orderDate === todayStr;
+
+    // Check operating hours - ONLY for same-day orders
     const operatingHours = settings.get('operating_hours') as { open?: string; close?: string } | undefined;
-    if (operatingHours?.open && operatingHours?.close) {
+    if (isToday && operatingHours?.open && operatingHours?.close) {
       const { open, close } = operatingHours;
       if (currentTimeStr < open || currentTimeStr > close) {
         return new Response(
@@ -122,10 +126,6 @@ serve(async (req) => {
         );
       }
     }
-
-    // Determine effective order date
-    const orderDate = scheduled_for || todayStr;
-    const isToday = orderDate === todayStr;
 
     // ============================================
     // VALIDATE ORDER DATE IS A SCHOOL DAY
