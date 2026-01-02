@@ -585,7 +585,7 @@ export default function AdminDashboard() {
   // ==================== LOADING STATE ====================
   if (statsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <LoadingSpinner size="lg" />
           <p className="mt-4 text-gray-500">Loading dashboard...</p>
@@ -708,7 +708,7 @@ export default function AdminDashboard() {
                 {alert.actionLabel && alert.actionRoute && (
                   <button
                     onClick={() => navigate(alert.actionRoute as string)}
-                    className="px-3 py-1 text-sm font-medium rounded-md bg-white/50 hover:bg-white transition-colors"
+                    className="px-3 py-1 text-sm font-medium rounded-md bg-white/50 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 transition-colors"
                   >
                     {alert.actionLabel}
                   </button>
@@ -761,7 +761,7 @@ export default function AdminDashboard() {
 
           <div className="rounded-xl p-4 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-2 rounded-lg bg-white/20"><DollarSign size={20} /></div>
+              <div className="p-2 rounded-lg bg-white/20 dark:bg-white/10"><DollarSign size={20} /></div>
               <div className={`flex items-center text-xs ${revenueTrend >= 0 ? 'text-emerald-200' : 'text-red-200'}`}>
                 {revenueTrend >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                 {Math.abs(revenueTrend).toFixed(0)}%
@@ -774,7 +774,7 @@ export default function AdminDashboard() {
 
           <div className="rounded-xl p-4 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-2 rounded-lg bg-white/20"><ShoppingBag size={20} /></div>
+              <div className="p-2 rounded-lg bg-white/20 dark:bg-white/10"><ShoppingBag size={20} /></div>
               <div className={`flex items-center text-xs ${ordersTrend >= 0 ? 'text-blue-200' : 'text-red-200'}`}>
                 {ordersTrend >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                 {Math.abs(ordersTrend).toFixed(0)}%
@@ -1126,7 +1126,7 @@ function StatusDistributionChart({ distribution }: StatusDistributionChartProps)
           return (
             <div key={status.key} className="flex items-center gap-2 text-sm">
               <div className={`w-3 h-3 rounded-full ${status.color}`} />
-              <span className="text-gray-600">{status.label}</span>
+              <span className="text-gray-600 dark:text-gray-400">{status.label}</span>
               <span className={`font-semibold ${status.textColor}`}>{value}</span>
               <span className="text-gray-400 text-xs">({percentage}%)</span>
             </div>

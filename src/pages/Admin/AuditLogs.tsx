@@ -129,7 +129,7 @@ export default function AdminAuditLogs() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -145,7 +145,7 @@ export default function AdminAuditLogs() {
           />
           <button
             onClick={() => refetch()}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
           >
             <RefreshCw size={20} />
           </button>
@@ -196,11 +196,11 @@ export default function AdminAuditLogs() {
               {filteredLogs.map((log) => (
                 <div
                   key={log.id}
-                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                   onClick={() => setSelectedLog(log)}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-gray-100 rounded-lg text-gray-600">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
                       {ENTITY_ICONS[log.entity_type] || <History size={18} />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -217,7 +217,7 @@ export default function AdminAuditLogs() {
                         {format(new Date(log.created_at), 'MMM d, yyyy h:mm a')}
                       </p>
                     </div>
-                    <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+                    <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                       <Eye size={18} />
                     </button>
                   </div>
@@ -227,7 +227,7 @@ export default function AdminAuditLogs() {
           ) : (
             <div className="text-center py-12">
               <History size={48} className="mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No audit logs found</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No audit logs found</h3>
               <p className="text-gray-500">
                 {logs?.length === 0 
                   ? 'Audit logging will track changes once the feature is enabled'
@@ -243,7 +243,7 @@ export default function AdminAuditLogs() {
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setSelectedLog(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold">Log Details</h2>
@@ -275,7 +275,7 @@ export default function AdminAuditLogs() {
 
                 {selectedLog.action === 'UPDATE' && selectedLog.old_data && selectedLog.new_data && (
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-900">Changes</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Changes</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm text-gray-500 block mb-2">Before</label>
@@ -295,7 +295,7 @@ export default function AdminAuditLogs() {
 
                 {selectedLog.action === 'CREATE' && selectedLog.new_data && (
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Created Data</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Created Data</h3>
                     <pre className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs overflow-auto max-h-60">
                       {JSON.stringify(selectedLog.new_data, null, 2)}
                     </pre>
@@ -304,7 +304,7 @@ export default function AdminAuditLogs() {
 
                 {selectedLog.action === 'DELETE' && selectedLog.old_data && (
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Deleted Data</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Deleted Data</h3>
                     <pre className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs overflow-auto max-h-60">
                       {JSON.stringify(selectedLog.old_data, null, 2)}
                     </pre>
@@ -313,7 +313,7 @@ export default function AdminAuditLogs() {
 
                 <button
                   onClick={() => setSelectedLog(null)}
-                  className="w-full mt-6 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  className="w-full mt-6 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Close
                 </button>

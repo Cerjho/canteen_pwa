@@ -565,7 +565,7 @@ export default function StaffDashboard() {
               </button>
               <button
                 onClick={() => setSelectedOrders([])}
-                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+                className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-500"
               >
                 Clear
               </button>
@@ -612,7 +612,7 @@ export default function StaffDashboard() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleOrderSelection(order.id)}
-                        className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
                         disabled={isAwaitingPayment}
                       />
                       <div className={`p-2 rounded-full ${getStatusBadge(order.status, order.payment_status)}`}>

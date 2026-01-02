@@ -616,7 +616,7 @@ export default function AdminWeeklyMenu() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -666,7 +666,7 @@ export default function AdminWeeklyMenu() {
             {/* Week Navigator */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
               <div className="flex items-center justify-between mb-2">
-                <button onClick={goToPrevWeek} className="p-2 hover:bg-gray-100 rounded-lg">
+                <button onClick={goToPrevWeek} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                   <ChevronLeft size={20} />
                 </button>
                 <div className="text-center flex-1">
@@ -680,7 +680,7 @@ export default function AdminWeeklyMenu() {
                     )}
                   </div>
                 </div>
-                <button onClick={goToNextWeek} className="p-2 hover:bg-gray-100 rounded-lg">
+                <button onClick={goToNextWeek} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                   <ChevronRight size={20} />
                 </button>
               </div>
@@ -693,7 +693,7 @@ export default function AdminWeeklyMenu() {
                 )}
                 
                 {/* View Toggle */}
-                <div className="flex bg-gray-100 rounded-lg p-1 ml-auto">
+                <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 ml-auto">
                   <button
                     onClick={() => setViewMode('day')}
                     className={`p-1.5 rounded ${viewMode === 'day' ? 'bg-white shadow-sm' : ''}`}
@@ -717,7 +717,7 @@ export default function AdminWeeklyMenu() {
                 {/* Day Selector */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <button onClick={handlePrevDay} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <button onClick={handlePrevDay} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                       <ChevronLeft size={20} />
                     </button>
                     <div className="text-center">
@@ -728,7 +728,7 @@ export default function AdminWeeklyMenu() {
                         {format(selectedDay === 6 ? saturdayDate : getDateForDay(selectedDay), 'MMM d')} • {activeItemsCount}/{daySchedules.length} active
                       </p>
                     </div>
-                    <button onClick={handleNextDay} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <button onClick={handleNextDay} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                       <ChevronRight size={20} />
                     </button>
                   </div>
@@ -858,7 +858,7 @@ export default function AdminWeeklyMenu() {
                           )}
                         </button>
                         {!copyToDay.isPending && !copyToAllDays.isPending && (
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg py-2 hidden group-hover:block z-10 min-w-[160px]">
+                          <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-2 hidden group-hover:block z-10 min-w-[160px]">
                             {WEEKDAYS.filter(d => d.value !== selectedDay).map(day => {
                               const targetDate = getDateForDay(day.value);
                               const targetHoliday = isHoliday(targetDate);
@@ -890,7 +890,7 @@ export default function AdminWeeklyMenu() {
                             <div className="border-t border-gray-100 my-1" />
                             <button
                               onClick={() => copyToAllDays.mutate(selectedDay)}
-                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-primary-600 font-medium"
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-primary-600 dark:text-primary-400 font-medium"
                             >
                               All Weekdays
                             </button>
@@ -901,7 +901,7 @@ export default function AdminWeeklyMenu() {
                       {/* Clear button */}
                       <button
                         onClick={() => { setClearTarget('day'); setShowClearConfirm(true); }}
-                        className="px-4 py-3 bg-white border border-red-200 rounded-xl font-medium text-red-600 hover:bg-red-50 transition-colors"
+                        className="px-4 py-3 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-xl font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                       >
                         <Trash size={18} />
                       </button>
@@ -953,7 +953,7 @@ export default function AdminWeeklyMenu() {
                                     className="w-12 h-12 rounded-lg object-cover"
                                   />
                                 ) : (
-                                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
+                                  <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                                     <Package size={20} className="text-gray-400" />
                                   </div>
                                 )}
@@ -963,7 +963,7 @@ export default function AdminWeeklyMenu() {
                                       {schedule.product?.name}
                                     </p>
                                     {!schedule.is_active && (
-                                      <span className="px-1.5 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
+                                      <span className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs rounded">
                                         Hidden
                                       </span>
                                     )}
@@ -1003,7 +1003,7 @@ export default function AdminWeeklyMenu() {
               </>
             ) : (
               /* Week Overview Grid */
-              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 border-b">
                   <h3 className="font-semibold">Week Overview</h3>
                   <button
@@ -1077,7 +1077,7 @@ export default function AdminWeeklyMenu() {
                                 ) : (
                                   <button
                                     onClick={() => { setSelectedDay(day.value); setViewMode('day'); setShowAddModal(true); }}
-                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-400 text-sm hover:bg-gray-200"
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 text-sm hover:bg-gray-200 dark:hover:bg-gray-600"
                                   >
                                     <Plus size={14} />
                                   </button>
@@ -1087,8 +1087,8 @@ export default function AdminWeeklyMenu() {
                           })}
                         </tr>
                       ))}
-                      <tr className="bg-gray-50">
-                        <td className="px-3 py-2 font-medium text-xs text-gray-600">Total Active</td>
+                      <tr className="bg-gray-50 dark:bg-gray-900">
+                        <td className="px-3 py-2 font-medium text-xs text-gray-600 dark:text-gray-400">Total Active</td>
                         {weekStats.map(stat => (
                           <td key={stat.day} className="px-2 py-2 text-center font-medium text-sm">
                             {stat.active}
@@ -1106,7 +1106,7 @@ export default function AdminWeeklyMenu() {
         {activeTab === 'holidays' && (
           <>
             {/* Sub-tabs for Holidays vs Make-up Days */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
+            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
               <button
                 onClick={() => setHolidaySubTab('holidays')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
@@ -1301,7 +1301,7 @@ export default function AdminWeeklyMenu() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search products..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
 
@@ -1357,7 +1357,7 @@ export default function AdminWeeklyMenu() {
                     <button
                       key={product.id}
                       onClick={() => addToSchedule.mutate({ productId: product.id, dayOfWeek: selectedDay })}
-                      className="bg-white border border-gray-200 rounded-xl p-3 text-left hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                      className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-left hover:border-primary-300 dark:hover:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
                     >
                       {product.image_url ? (
                         <img
@@ -1366,11 +1366,11 @@ export default function AdminWeeklyMenu() {
                           className="w-full h-20 rounded-lg object-cover mb-2"
                         />
                       ) : (
-                        <div className="w-full h-20 rounded-lg bg-gray-100 flex items-center justify-center mb-2">
+                        <div className="w-full h-20 rounded-lg bg-gray-100 dark:bg-gray-600 flex items-center justify-center mb-2">
                           <Package size={24} className="text-gray-400" />
                         </div>
                       )}
-                      <p className="font-medium text-gray-900 text-sm truncate">{product.name}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{product.name}</p>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-xs text-primary-600">₱{product.price.toFixed(2)}</span>
                         <span className={`text-xs px-1.5 py-0.5 rounded ${CATEGORY_COLORS[product.category]}`}>
@@ -1481,7 +1481,7 @@ function HolidayModal({
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-4 border-b">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Add Holiday</h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
               <X size={20} />
             </button>
           </div>
@@ -1498,7 +1498,7 @@ function HolidayModal({
                     key={holiday.name}
                     type="button"
                     onClick={() => setQuickHoliday(holiday)}
-                    className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg"
+                    className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-900 dark:text-gray-100"
                   >
                     {holiday.name}
                   </button>
@@ -1548,7 +1548,7 @@ function HolidayModal({
             </div>
 
             {/* Recurring Toggle */}
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div>
                 <p className="font-medium text-sm">Recurring Yearly</p>
                 <p className="text-xs text-gray-500">Automatically repeats every year</p>
@@ -1572,7 +1572,7 @@ function HolidayModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -1722,7 +1722,7 @@ function MakeupDayModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>

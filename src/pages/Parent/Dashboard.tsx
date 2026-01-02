@@ -325,7 +325,7 @@ export default function ParentDashboard() {
                   >
                     {/* Progress Bar */}
                     {!isFutureOrder && (
-                      <div className="h-1 bg-gray-100">
+                      <div className="h-1 bg-gray-100 dark:bg-gray-700">
                         <div 
                           className={`h-full transition-all duration-500 ${
                             order.status === 'pending' ? 'bg-gray-400' :
@@ -355,7 +355,7 @@ export default function ParentDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         {!isFutureOrder && order.status !== 'ready' && (
-                          <span className="text-sm bg-white/50 px-2 py-0.5 rounded-full">
+                          <span className="text-sm bg-white/50 dark:bg-black/20 px-2 py-0.5 rounded-full">
                             {getEstimatedWait(order.status, order.created_at)}
                           </span>
                         )}

@@ -291,10 +291,10 @@ export default function Menu() {
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <CalendarOff size={48} className="text-red-500" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               {isToday(effectiveDate) ? 'Canteen Closed Today' : 'Canteen Closed'}
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
               The canteen is closed for<br />
               <span className="font-semibold text-red-600">{selectedWeekdayInfo.holidayName || 'Holiday'}</span>
             </p>
@@ -428,7 +428,7 @@ export default function Menu() {
           </div>
         ) : !products || products.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar size={40} className="text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">No Menu Available</h3>

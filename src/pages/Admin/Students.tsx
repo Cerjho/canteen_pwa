@@ -179,7 +179,7 @@ export default function AdminStudents() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -227,7 +227,7 @@ export default function AdminStudents() {
           </button>
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-3 rounded-xl font-medium hover:bg-gray-50"
+            className="flex items-center justify-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             <Upload size={20} />
             Import
@@ -272,7 +272,7 @@ export default function AdminStudents() {
         {/* Students List */}
         <div className="space-y-3">
           {filteredStudents?.length === 0 ? (
-            <div className="bg-white rounded-xl p-8 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
               <GraduationCap size={48} className="mx-auto text-gray-300 mb-3" />
               <p className="text-gray-500">No students found</p>
             </div>

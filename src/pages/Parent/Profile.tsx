@@ -261,14 +261,14 @@ export default function Profile() {
                         value={formData.first_name}
                         onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
                         placeholder="First Name"
-                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                        className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />
                       <input
                         type="text"
                         value={formData.last_name}
                         onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
                         placeholder="Last Name"
-                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                        className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                     <input
@@ -276,7 +276,7 @@ export default function Profile() {
                       value={formData.phone_number}
                       onChange={(e) => setFormData(prev => ({ ...prev, phone_number: e.target.value }))}
                       placeholder="Phone (e.g., 09XX XXX XXXX)"
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                   </div>
                 ) : (
@@ -416,7 +416,7 @@ export default function Profile() {
                       {student.first_name} {student.last_name}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      <span className="font-mono bg-gray-200 px-1.5 py-0.5 rounded text-xs mr-2">
+                      <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs mr-2 text-gray-900 dark:text-gray-100">
                         {student.student_id}
                       </span>
                       {student.grade_level}
@@ -666,7 +666,7 @@ function EditDietaryModal({ student, onClose, onSubmit, isLoading }: EditDietary
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Dietary Restrictions / Allergies
             </label>
             <textarea
@@ -686,7 +686,7 @@ function EditDietaryModal({ student, onClose, onSubmit, isLoading }: EditDietary
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
+              className="flex-1 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
             >
               Cancel
             </button>

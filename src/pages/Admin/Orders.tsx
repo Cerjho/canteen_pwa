@@ -240,13 +240,13 @@ export default function AdminOrders() {
           <div className="flex gap-2">
             <button
               onClick={() => refetch()}
-              className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg"
+              className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
             >
               <RefreshCw size={20} />
             </button>
             <button
               onClick={exportOrders}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 border border-gray-200"
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600"
             >
               <Download size={18} />
               Export
@@ -545,7 +545,7 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
 
             {/* Status Actions */}
             <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">Update Status</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Update Status</label>
               <div className="grid grid-cols-2 gap-2">
                 {STATUS_OPTIONS.filter(s => s !== order.status).map(status => (
                   <button
@@ -576,7 +576,7 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
 
             <button
               onClick={onClose}
-              className="w-full mt-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="w-full mt-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Close
             </button>

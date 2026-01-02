@@ -227,7 +227,7 @@ export default function StaffProducts() {
               type="checkbox"
               checked={showOnlyUnavailable}
               onChange={(e) => setShowOnlyUnavailable(e.target.checked)}
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
             />
             Show only unavailable
           </label>
@@ -250,7 +250,7 @@ export default function StaffProducts() {
                     className="w-16 h-16 rounded-lg object-cover"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                     <Package size={24} className="text-gray-400" />
                   </div>
                 )}

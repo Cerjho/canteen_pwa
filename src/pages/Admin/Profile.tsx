@@ -204,7 +204,7 @@ export default function AdminProfile() {
           {!isEditing && (
             <button
               onClick={handleEdit}
-              className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              className="absolute top-4 right-4 p-2 bg-white/20 dark:bg-white/10 hover:bg-white/30 dark:hover:bg-white/20 rounded-lg transition-colors"
               title="Edit profile"
             >
               <Edit2 size={18} />
@@ -212,7 +212,7 @@ export default function AdminProfile() {
           )}
           
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center ring-4 ring-white/30">
+            <div className="w-20 h-20 rounded-full bg-white/20 dark:bg-white/10 flex items-center justify-center ring-4 ring-white/30 dark:ring-white/20">
               <User size={40} className="text-white" />
             </div>
             <div className="flex-1">
@@ -224,14 +224,14 @@ export default function AdminProfile() {
                       value={formData.first_name}
                       onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
                       placeholder="First Name"
-                      className="flex-1 px-3 py-1.5 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-white"
+                      className="flex-1 px-3 py-1.5 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-white"
                     />
                     <input
                       type="text"
                       value={formData.last_name}
                       onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
                       placeholder="Last Name"
-                      className="flex-1 px-3 py-1.5 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-white"
+                      className="flex-1 px-3 py-1.5 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-white"
                     />
                   </div>
                   <input
@@ -239,12 +239,12 @@ export default function AdminProfile() {
                     value={formData.phone_number}
                     onChange={(e) => setFormData(prev => ({ ...prev, phone_number: e.target.value }))}
                     placeholder="Phone Number (e.g., 09XX XXX XXXX)"
-                    className="w-full px-3 py-1.5 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-white"
+                    className="w-full px-3 py-1.5 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-white"
                   />
                   <div className="flex gap-2 pt-2">
                     <button
                       onClick={handleCancelEdit}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition-colors"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-white/20 dark:bg-white/10 hover:bg-white/30 dark:hover:bg-white/20 rounded-lg text-sm transition-colors"
                     >
                       <X size={14} />
                       Cancel
@@ -252,7 +252,7 @@ export default function AdminProfile() {
                     <button
                       onClick={handleSave}
                       disabled={updateProfileMutation.isPending}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-white text-primary-600 rounded-lg text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-100 text-primary-600 dark:text-primary-700 rounded-lg text-sm font-medium hover:bg-white/90 dark:hover:bg-gray-200 transition-colors disabled:opacity-50"
                     >
                       <Save size={14} />
                       {updateProfileMutation.isPending ? 'Saving...' : 'Save'}
@@ -273,7 +273,7 @@ export default function AdminProfile() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium flex items-center gap-1">
+                    <span className="px-2 py-0.5 bg-white/20 dark:bg-white/10 rounded-full text-xs font-medium flex items-center gap-1">
                       <Shield size={12} />
                       {adminInfo.role}
                     </span>
@@ -302,7 +302,7 @@ export default function AdminProfile() {
               <span className="text-gray-900 dark:text-gray-100 font-medium">{adminInfo.phone}</span>
             </div>
             <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600">Role</span>
+              <span className="text-gray-600 dark:text-gray-400">Role</span>
               <span className="text-primary-600 font-medium flex items-center gap-1">
                 <Shield size={14} />
                 {adminInfo.role}
@@ -389,43 +389,43 @@ export default function AdminProfile() {
                 </div>
                 <span className="text-gray-900 dark:text-gray-100 font-medium">Manage Users</span>
               </div>
-              <ChevronRight size={18} className="text-gray-400" />
+              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
             </button>
             <button
               onClick={() => navigate('/admin/reports')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <FileText size={18} className="text-purple-600" />
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                  <FileText size={18} className="text-purple-600 dark:text-purple-400" />
                 </div>
-                <span className="text-gray-900 font-medium">View Reports</span>
+                <span className="text-gray-900 dark:text-gray-100 font-medium">View Reports</span>
               </div>
-              <ChevronRight size={18} className="text-gray-400" />
+              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
             </button>
             <button
               onClick={() => setShowPasswordModal(true)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Key size={18} className="text-green-600" />
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <Key size={18} className="text-green-600 dark:text-green-400" />
                 </div>
-                <span className="text-gray-900 font-medium">Change Password</span>
+                <span className="text-gray-900 dark:text-gray-100 font-medium">Change Password</span>
               </div>
-              <ChevronRight size={18} className="text-gray-400" />
+              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
             </button>
             <button
               onClick={() => setShowHelpModal(true)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-100 rounded-lg">
-                  <HelpCircle size={18} className="text-gray-600" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <HelpCircle size={18} className="text-gray-600 dark:text-gray-400" />
                 </div>
-                <span className="text-gray-900 font-medium">Help & Support</span>
+                <span className="text-gray-900 dark:text-gray-100 font-medium">Help & Support</span>
               </div>
-              <ChevronRight size={18} className="text-gray-400" />
+              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
             </button>
           </div>
         </div>
@@ -472,23 +472,23 @@ export default function AdminProfile() {
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div 
-              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <HelpCircle size={24} className="text-primary-600" />
+                <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                  <HelpCircle size={24} className="text-primary-600 dark:text-primary-400" />
                 </div>
-                <h2 className="text-xl font-bold">Help & Support</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Help & Support</h2>
               </div>
               
               <div className="space-y-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-semibold mb-2">Contact Support</h3>
-                  <p className="text-sm text-gray-600 mb-2">
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Contact Support</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                     Need help with the canteen system? Reach out to our support team.
                   </p>
-                  <p className="text-sm">
+                  <p className="text-sm text-gray-900 dark:text-gray-100">
                     <span className="font-medium">Email:</span>{' '}
                     <a href="mailto:support@canteen.app" className="text-primary-600 hover:underline">
                       support@canteen.app
@@ -496,16 +496,16 @@ export default function AdminProfile() {
                   </p>
                 </div>
                 
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-semibold mb-2">Documentation</h3>
-                  <p className="text-sm text-gray-600">
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Documentation</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     View the admin guide and documentation for detailed instructions on managing the canteen system.
                   </p>
                 </div>
                 
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h3 className="font-semibold text-blue-900 mb-2">Quick Tips</h3>
-                  <ul className="text-sm text-blue-800 space-y-1">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">Quick Tips</h3>
+                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
                     <li>• Use the Dashboard for real-time order monitoring</li>
                     <li>• Set up Weekly Menu for recurring items</li>
                     <li>• Check Reports for sales analytics</li>
