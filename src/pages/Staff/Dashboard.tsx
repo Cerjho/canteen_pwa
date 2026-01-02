@@ -65,8 +65,11 @@ function getWaitTimeCategory(createdAt: string): { minutes: number; category: 'n
   return { minutes, category: 'normal' };
 }
 
+type DateFilter = 'today' | 'future' | 'all';
+
 export default function StaffDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
@@ -76,7 +79,7 @@ export default function StaffDashboard() {
   const { showToast } = useToast();
 
   const { data: orders, isLoading, refetch } = useQuery<StaffOrder[]>({
-    queryKey: ['staff-orders', statusFilter],
+    queryKey: ['staff-orders', statusFilter, dateFilter],
     queryFn: async () => {
       const todayStr = formatDateLocal(new Date());
       let query = supabase
@@ -90,8 +93,16 @@ export default function StaffDashboard() {
             product:products(name, image_url)
           )
         `)
-        .eq('scheduled_for', todayStr)
+        .order('scheduled_for', { ascending: true })
         .order('created_at', { ascending: true });
+      
+      // Apply date filter
+      if (dateFilter === 'today') {
+        query = query.eq('scheduled_for', todayStr);
+      } else if (dateFilter === 'future') {
+        query = query.gt('scheduled_for', todayStr);
+      }
+      // 'all' - no date filter, show all orders
       
       if (statusFilter === 'all') {
         query = query.in('status', ['awaiting_payment', 'pending', 'preparing', 'ready']);
@@ -421,13 +432,21 @@ export default function StaffDashboard() {
   const preparingCount = filteredOrders?.filter(o => o.status === 'preparing').length || 0;
   const readyCount = filteredOrders?.filter(o => o.status === 'ready').length || 0;
 
+  const getSubtitle = () => {
+    switch (dateFilter) {
+      case 'today': return "Today's orders";
+      case 'future': return 'Upcoming scheduled orders';
+      case 'all': return 'All orders';
+    }
+  };
+
   return (
     <div className="min-h-screen pb-20 bg-gray-50">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <PageHeader
             title="Staff Dashboard"
-            subtitle="Manage today's orders"
+            subtitle={getSubtitle()}
           />
           <div className="flex items-center gap-2">
             <button
@@ -453,6 +472,27 @@ export default function StaffDashboard() {
             onChange={setSearchQuery}
             placeholder="Search by name, class, or item..."
           />
+        </div>
+
+        {/* Date Filter Tabs */}
+        <div className="flex gap-2 mb-4">
+          {([
+            { key: 'today', label: 'Today' },
+            { key: 'future', label: 'Future Orders' },
+            { key: 'all', label: 'All' }
+          ] as { key: DateFilter; label: string }[]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setDateFilter(key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                dateFilter === key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Status Summary Cards */}
@@ -635,6 +675,16 @@ export default function StaffDashboard() {
                     {order.payment_method === 'balance' && <span className="text-green-600 font-medium">BALANCE</span>}
                     {order.payment_method === 'gcash' && <span className="text-blue-600 font-medium">GCASH</span>}
                   </p>
+
+                  {/* Scheduled Date (for future orders) */}
+                  {dateFilter !== 'today' && order.scheduled_for && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3 flex items-center gap-2">
+                      <span className="text-blue-600">📅</span>
+                      <span className="text-sm font-medium text-blue-800">
+                        Scheduled for: {format(new Date(order.scheduled_for + 'T00:00:00'), 'EEEE, MMMM d, yyyy')}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Order Notes */}
                   {order.notes && (
