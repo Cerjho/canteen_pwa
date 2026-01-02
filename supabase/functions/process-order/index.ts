@@ -40,36 +40,59 @@ serve(async (req) => {
   }
 
   try {
-    // Get auth token from request
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Initialize Supabase client with service role for admin operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Missing Supabase configuration');
       return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'CONFIG_ERROR', message: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Extract token from Bearer header
-    const token = authHeader.replace('Bearer ', '');
-
-    // Initialize Supabase client with service role for admin operations
+    
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      serviceRoleKey,
       { auth: { persistSession: false } }
     );
 
-    // Get user from token using admin client
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-      console.log('Auth error:', authError?.message);
+    // Get auth token from Authorization header (standard Supabase auth flow)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token' }),
+        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Missing or invalid authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Validate token is a proper JWT (basic structure check)
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      return new Response(
+        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token format' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse request body
+    // Verify user with Supabase Auth (server-side validation)
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth verification failed:', authError?.message);
+      return new Response(
+        JSON.stringify({ 
+          error: 'UNAUTHORIZED', 
+          message: 'Session expired or invalid. Please sign in again.'
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse and validate request body
     const body: OrderRequest = await req.json();
     const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
 

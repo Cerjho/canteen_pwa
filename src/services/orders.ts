@@ -49,11 +49,31 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
     return { queued: true };
   }
 
+  // Ensure we have a valid session before making the request
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData.session) {
+    throw new Error('Please sign in again to place an order');
+  }
+  
+  // Refresh token if it's about to expire (within 2 minutes)
+  const expiresAt = sessionData.session.expires_at;
+  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      throw new Error('Session expired. Please sign in again.');
+    }
+    // Use the refreshed session
+    if (!refreshData.session) {
+      throw new Error('Failed to refresh session. Please sign in again.');
+    }
+  }
+
   // Process order via Edge Function with retry logic
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      // supabase.functions.invoke automatically includes the Authorization header
       const { data, error } = await supabase.functions.invoke('process-order', {
         body: orderData
       });
