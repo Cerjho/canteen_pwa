@@ -26,6 +26,9 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import type { Parent } from '../../types';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 export default function Profile() {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
@@ -42,41 +45,68 @@ export default function Profile() {
     phone_number: ''
   });
 
-  // Fetch parent profile
+  // Fetch parent profile (via edge function to handle creation if needed)
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      
-      // If no profile exists yet, create one from auth metadata
-      if (!data && user) {
-        const newProfile = {
-          id: user.id,
-          email: user.email || '',
-          first_name: user.user_metadata?.first_name || '',
-          last_name: user.user_metadata?.last_name || '',
-          phone_number: user.user_metadata?.phone_number || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        const { data: inserted, error: insertError } = await supabase
-          .from('user_profiles')
-          .insert(newProfile)
-          .select()
-          .single();
-        
-        if (insertError) {
-          console.error('Failed to create profile:', insertError);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      // First try to get existing profile via edge function
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'get' }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to fetch profile');
+
+      // If profile doesn't exist, create it via edge function
+      if (!result.exists && user) {
+        const createResponse = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'create',
+            data: {
+              first_name: user.user_metadata?.first_name || '',
+              last_name: user.user_metadata?.last_name || '',
+              phone_number: user.user_metadata?.phone_number || null
+            }
+          }),
+        });
+
+        const createResult = await createResponse.json();
+        if (!createResponse.ok) {
+          console.error('Failed to create profile:', createResult.message);
           // Return default profile from auth metadata
-          return { ...newProfile, balance: 0 } as Parent;
+          return {
+            id: user.id,
+            email: user.email || '',
+            first_name: user.user_metadata?.first_name || '',
+            last_name: user.user_metadata?.last_name || '',
+            phone_number: user.user_metadata?.phone_number || null,
+            balance: 0
+          } as Parent;
         }
-        return { ...inserted, balance: 0 } as Parent;
+        
+        // Fetch balance from wallets table
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('balance')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        return { ...createResult.profile, balance: wallet?.balance || 0 } as Parent;
       }
       
       // Fetch balance from wallets table
@@ -86,7 +116,7 @@ export default function Profile() {
         .eq('user_id', user!.id)
         .maybeSingle();
       
-      return { ...data, balance: wallet?.balance || 0 } as Parent;
+      return { ...result.profile, balance: wallet?.balance || 0 } as Parent;
     },
     enabled: !!user
   });
@@ -98,39 +128,40 @@ export default function Profile() {
     enabled: !!user
   });
 
-  // Update profile mutation
+  // Update profile mutation (via edge function)
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { first_name: string; last_name: string; phone_number: string }) => {
-      const { error: dbError } = await supabase
-        .from('user_profiles')
-        .update({
-          first_name: data.first_name,
-          last_name: data.last_name,
-          phone_number: data.phone_number || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user!.id);
-      
-      if (dbError) throw dbError;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
 
-      // Also update user metadata
-      const { error: authError } = await supabase.auth.updateUser({
-        data: {
-          first_name: data.first_name,
-          last_name: data.last_name,
-          phone_number: data.phone_number
-        }
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update',
+          data: {
+            first_name: data.first_name,
+            last_name: data.last_name,
+            phone_number: data.phone_number || null
+          }
+        }),
       });
-      
-      if (authError) throw authError;
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to update profile');
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setIsEditingProfile(false);
       showToast('Profile updated successfully', 'success');
     },
-    onError: () => {
-      showToast('Failed to update profile', 'error');
+    onError: (error: Error) => {
+      showToast(error.message || 'Failed to update profile', 'error');
     }
   });
 

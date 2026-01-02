@@ -101,7 +101,7 @@ export default function AdminOrders() {
       }
 
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/admin-update-order`,
+        `${SUPABASE_URL}/functions/v1/manage-order`,
         {
           method: 'POST',
           headers: {
@@ -110,6 +110,7 @@ export default function AdminOrders() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            action: 'update-status',
             order_id: orderId,
             status
           }),

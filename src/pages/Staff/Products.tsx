@@ -7,6 +7,9 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import type { Product, ProductCategory } from '../../types';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
 
 export default function StaffProducts() {
@@ -29,52 +32,95 @@ export default function StaffProducts() {
     }
   });
 
-  // Toggle availability mutation
+  // Toggle availability mutation (via edge function)
   const toggleAvailability = useMutation({
     mutationFn: async ({ id, available }: { id: string; available: boolean }) => {
-      const { error } = await supabase
-        .from('products')
-        .update({ available, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'toggle-availability',
+          product_id: id,
+          available
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to update availability');
+      return result;
     },
-    onSuccess: (_, { available }) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['staff-products'] });
-      showToast(available ? 'Product marked available' : 'Product marked unavailable', 'success');
+      showToast(result.message || 'Product availability updated', 'success');
     },
-    onError: () => showToast('Failed to update product', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update product', 'error')
   });
 
-  // Update stock mutation
+  // Update stock mutation (via edge function)
   const updateStock = useMutation({
     mutationFn: async ({ id, stock_quantity }: { id: string; stock_quantity: number }) => {
-      const { error } = await supabase
-        .from('products')
-        .update({ stock_quantity, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update-stock',
+          product_id: id,
+          stock_quantity
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to update stock');
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['staff-products'] });
-      showToast('Stock updated', 'success');
+      showToast(result.message || 'Stock updated', 'success');
     },
-    onError: () => showToast('Failed to update stock', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update stock', 'error')
   });
 
-  // Mark all as available
+  // Mark all as available (via edge function)
   const markAllAvailable = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from('products')
-        .update({ available: true, updated_at: new Date().toISOString() })
-        .eq('available', false);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'mark-all-available'
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to update products');
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['staff-products'] });
-      showToast('All products marked available', 'success');
+      showToast(result.message || 'All products marked available', 'success');
     },
-    onError: () => showToast('Failed to update products', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update products', 'error')
   });
 
   // Filter products

@@ -9,6 +9,9 @@ import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 interface StaffProfile {
   id: string;
   email: string;
@@ -64,25 +67,39 @@ export default function StaffProfilePage() {
     enabled: !!user
   });
 
-  // Update profile mutation
+  // Update profile mutation (via edge function)
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<StaffProfile>) => {
-      const { error } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: user!.id,
-          email: user!.email,
-          ...data,
-          updated_at: new Date().toISOString()
-        });
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update',
+          data: {
+            first_name: data.first_name,
+            last_name: data.last_name,
+            phone_number: data.phone_number || null
+          }
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to update profile');
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff-profile'] });
       setIsEditing(false);
       showToast('Profile updated', 'success');
     },
-    onError: () => showToast('Failed to update profile', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update profile', 'error')
   });
 
   const handleEdit = () => {

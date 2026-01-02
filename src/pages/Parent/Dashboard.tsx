@@ -26,6 +26,9 @@ import {
   Sparkles
 } from 'lucide-react';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 // Helper to format date in local timezone (avoids UTC shift issues)
 function formatDateLocal(date: Date): string {
   const year = date.getFullYear();
@@ -147,29 +150,35 @@ export default function ParentDashboard() {
     enabled: !!user
   });
 
-  // Cancel order mutation
+  // Cancel order mutation (via edge function)
   const cancelOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      const { error } = await supabase
-        .from('orders')
-        .update({ 
-          status: 'cancelled',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId)
-        .eq('parent_id', user!.id)
-        .in('status', ['pending']); // Can only cancel pending orders
-      
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/parent-cancel-order`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to cancel order');
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['active-orders'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-orders'] });
-      showToast('Order cancelled successfully', 'success');
+      queryClient.invalidateQueries({ queryKey: ['profile'] }); // Refresh balance if refund applied
+      showToast(result.message || 'Order cancelled successfully', 'success');
       setShowCancelDialog(null);
     },
-    onError: () => {
-      showToast('Failed to cancel order', 'error');
+    onError: (error: Error) => {
+      showToast(error.message || 'Failed to cancel order', 'error');
     }
   });
 

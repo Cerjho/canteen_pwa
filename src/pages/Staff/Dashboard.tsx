@@ -10,6 +10,9 @@ import { SearchBar } from '../../components/SearchBar';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { playNotificationSound } from '../../utils/notificationSound';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 // Helper to format date in local timezone (avoids UTC shift issues)
 function formatDateLocal(date: Date): string {
   const year = date.getFullYear();
@@ -155,70 +158,124 @@ export default function StaffDashboard() {
   }, [orders, soundEnabled]);
 
   const updateOrderStatus = async (orderId: string, status: string) => {
-    const updateData: { status: string; updated_at: string; completed_at?: string } = {
-      status,
-      updated_at: new Date().toISOString()
-    };
-    
-    if (status === 'completed') {
-      updateData.completed_at = new Date().toISOString();
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        showToast('Please log in again', 'error');
+        return;
+      }
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', orderId);
-    
-    if (error) {
-      showToast('Failed to update order', 'error');
-    } else {
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-order`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'update-status',
+            order_id: orderId,
+            status
+          }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to update order');
+      }
+
       showToast(`Order marked as ${status}`, 'success');
       setSelectedOrders(prev => prev.filter(id => id !== orderId));
       refetch();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to update order', 'error');
     }
   };
 
   const handleBatchStatusUpdate = async (status: string) => {
     if (selectedOrders.length === 0) return;
     
-    const updateData: { status: string; updated_at: string; completed_at?: string } = {
-      status,
-      updated_at: new Date().toISOString()
-    };
-    
-    if (status === 'completed') {
-      updateData.completed_at = new Date().toISOString();
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        showToast('Please log in again', 'error');
+        return;
+      }
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .in('id', selectedOrders);
-    
-    if (error) {
-      showToast('Failed to update orders', 'error');
-    } else {
-      showToast(`${selectedOrders.length} orders marked as ${status}`, 'success');
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-order`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'bulk-update-status',
+            order_ids: selectedOrders,
+            status
+          }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to update orders');
+      }
+
+      showToast(`${result.updated_count || selectedOrders.length} orders marked as ${status}`, 'success');
       setSelectedOrders([]);
       refetch();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to update orders', 'error');
     }
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ 
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', orderId);
-    
-    if (error) {
-      showToast('Failed to cancel order', 'error');
-    } else {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        showToast('Please log in again', 'error');
+        return;
+      }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-order`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'cancel',
+            order_id: orderId,
+            reason: 'Cancelled by staff'
+          }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to cancel order');
+      }
+
       showToast('Order cancelled', 'success');
       setShowCancelDialog(null);
       refetch();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to cancel order', 'error');
     }
   };
 
