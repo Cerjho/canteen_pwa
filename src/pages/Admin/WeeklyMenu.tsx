@@ -275,9 +275,11 @@ export default function AdminWeeklyMenu() {
   // Add product to schedule for a specific date (via secure edge function)
   const addToSchedule = useMutation({
     mutationFn: async ({ productId, dayOfWeek }: { productId: string; dayOfWeek: number }) => {
+      const scheduledDate = formatDateLocal(getDateForDay(dayOfWeek));
       return callManageMenu({
         action: 'add',
         product_id: productId,
+        scheduled_date: scheduledDate,
         day_of_week: dayOfWeek
       });
     },
@@ -291,9 +293,11 @@ export default function AdminWeeklyMenu() {
   // Add multiple products at once for a specific date (via secure edge function)
   const addBulkToSchedule = useMutation({
     mutationFn: async ({ productIds, dayOfWeek }: { productIds: string[]; dayOfWeek: number }) => {
+      const scheduledDate = formatDateLocal(getDateForDay(dayOfWeek));
       return callManageMenu({
         action: 'add-bulk',
         product_ids: productIds,
+        scheduled_date: scheduledDate,
         day_of_week: dayOfWeek
       });
     },
@@ -338,10 +342,12 @@ export default function AdminWeeklyMenu() {
   // Copy menu to another day (via secure edge function)
   const copyToDay = useMutation({
     mutationFn: async ({ fromDay, toDay }: { fromDay: number; toDay: number }) => {
+      const fromDate = formatDateLocal(getDateForDay(fromDay));
+      const toDate = formatDateLocal(getDateForDay(toDay));
       return callManageMenu({
         action: 'copy-day',
-        from_day: fromDay,
-        to_day: toDay
+        from_date: fromDate,
+        to_date: toDate
       });
     },
     onSuccess: (_, { toDay }) => {
@@ -354,9 +360,11 @@ export default function AdminWeeklyMenu() {
   // Copy day to all weekdays (via secure edge function)
   const copyToAllDays = useMutation({
     mutationFn: async (fromDay: number) => {
+      const fromDate = formatDateLocal(getDateForDay(fromDay));
       return callManageMenu({
-        action: 'copy-all',
-        from_day: fromDay
+        action: 'copy-week',
+        from_date: fromDate,
+        week_start: weekStartStr
       });
     },
     onSuccess: () => {
@@ -369,9 +377,10 @@ export default function AdminWeeklyMenu() {
   // Clear day's menu (via secure edge function)
   const clearDayMenu = useMutation({
     mutationFn: async (dayOfWeek: number) => {
+      const scheduledDate = formatDateLocal(getDateForDay(dayOfWeek));
       return callManageMenu({
         action: 'clear-day',
-        day_of_week: dayOfWeek
+        scheduled_date: scheduledDate
       });
     },
     onSuccess: () => {
@@ -386,7 +395,8 @@ export default function AdminWeeklyMenu() {
   const clearWeekMenu = useMutation({
     mutationFn: async () => {
       return callManageMenu({
-        action: 'clear-week'
+        action: 'clear-week',
+        week_start: weekStartStr
       });
     },
     onSuccess: () => {
@@ -979,8 +989,9 @@ export default function AdminWeeklyMenu() {
                             </div>
                           </td>
                           {WEEKDAYS.map(day => {
+                            const dayDateStr = formatDateLocal(getDateForDay(day.value));
                             const dayItems = schedules?.filter(
-                              s => s.day_of_week === day.value && s.product?.category === category
+                              s => s.scheduled_date === dayDateStr && s.product?.category === category
                             ) || [];
                             const activeItems = dayItems.filter(s => s.is_active);
                             

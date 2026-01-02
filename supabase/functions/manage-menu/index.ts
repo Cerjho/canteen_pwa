@@ -1,5 +1,6 @@
 // Manage Menu Edge Function
 // Secure server-side menu schedule management
+// FIXED: Now uses scheduled_date instead of day_of_week
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -9,18 +10,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-type Action = 'add' | 'add-bulk' | 'remove' | 'toggle' | 'copy-day' | 'copy-all' | 'clear-day' | 'clear-week';
+type Action = 'add' | 'add-bulk' | 'remove' | 'toggle' | 'copy-day' | 'copy-week' | 'clear-day' | 'clear-week';
 
 interface ManageMenuRequest {
   action: Action;
   schedule_id?: string;
   product_id?: string;
   product_ids?: string[];
-  day_of_week?: number; // 0-6, Sunday-Saturday
-  from_day?: number;
-  to_day?: number;
-  week_start?: string; // ISO date string
+  scheduled_date?: string; // ISO date string (YYYY-MM-DD) - the specific date
+  day_of_week?: number; // 1-5 (Mon-Fri) - for reference only
+  from_date?: string; // Source date for copy operations
+  to_date?: string; // Target date for copy operations
+  week_start?: string; // ISO date string for week operations
   is_active?: boolean;
+}
+
+// Helper to add days to a date string
+function addDays(dateStr: string, days: number): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+// Helper to get day of week from date string (1=Mon, 5=Fri)
+function getDayOfWeek(dateStr: string): number {
+  const date = new Date(dateStr + 'T00:00:00');
+  const day = date.getDay();
+  return day === 0 ? 7 : day; // Convert Sunday=0 to 7
 }
 
 serve(async (req) => {
@@ -64,10 +80,10 @@ serve(async (req) => {
     }
 
     const body: ManageMenuRequest = await req.json();
-    const { action, schedule_id, product_id, product_ids, day_of_week, from_day, to_day, week_start, is_active } = body;
+    const { action, schedule_id, product_id, product_ids, scheduled_date, day_of_week, from_date, to_date, week_start, is_active } = body;
 
     // Validate action
-    const validActions: Action[] = ['add', 'add-bulk', 'remove', 'toggle', 'copy-day', 'copy-all', 'clear-day', 'clear-week'];
+    const validActions: Action[] = ['add', 'add-bulk', 'remove', 'toggle', 'copy-day', 'copy-week', 'clear-day', 'clear-week'];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid action. Must be: ${validActions.join(', ')}` }),
@@ -77,16 +93,9 @@ serve(async (req) => {
 
     switch (action) {
       case 'add': {
-        if (!product_id || day_of_week === undefined) {
+        if (!product_id || !scheduled_date) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id and day_of_week are required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (day_of_week < 0 || day_of_week > 6) {
-          return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'day_of_week must be 0-6' }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id and scheduled_date are required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -105,24 +114,32 @@ serve(async (req) => {
           );
         }
 
-        // Check if already exists
+        // Check if already exists for this date
         const { data: existing } = await supabaseAdmin
           .from('menu_schedules')
           .select('id')
           .eq('product_id', product_id)
-          .eq('day_of_week', day_of_week)
+          .eq('scheduled_date', scheduled_date)
           .single();
 
         if (existing) {
           return new Response(
-            JSON.stringify({ error: 'ALREADY_EXISTS', message: 'Product already scheduled for this day' }),
+            JSON.stringify({ error: 'ALREADY_EXISTS', message: 'Product already scheduled for this date' }),
             { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
+        // Calculate day_of_week from scheduled_date
+        const calculatedDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
+
         const { data: newSchedule, error: insertError } = await supabaseAdmin
           .from('menu_schedules')
-          .insert({ product_id, day_of_week, is_active: true })
+          .insert({ 
+            product_id, 
+            scheduled_date,
+            day_of_week: calculatedDayOfWeek,
+            is_active: true 
+          })
           .select()
           .single();
 
@@ -134,7 +151,7 @@ serve(async (req) => {
           );
         }
 
-        console.log(`[AUDIT] Admin ${user.email} added product ${product.name} to day ${day_of_week}`);
+        console.log(`[AUDIT] Admin ${user.email} added product ${product.name} to ${scheduled_date}`);
 
         return new Response(
           JSON.stringify({ success: true, schedule: newSchedule }),
@@ -143,18 +160,18 @@ serve(async (req) => {
       }
 
       case 'add-bulk': {
-        if (!product_ids || product_ids.length === 0 || day_of_week === undefined) {
+        if (!product_ids || product_ids.length === 0 || !scheduled_date) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_ids array and day_of_week are required' }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_ids array and scheduled_date are required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Get existing schedules for this day
+        // Get existing schedules for this date
         const { data: existing } = await supabaseAdmin
           .from('menu_schedules')
           .select('product_id')
-          .eq('day_of_week', day_of_week);
+          .eq('scheduled_date', scheduled_date);
 
         const existingIds = new Set((existing || []).map(e => e.product_id));
         const newProductIds = product_ids.filter(id => !existingIds.has(id));
@@ -166,9 +183,13 @@ serve(async (req) => {
           );
         }
 
+        // Calculate day_of_week from scheduled_date
+        const calculatedDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
+
         const schedules = newProductIds.map(pid => ({
           product_id: pid,
-          day_of_week,
+          scheduled_date,
+          day_of_week: calculatedDayOfWeek,
           is_active: true
         }));
 
@@ -184,7 +205,7 @@ serve(async (req) => {
           );
         }
 
-        console.log(`[AUDIT] Admin ${user.email} bulk added ${newProductIds.length} products to day ${day_of_week}`);
+        console.log(`[AUDIT] Admin ${user.email} bulk added ${newProductIds.length} products to ${scheduled_date}`);
 
         return new Response(
           JSON.stringify({ success: true, added: newProductIds.length }),
@@ -264,9 +285,9 @@ serve(async (req) => {
       }
 
       case 'copy-day': {
-        if (from_day === undefined || to_day === undefined) {
+        if (!from_date || !to_date) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'from_day and to_day are required' }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'from_date and to_date are required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -275,25 +296,29 @@ serve(async (req) => {
         const { data: sourceMenu } = await supabaseAdmin
           .from('menu_schedules')
           .select('product_id, is_active')
-          .eq('day_of_week', from_day);
+          .eq('scheduled_date', from_date);
 
         if (!sourceMenu || sourceMenu.length === 0) {
           return new Response(
-            JSON.stringify({ error: 'NO_SOURCE_MENU', message: 'No menu items on source day' }),
+            JSON.stringify({ error: 'NO_SOURCE_MENU', message: 'No menu items on source date' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Clear target day
+        // Clear target date
         await supabaseAdmin
           .from('menu_schedules')
           .delete()
-          .eq('day_of_week', to_day);
+          .eq('scheduled_date', to_date);
+
+        // Calculate day_of_week for target date
+        const toDayOfWeek = getDayOfWeek(to_date);
 
         // Copy items
         const newItems = sourceMenu.map(item => ({
           product_id: item.product_id,
-          day_of_week: to_day,
+          scheduled_date: to_date,
+          day_of_week: toDayOfWeek,
           is_active: item.is_active
         }));
 
@@ -308,18 +333,18 @@ serve(async (req) => {
           );
         }
 
-        console.log(`[AUDIT] Admin ${user.email} copied menu from day ${from_day} to day ${to_day} (${sourceMenu.length} items)`);
+        console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to ${to_date} (${sourceMenu.length} items)`);
 
         return new Response(
-          JSON.stringify({ success: true, copied: sourceMenu.length, from_day, to_day }),
+          JSON.stringify({ success: true, copied: sourceMenu.length, from_date, to_date }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      case 'copy-all': {
-        if (from_day === undefined) {
+      case 'copy-week': {
+        if (!from_date || !week_start) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'from_day is required' }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'from_date and week_start are required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -328,75 +353,110 @@ serve(async (req) => {
         const { data: sourceMenu } = await supabaseAdmin
           .from('menu_schedules')
           .select('product_id, is_active')
-          .eq('day_of_week', from_day);
+          .eq('scheduled_date', from_date);
 
         if (!sourceMenu || sourceMenu.length === 0) {
           return new Response(
-            JSON.stringify({ error: 'NO_SOURCE_MENU', message: 'No menu items on source day' }),
+            JSON.stringify({ error: 'NO_SOURCE_MENU', message: 'No menu items on source date' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Copy to all other weekdays (1-5, Mon-Fri)
-        const targetDays = [1, 2, 3, 4, 5].filter(d => d !== from_day);
+        // Copy to all weekdays (Mon-Fri) of the week
+        const targetDates: string[] = [];
+        for (let i = 0; i < 5; i++) {
+          const targetDate = addDays(week_start, i);
+          if (targetDate !== from_date) {
+            targetDates.push(targetDate);
+          }
+        }
 
-        for (const targetDay of targetDays) {
+        for (const targetDate of targetDates) {
+          // Clear target date
           await supabaseAdmin
             .from('menu_schedules')
             .delete()
-            .eq('day_of_week', targetDay);
+            .eq('scheduled_date', targetDate);
+
+          // Calculate day_of_week
+          const targetDayOfWeek = getDayOfWeek(targetDate);
 
           const newItems = sourceMenu.map(item => ({
             product_id: item.product_id,
-            day_of_week: targetDay,
+            scheduled_date: targetDate,
+            day_of_week: targetDayOfWeek,
             is_active: item.is_active
           }));
 
           await supabaseAdmin.from('menu_schedules').insert(newItems);
         }
 
-        console.log(`[AUDIT] Admin ${user.email} copied menu from day ${from_day} to all weekdays (${sourceMenu.length} items)`);
+        console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to all weekdays (${sourceMenu.length} items)`);
 
         return new Response(
-          JSON.stringify({ success: true, copied_to_days: targetDays, items_per_day: sourceMenu.length }),
+          JSON.stringify({ success: true, copied_to_dates: targetDates, items_per_day: sourceMenu.length }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       case 'clear-day': {
-        if (day_of_week === undefined) {
+        if (!scheduled_date) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'day_of_week is required' }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'scheduled_date is required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        const { count } = await supabaseAdmin
+        const { data: deleted, error: deleteError } = await supabaseAdmin
           .from('menu_schedules')
           .delete()
-          .eq('day_of_week', day_of_week)
-          .select('*', { count: 'exact', head: true });
+          .eq('scheduled_date', scheduled_date)
+          .select('id');
 
-        console.log(`[AUDIT] Admin ${user.email} cleared menu for day ${day_of_week}`);
+        if (deleteError) {
+          return new Response(
+            JSON.stringify({ error: 'DELETE_FAILED', message: 'Failed to clear day' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[AUDIT] Admin ${user.email} cleared menu for ${scheduled_date}`);
 
         return new Response(
-          JSON.stringify({ success: true, day_of_week, cleared: count || 0 }),
+          JSON.stringify({ success: true, scheduled_date, cleared: deleted?.length || 0 }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       case 'clear-week': {
-        const { count } = await supabaseAdmin
+        if (!week_start) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'week_start is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Calculate week end (Friday)
+        const weekEnd = addDays(week_start, 4);
+
+        const { data: deleted, error: deleteError } = await supabaseAdmin
           .from('menu_schedules')
           .delete()
-          .gte('day_of_week', 0)
-          .lte('day_of_week', 6)
-          .select('*', { count: 'exact', head: true });
+          .gte('scheduled_date', week_start)
+          .lte('scheduled_date', weekEnd)
+          .select('id');
 
-        console.log(`[AUDIT] Admin ${user.email} cleared entire week menu`);
+        if (deleteError) {
+          return new Response(
+            JSON.stringify({ error: 'DELETE_FAILED', message: 'Failed to clear week' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[AUDIT] Admin ${user.email} cleared week menu (${week_start} to ${weekEnd})`);
 
         return new Response(
-          JSON.stringify({ success: true, cleared: count || 0 }),
+          JSON.stringify({ success: true, week_start, week_end: weekEnd, cleared: deleted?.length || 0 }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
