@@ -147,8 +147,8 @@ export default function AdminUsers() {
         })
       );
 
-      // Filter to only show users who have children (actual parents)
-      return enrichedParents.filter(p => p.children_count > 0 || p.orders_count > 0);
+      // Filter to only show users who have wallets (parents have wallets, staff/admin don't)
+      return enrichedParents.filter(p => walletMap.has(p.id));
     }
   });
 
