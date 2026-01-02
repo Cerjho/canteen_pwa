@@ -23,15 +23,25 @@ CREATE POLICY "Anyone can view makeup days"
   ON makeup_days FOR SELECT
   USING (true);
 
--- Only admins can manage makeup days
-CREATE POLICY "Admins can manage makeup days"
-  ON makeup_days FOR ALL
+-- Only admins can manage makeup days (INSERT)
+CREATE POLICY "Admins can insert makeup days"
+  ON makeup_days FOR INSERT
+  WITH CHECK (
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+  );
+
+-- Only admins can manage makeup days (UPDATE)
+CREATE POLICY "Admins can update makeup days"
+  ON makeup_days FOR UPDATE
   USING (
-    EXISTS (
-      SELECT 1 FROM parents 
-      WHERE parents.user_id = auth.uid() 
-      AND parents.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+  );
+
+-- Only admins can manage makeup days (DELETE)
+CREATE POLICY "Admins can delete makeup days"
+  ON makeup_days FOR DELETE
+  USING (
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   );
 
 -- Create index for date lookups
