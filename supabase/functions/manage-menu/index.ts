@@ -427,12 +427,20 @@ serve(async (req) => {
           );
         }
 
-        // Copy to all weekdays (Mon-Fri) of the week
+        // Copy to all weekdays (Mon-Fri) of the week, skipping holidays
         const targetDates: string[] = [];
+        const skippedHolidays: string[] = [];
+        
         for (let i = 0; i < 5; i++) {
           const targetDate = addDays(week_start, i);
           if (targetDate !== from_date) {
-            targetDates.push(targetDate);
+            // Check if target date is a holiday
+            const holidayCheck = await isHoliday(supabaseAdmin, targetDate);
+            if (holidayCheck.isHoliday) {
+              skippedHolidays.push(`${targetDate} (${holidayCheck.holidayName})`);
+            } else {
+              targetDates.push(targetDate);
+            }
           }
         }
 
@@ -456,10 +464,15 @@ serve(async (req) => {
           await supabaseAdmin.from('menu_schedules').insert(newItems);
         }
 
-        console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to all weekdays (${sourceMenu.length} items)`);
+        console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to all weekdays (${sourceMenu.length} items, skipped holidays: ${skippedHolidays.join(', ') || 'none'})`);
 
         return new Response(
-          JSON.stringify({ success: true, copied_to_dates: targetDates, items_per_day: sourceMenu.length }),
+          JSON.stringify({ 
+            success: true, 
+            copied_to_dates: targetDates, 
+            items_per_day: sourceMenu.length,
+            skipped_holidays: skippedHolidays
+          }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

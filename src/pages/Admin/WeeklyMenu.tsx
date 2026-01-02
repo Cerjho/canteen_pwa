@@ -373,9 +373,15 @@ export default function AdminWeeklyMenu() {
         week_start: weekStartStr
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
-      showToast('Menu copied to all weekdays', 'success');
+      const skippedHolidays = data?.skipped_holidays || [];
+      const copiedCount = data?.copied_to_dates?.length || 0;
+      if (skippedHolidays.length > 0) {
+        showToast(`Menu copied to ${copiedCount} days (skipped ${skippedHolidays.length} holidays)`, 'success');
+      } else {
+        showToast('Menu copied to all weekdays', 'success');
+      }
     },
     onError: (error: Error) => showToast(error.message || 'Failed to copy menu', 'error')
   });
