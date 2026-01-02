@@ -101,9 +101,10 @@ serve(async (req) => {
 
       // Find student by student_id
       const { data: student, error: findError } = await supabaseAdmin
-        .from('children')
-        .select('id, student_id, first_name, last_name, grade_level, section, parent_id')
+        .from('students')
+        .select('id, student_id, first_name, last_name, grade_level, section')
         .eq('student_id', normalizedId)
+        .eq('is_active', true)
         .single();
 
       if (findError || !student) {
@@ -117,10 +118,16 @@ serve(async (req) => {
         );
       }
 
-      // Check if already linked to a parent
-      if (student.parent_id) {
+      // Check if already linked to any parent
+      const { data: existingLink } = await supabaseAdmin
+        .from('parent_students')
+        .select('parent_id')
+        .eq('student_id', student.id)
+        .single();
+
+      if (existingLink) {
         // Check if linked to current user
-        if (student.parent_id === user.id) {
+        if (existingLink.parent_id === user.id) {
           return new Response(
             JSON.stringify({ 
               error: 'ALREADY_LINKED', 
@@ -143,7 +150,7 @@ serve(async (req) => {
 
       // Check how many children this parent already has linked (rate limiting)
       const { data: existingChildren, error: countError } = await supabaseAdmin
-        .from('children')
+        .from('parent_students')
         .select('id')
         .eq('parent_id', user.id);
 
@@ -158,19 +165,17 @@ serve(async (req) => {
         );
       }
 
-      // Link the student
-      const { data: linkedStudent, error: linkError } = await supabaseAdmin
-        .from('children')
-        .update({ 
+      // Link the student by inserting into parent_students
+      const { error: linkError } = await supabaseAdmin
+        .from('parent_students')
+        .insert({ 
           parent_id: user.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', student.id)
-        .is('parent_id', null) // Use .is() for null comparison, not .eq()
-        .select('id, student_id, first_name, last_name, grade_level, section, dietary_restrictions')
-        .single();
+          student_id: student.id,
+          relationship: 'parent',
+          is_primary: true
+        });
 
-      if (linkError || !linkedStudent) {
+      if (linkError) {
         console.error('Failed to link student:', linkError);
         return new Response(
           JSON.stringify({ 
@@ -181,7 +186,17 @@ serve(async (req) => {
         );
       }
 
-      console.log(`SUCCESS: User ${user.id} linked student ${linkedStudent.id}`);
+      // Get dietary restrictions for response
+      const linkedStudent = {
+        id: student.id,
+        student_id: student.student_id,
+        first_name: student.first_name,
+        last_name: student.last_name,
+        grade_level: student.grade_level,
+        section: student.section
+      };
+
+      console.log(`SUCCESS: User ${user.id} linked student ${student.id}`);
       return new Response(
         JSON.stringify({ success: true, student: linkedStudent }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -199,38 +214,26 @@ serve(async (req) => {
         );
       }
 
-      // Verify the student belongs to this parent
-      const { data: student, error: findError } = await supabaseAdmin
-        .from('children')
-        .select('id, parent_id')
-        .eq('id', student_id)
+      // Verify the student link belongs to this parent
+      const { data: link, error: findError } = await supabaseAdmin
+        .from('parent_students')
+        .select('id, parent_id, student_id')
+        .eq('student_id', student_id)
+        .eq('parent_id', user.id)
         .single();
 
-      if (findError || !student) {
+      if (findError || !link) {
         return new Response(
-          JSON.stringify({ error: 'NOT_FOUND', message: 'Student not found' }),
+          JSON.stringify({ error: 'NOT_FOUND', message: 'Student not linked to your account' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // CRITICAL: Only allow unlinking own children
-      if (student.parent_id !== user.id) {
-        console.log(`SECURITY: User ${user.id} attempted to unlink student ${student_id} belonging to ${student.parent_id}`);
-        return new Response(
-          JSON.stringify({ error: 'FORBIDDEN', message: 'You can only unlink your own children' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Unlink the student
+      // Delete the link
       const { error: unlinkError } = await supabaseAdmin
-        .from('children')
-        .update({ 
-          parent_id: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', student_id)
-        .eq('parent_id', user.id); // Extra safety check
+        .from('parent_students')
+        .delete()
+        .eq('id', link.id);
 
       if (unlinkError) {
         console.error('Failed to unlink student:', unlinkError);

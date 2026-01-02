@@ -155,7 +155,7 @@ serve(async (req) => {
 
       // Insert student with sanitized data
       const { data: newStudent, error: insertError } = await supabaseAdmin
-        .from('children')
+        .from('students')
         .insert({
           student_id: newStudentId,
           first_name: sanitizeString(data.first_name, 50),
@@ -163,6 +163,7 @@ serve(async (req) => {
           grade_level: data.grade_level, // Already validated
           section: sanitizeString(data.section, 10) || null,
           dietary_restrictions: sanitizeString(data.dietary_restrictions, 500) || null,
+          is_active: true,
           created_by: user.id,
         })
         .select()
@@ -210,7 +211,7 @@ serve(async (req) => {
 
       // Verify student exists
       const { data: existing, error: findError } = await supabaseAdmin
-        .from('children')
+        .from('students')
         .select('id')
         .eq('id', student_id)
         .single();
@@ -224,7 +225,7 @@ serve(async (req) => {
 
       // Update with sanitized data (do NOT allow updating student_id)
       const { data: updated, error: updateError } = await supabaseAdmin
-        .from('children')
+        .from('students')
         .update({
           first_name: sanitizeString(data.first_name, 50),
           last_name: sanitizeString(data.last_name, 50),
@@ -273,7 +274,7 @@ serve(async (req) => {
       const { data: orders, error: ordersError } = await supabaseAdmin
         .from('orders')
         .select('id')
-        .eq('child_id', student_id)
+        .eq('student_id', student_id)
         .limit(1);
 
       if (ordersError) {
@@ -294,8 +295,15 @@ serve(async (req) => {
         );
       }
 
+      // First delete any parent links
+      await supabaseAdmin
+        .from('parent_students')
+        .delete()
+        .eq('student_id', student_id);
+
+      // Then delete the student
       const { error: deleteError } = await supabaseAdmin
-        .from('children')
+        .from('students')
         .delete()
         .eq('id', student_id);
 
@@ -331,12 +339,11 @@ serve(async (req) => {
         );
       }
 
-      const { data: updated, error: unlinkError } = await supabaseAdmin
-        .from('children')
-        .update({ parent_id: null, updated_at: new Date().toISOString() })
-        .eq('id', student_id)
-        .select()
-        .single();
+      // Delete the parent-student link
+      const { error: unlinkError } = await supabaseAdmin
+        .from('parent_students')
+        .delete()
+        .eq('student_id', student_id);
 
       if (unlinkError) {
         console.error('Failed to unlink student:', unlinkError);
@@ -345,6 +352,13 @@ serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
+      // Get the updated student
+      const { data: updated } = await supabaseAdmin
+        .from('students')
+        .select('*')
+        .eq('id', student_id)
+        .single();
 
       return new Response(
         JSON.stringify({ success: true, student: updated }),
@@ -404,13 +418,14 @@ serve(async (req) => {
 
         // Insert student
         const { error: insertError } = await supabaseAdmin
-          .from('children')
+          .from('students')
           .insert({
             student_id: newStudentId,
             first_name: sanitizeString(student.first_name, 50),
             last_name: sanitizeString(student.last_name, 50),
             grade_level: student.grade_level,
             section: sanitizeString(student.section, 10) || null,
+            is_active: true,
             created_by: user.id,
           });
 

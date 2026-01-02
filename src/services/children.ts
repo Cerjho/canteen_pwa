@@ -13,22 +13,50 @@ export interface Child {
 
 // Get children linked to a parent
 export async function getChildren(parentId: string): Promise<Child[]> {
+  // Query through parent_students join table
   const { data, error } = await supabase
-    .from('children')
-    .select('*')
-    .eq('parent_id', parentId)
-    .order('first_name', { ascending: true });
+    .from('parent_students')
+    .select(`
+      student_id,
+      students:student_id (
+        id,
+        student_id,
+        first_name,
+        last_name,
+        grade_level,
+        section,
+        dietary_restrictions
+      )
+    `)
+    .eq('parent_id', parentId);
 
   if (error) throw error;
-  return data || [];
+  
+  // Flatten the result - students is an object (single record from FK)
+  return (data || []).map(item => {
+    const student = item.students as unknown as {
+      id: string;
+      student_id: string;
+      first_name: string;
+      last_name: string;
+      grade_level: string;
+      section?: string;
+      dietary_restrictions?: string;
+    };
+    return {
+      ...student,
+      parent_id: parentId
+    };
+  });
 }
 
 // Search for student by student ID (for display only, actual linking goes through Edge Function)
 export async function findStudentById(studentId: string): Promise<Child | null> {
   const { data, error } = await supabase
-    .from('children')
-    .select('id, student_id, first_name, last_name, grade_level, section, parent_id')
+    .from('students')
+    .select('id, student_id, first_name, last_name, grade_level, section')
     .eq('student_id', studentId.toUpperCase().trim())
+    .eq('is_active', true)
     .single();
 
   if (error) {

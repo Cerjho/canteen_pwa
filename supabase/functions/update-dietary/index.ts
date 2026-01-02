@@ -77,24 +77,18 @@ serve(async (req) => {
 
     // Verify the child belongs to this parent
     const { data: child, error: findError } = await supabaseAdmin
-      .from('children')
-      .select('id, parent_id')
-      .eq('id', child_id)
+    // Verify parent has link to this student
+    const { data: link, error: findError } = await supabaseAdmin
+      .from('parent_students')
+      .select('id, student_id')
+      .eq('student_id', child_id)
+      .eq('parent_id', user.id)
       .single();
 
-    if (findError || !child) {
+    if (findError || !link) {
       return new Response(
-        JSON.stringify({ error: 'NOT_FOUND', message: 'Child not found' }),
+        JSON.stringify({ error: 'NOT_FOUND', message: 'Student not linked to your account' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // CRITICAL: Only allow updating own children
-    if (child.parent_id !== user.id) {
-      console.log(`SECURITY: User ${user.id} attempted to update dietary for child ${child_id} belonging to ${child.parent_id}`);
-      return new Response(
-        JSON.stringify({ error: 'FORBIDDEN', message: 'You can only update your own children' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -102,13 +96,12 @@ serve(async (req) => {
     const sanitizedDietary = sanitizeString(dietary_restrictions, 500);
 
     const { data: updated, error: updateError } = await supabaseAdmin
-      .from('children')
+      .from('students')
       .update({ 
         dietary_restrictions: sanitizedDietary || null,
         updated_at: new Date().toISOString()
       })
       .eq('id', child_id)
-      .eq('parent_id', user.id) // Extra safety check
       .select('id, student_id, first_name, last_name, grade_level, section, dietary_restrictions')
       .single();
 
