@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow } from 'date-fns';
@@ -14,6 +14,8 @@ import { SearchBar } from '../../components/SearchBar';
 import { ProductCardSkeleton } from '../../components/Skeleton';
 import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
+import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../services/supabaseClient';
 import type { ProductCategory } from '../../types';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
@@ -33,12 +35,32 @@ function getDateLabel(date: Date): string {
 
 export default function Menu() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all' | 'favorites'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { showToast } = useToast();
+
+  // Fetch parent wallet balance
+  const { data: walletData } = useQuery({
+    queryKey: ['parent-wallet', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id
+  });
+
+  const parentBalance = walletData?.balance || 0;
   
   // Get weekdays with status (including holidays)
   const { data: weekdaysInfo } = useQuery({
@@ -141,6 +163,12 @@ export default function Menu() {
     try {
       const result = await checkout(selectedChildId, paymentMethod, notes, scheduledFor);
       setCartOpen(false);
+      
+      // Invalidate wallet balance if paid with balance
+      if (paymentMethod === 'balance') {
+        queryClient.invalidateQueries({ queryKey: ['parent-wallet'] });
+        queryClient.invalidateQueries({ queryKey: ['parent-balance'] });
+      }
       
       // Navigate to confirmation page
       navigate('/order-confirmation', {
@@ -450,6 +478,7 @@ export default function Menu() {
         items={items}
         onUpdateQuantity={updateQuantity}
         onCheckout={handleCheckout}
+        parentBalance={parentBalance}
       />
     </div>
   );
