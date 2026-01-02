@@ -182,56 +182,38 @@ export default function AdminUsers() {
     }
   });
 
-  // Top up balance mutation
+  // Top up balance mutation via edge function
   const topUpMutation = useMutation({
     mutationFn: async ({ parentId, amount }: { parentId: string; amount: number }) => {
-      // Get or create wallet
-      let { data: wallet } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', parentId)
-        .maybeSingle();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/admin-topup`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: parentId,
+          amount
+        })
+      });
 
-      if (!wallet) {
-        // Create wallet if doesn't exist
-        const { data: newWallet, error: createError } = await supabase
-          .from('wallets')
-          .insert({ user_id: parentId, balance: 0 })
-          .select('balance')
-          .single();
-        if (createError) throw createError;
-        wallet = newWallet;
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to top up balance');
       }
-
-      const newBalance = (wallet?.balance || 0) + amount;
-
-      const { error: updateError } = await supabase
-        .from('wallets')
-        .update({ balance: newBalance })
-        .eq('user_id', parentId);
-
-      if (updateError) throw updateError;
-
-      const { error: txError } = await supabase
-        .from('transactions')
-        .insert({
-          parent_id: parentId,
-          type: 'topup',
-          amount,
-          method: 'cash',
-          status: 'completed',
-          reference_id: `TOPUP-${Date.now()}`
-        });
-
-      if (txError) throw txError;
+      
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-parents'] });
       setShowTopUpModal(false);
       setSelectedParent(null);
-      showToast('Balance updated successfully', 'success');
+      showToast(`Balance updated: ₱${data.previous_balance.toFixed(2)} → ₱${data.new_balance.toFixed(2)}`, 'success');
     },
-    onError: () => showToast('Failed to update balance', 'error')
+    onError: (error: Error) => showToast(error.message || 'Failed to update balance', 'error')
   });
 
   // Create user mutation via edge function
