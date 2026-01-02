@@ -582,6 +582,12 @@ export default function AdminWeeklyMenu() {
   };
 
   const handleAddAll = (category: ProductCategory | 'all') => {
+    // Check if selected day is a holiday
+    if (selectedDayHoliday) {
+      showToast(`Cannot add items on a holiday (${selectedDayHoliday.name})`, 'error');
+      return;
+    }
+    
     const toAdd = category === 'all' 
       ? availableProducts?.map(p => p.id) || []
       : availableProducts?.filter(p => p.category === category).map(p => p.id) || [];
@@ -1040,6 +1046,10 @@ export default function AdminWeeklyMenu() {
                             ) || [];
                             const activeItems = dayItems.filter(s => s.is_active);
                             
+                            // Check if this day is a holiday
+                            const dayDate = day.value === 6 ? saturdayDate : addDays(weekStart, day.value - 1);
+                            const dayHoliday = isHoliday(dayDate);
+                            
                             return (
                               <td key={day.value} className="px-2 py-3 text-center">
                                 {dayItems.length > 0 ? (
@@ -1050,6 +1060,13 @@ export default function AdminWeeklyMenu() {
                                   >
                                     {activeItems.length}
                                   </button>
+                                ) : dayHoliday ? (
+                                  <span
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-400 text-sm"
+                                    title={`Holiday: ${dayHoliday.name}`}
+                                  >
+                                    <CalendarOff size={14} />
+                                  </span>
                                 ) : (
                                   <button
                                     onClick={() => { setSelectedDay(day.value); setViewMode('day'); setShowAddModal(true); }}
@@ -1257,6 +1274,17 @@ export default function AdminWeeklyMenu() {
                 </button>
               </div>
 
+              {/* Holiday Warning */}
+              {selectedDayHoliday && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3 flex items-start gap-2">
+                  <CalendarOff className="text-red-500 flex-shrink-0 mt-0.5" size={18} />
+                  <div>
+                    <p className="font-medium text-red-800 text-sm">Holiday: {selectedDayHoliday.name}</p>
+                    <p className="text-xs text-red-600">Cannot add menu items on holidays</p>
+                  </div>
+                </div>
+              )}
+
               {/* Search */}
               <div className="relative mb-3">
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1287,7 +1315,7 @@ export default function AdminWeeklyMenu() {
               </div>
 
               {/* Bulk Add */}
-              {filteredAvailableProducts && filteredAvailableProducts.length > 0 && (
+              {filteredAvailableProducts && filteredAvailableProducts.length > 0 && !selectedDayHoliday && (
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => handleAddAll(selectedCategory)}
@@ -1301,7 +1329,12 @@ export default function AdminWeeklyMenu() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              {filteredAvailableProducts?.length === 0 ? (
+              {selectedDayHoliday ? (
+                <div className="text-center py-8 text-gray-500">
+                  <CalendarOff size={48} className="mx-auto text-red-300 mb-3" />
+                  <p>Adding items is disabled on holidays</p>
+                </div>
+              ) : filteredAvailableProducts?.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   {searchQuery 
                     ? 'No products match your search'
