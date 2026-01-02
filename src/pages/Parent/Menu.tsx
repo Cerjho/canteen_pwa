@@ -162,7 +162,7 @@ export default function Menu() {
     }
 
     const selectedStudent = students?.find(c => c.id === selectedChildId);
-    const scheduledFor = effectiveDate.toISOString().split('T')[0];
+    const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
     const isFutureOrder = !isToday(effectiveDate);
 
     try {
