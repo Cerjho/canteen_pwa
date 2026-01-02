@@ -136,7 +136,8 @@ export function createMockDate(dateString: string) {
 
 export function mockDateNow(dateString: string) {
   const mockDate = new Date(dateString);
-  vi.spyOn(global, 'Date').mockImplementation(() => mockDate as unknown as string);
+  vi.spyOn(Date, 'now').mockReturnValue(mockDate.getTime());
+  vi.setSystemTime(mockDate);
 }
 
 // Type guard helpers
