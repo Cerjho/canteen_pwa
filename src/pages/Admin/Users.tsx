@@ -106,14 +106,15 @@ export default function AdminUsers() {
     }
   });
 
-  // Fetch parents (users who have children or wallets)
+  // Fetch parents (users with role = 'parent')
   const { data: parents, isLoading: parentsLoading } = useQuery<Parent[]>({
     queryKey: ['admin-parents'],
     queryFn: async () => {
-      // Get user profiles with their wallets
+      // Get user profiles with role = 'parent'
       const { data: profiles, error } = await supabase
         .from('user_profiles')
         .select('*')
+        .eq('role', 'parent')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -127,7 +128,7 @@ export default function AdminUsers() {
       
       // Get children and orders count for each parent
       const enrichedParents = await Promise.all(
-        profiles.map(async (profile) => {
+        (profiles || []).map(async (profile) => {
           const { count: childrenCount } = await supabase
             .from('children')
             .select('*', { count: 'exact', head: true })
@@ -147,8 +148,7 @@ export default function AdminUsers() {
         })
       );
 
-      // Filter to only show users who have wallets (parents have wallets, staff/admin don't)
-      return enrichedParents.filter(p => walletMap.has(p.id));
+      return enrichedParents;
     }
   });
 
