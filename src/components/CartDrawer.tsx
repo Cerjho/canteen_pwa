@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Plus, Minus, CreditCard, Wallet, Banknote } from 'lucide-react';
 
 interface CartItem {
@@ -17,7 +17,8 @@ interface CartDrawerProps {
   onClose: () => void;
   items: CartItem[];
   onUpdateQuantity: (productId: string, quantity: number) => void;
-  onCheckout: (paymentMethod: PaymentMethod, notes: string) => void;
+  onCheckout: (paymentMethod: PaymentMethod, notes: string) => Promise<void>;
+  onError?: (error: Error) => void;
   parentBalance?: number;
 }
 
@@ -27,21 +28,51 @@ export function CartDrawer({
   items,
   onUpdateQuantity,
   onCheckout,
+  onError,
   parentBalance = 0
 }: CartDrawerProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [notes, setNotes] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const canUseBalance = parentBalance >= total;
 
+  // Handle escape key to close drawer
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isCheckingOut) {
+        onClose();
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, isCheckingOut, onClose]);
+
+  // Clear error when drawer closes
+  useEffect(() => {
+    if (!isOpen) {
+      setCheckoutError(null);
+    }
+  }, [isOpen]);
+
   const handleCheckout = async () => {
+    if (isCheckingOut) return; // Prevent double submission
+    
     setIsCheckingOut(true);
+    setCheckoutError(null);
+    
     try {
       await onCheckout(paymentMethod, notes);
       setNotes('');
       setPaymentMethod('cash');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Checkout failed. Please try again.';
+      setCheckoutError(errorMessage);
+      onError?.(error instanceof Error ? error : new Error(errorMessage));
+      console.error('Checkout error:', error);
     } finally {
       setIsCheckingOut(false);
     }
@@ -196,17 +227,26 @@ export function CartDrawer({
             {/* Order Notes */}
             {items.length > 0 && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label htmlFor="order-notes" className="text-sm font-medium text-gray-700">
                   Special Instructions (optional)
                 </label>
                 <textarea
+                  id="order-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Any allergies or special requests?"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   rows={2}
                   maxLength={200}
+                  aria-label="Special instructions for your order"
                 />
+              </div>
+            )}
+
+            {/* Checkout Error Message */}
+            {checkoutError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg" role="alert">
+                <p className="text-sm text-red-600">{checkoutError}</p>
               </div>
             )}
 

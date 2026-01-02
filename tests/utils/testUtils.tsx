@@ -1,9 +1,11 @@
+/* eslint-disable react-refresh/only-export-components */
 // Test Utilities and Wrapper Components
 import { ReactNode } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../../src/components/Toast';
+import { vi, expect } from 'vitest';
 
 // Create a test query client with disabled retries and caching
 export function createTestQueryClient() {
@@ -31,7 +33,7 @@ export function AllProviders({ children }: WrapperProps) {
   
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ToastProvider>
           {children}
         </ToastProvider>
@@ -47,7 +49,7 @@ export function createMemoryRouterWrapper(initialEntries: string[] = ['/']) {
     
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={initialEntries}>
+        <MemoryRouter initialEntries={initialEntries} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ToastProvider>
             {children}
           </ToastProvider>
@@ -134,7 +136,7 @@ export function createMockDate(dateString: string) {
 
 export function mockDateNow(dateString: string) {
   const mockDate = new Date(dateString);
-  jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
+  vi.spyOn(global, 'Date').mockImplementation(() => mockDate as unknown as string);
 }
 
 // Type guard helpers

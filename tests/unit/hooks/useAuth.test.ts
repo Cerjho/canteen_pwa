@@ -4,7 +4,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 
 // Mock supabase client - functions must be defined before vi.mock due to hoisting
 const mockUnsubscribe = vi.fn();
-let authChangeCallback: ((event: string, session: any) => void) | null = null;
+let authChangeCallback: ((event: string, session: { user: unknown; access_token: string } | null) => void) | null = null;
 const mockGetSession = vi.fn();
 const mockSignOut = vi.fn();
 
@@ -13,7 +13,7 @@ vi.mock('../../../src/services/supabaseClient', () => ({
     auth: {
       getSession: () => mockGetSession(),
       signOut: () => mockSignOut(),
-      onAuthStateChange: (callback: any) => {
+      onAuthStateChange: (callback: (event: string, session: { user: unknown; access_token: string } | null) => void) => {
         authChangeCallback = callback;
         return {
           data: {

@@ -101,29 +101,30 @@ serve(async (req) => {
 
     // Restore stock for each item
     for (const item of order.items) {
-      const { error: stockError } = await supabaseAdmin.rpc('increment_stock', {
-        p_product_id: item.product_id,
-        p_quantity: item.quantity
-      }).catch(() => {
-        // Fallback if RPC doesn't exist
-        return supabaseAdmin
-          .from('products')
-          .update({ stock_quantity: supabaseAdmin.rpc('add', { a: 'stock_quantity', b: item.quantity }) })
-          .eq('id', item.product_id);
-      });
+      try {
+        // Try RPC first for atomic increment
+        const { error: rpcError } = await supabaseAdmin.rpc('increment_stock', {
+          p_product_id: item.product_id,
+          p_quantity: item.quantity
+        });
+        
+        // Only fall back to direct update if RPC fails
+        if (rpcError) {
+          const { data: product } = await supabaseAdmin
+            .from('products')
+            .select('stock_quantity')
+            .eq('id', item.product_id)
+            .single();
 
-      // Alternative: Direct update
-      const { data: product } = await supabaseAdmin
-        .from('products')
-        .select('stock_quantity')
-        .eq('id', item.product_id)
-        .single();
-
-      if (product) {
-        await supabaseAdmin
-          .from('products')
-          .update({ stock_quantity: product.stock_quantity + item.quantity })
-          .eq('id', item.product_id);
+          if (product) {
+            await supabaseAdmin
+              .from('products')
+              .update({ stock_quantity: product.stock_quantity + item.quantity })
+              .eq('id', item.product_id);
+          }
+        }
+      } catch (stockErr) {
+        console.error(`Failed to restore stock for product ${item.product_id}:`, stockErr);
       }
     }
 

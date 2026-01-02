@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -25,18 +26,38 @@ export function useToast() {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Track timeout IDs for cleanup
+  const timeoutIds = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    const currentTimeouts = timeoutIds.current;
+    return () => {
+      currentTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+      currentTimeouts.clear();
+    };
+  }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts((prev) => [...prev, { id, message, type }]);
 
     // Auto-dismiss after 4 seconds
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      timeoutIds.current.delete(id);
     }, 4000);
+    
+    timeoutIds.current.set(id, timeoutId);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
+    // Clear the timeout when manually dismissed
+    const timeoutId = timeoutIds.current.get(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutIds.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
@@ -66,18 +87,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ showToast }}>
       {children}
       
-      {/* Toast container */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      {/* Toast container with ARIA live region for accessibility */}
+      <div 
+        className="fixed top-4 right-4 z-50 space-y-2"
+        role="region"
+        aria-label="Notifications"
+        aria-live="polite"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg animate-slide-in ${getBgColor(toast.type)}`}
+            role="alert"
           >
             {getIcon(toast.type)}
             <span className="text-gray-800 font-medium">{toast.message}</span>
             <button
               onClick={() => dismissToast(toast.id)}
               className="ml-2 p-1 hover:bg-gray-200 rounded"
+              aria-label="Dismiss notification"
             >
               <X size={16} />
             </button>

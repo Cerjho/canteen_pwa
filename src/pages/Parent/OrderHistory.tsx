@@ -6,13 +6,17 @@ import { getOrderHistory } from '../../services/orders';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import type { OrderWithDetails } from '../../types';
 
 export default function OrderHistory() {
   const { user } = useAuth();
   
-  const { data: orders, isLoading } = useQuery({
+  const { data: orders, isLoading } = useQuery<OrderWithDetails[]>({
     queryKey: ['order-history', user?.id],
-    queryFn: () => getOrderHistory(user!.id),
+    queryFn: () => {
+      if (!user) throw new Error('User not authenticated');
+      return getOrderHistory(user.id);
+    },
     enabled: !!user
   });
 
@@ -81,9 +85,10 @@ export default function OrderHistory() {
           />
         ) : (
           <div className="space-y-4">
-            {orders.map((order: any) => {
+            {orders.map((order) => {
               const status = getStatusDetails(order.status);
               const StatusIcon = status.icon;
+              const child = order.child || order.student;
               
               return (
                 <div
@@ -98,7 +103,7 @@ export default function OrderHistory() {
                           {format(new Date(order.created_at), 'MMM d, yyyy • h:mm a')}
                         </p>
                         <h3 className="font-semibold text-gray-900">
-                          For {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                          For {child?.first_name || 'Unknown'} {child?.last_name || 'Student'}
                         </h3>
                       </div>
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${status.color}`}>
@@ -111,7 +116,7 @@ export default function OrderHistory() {
                   {/* Order Items */}
                   <div className="p-4">
                     <div className="space-y-2">
-                      {order.items.slice(0, 3).map((item: any) => (
+                      {order.items.slice(0, 3).map((item) => (
                         <div key={item.id} className="flex items-center gap-3">
                           {item.product.image_url && (
                             <img

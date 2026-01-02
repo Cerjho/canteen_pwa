@@ -110,10 +110,11 @@ export default function Profile() {
       }
       
       // Fetch balance from wallets table
+      if (!user) throw new Error('User not authenticated');
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .maybeSingle();
       
       return { ...result.profile, balance: wallet?.balance || 0 } as Parent;
@@ -124,7 +125,10 @@ export default function Profile() {
   // Fetch students
   const { data: students, isLoading: studentsLoading } = useQuery({
     queryKey: ['students', user?.id],
-    queryFn: () => getStudents(user!.id),
+    queryFn: () => {
+      if (!user) throw new Error('User not authenticated');
+      return getStudents(user.id);
+    },
     enabled: !!user
   });
 

@@ -128,14 +128,25 @@ serve(async (req) => {
     const previousBalance = wallet!.balance;
     const newBalance = previousBalance + amount;
 
-    // Update wallet balance
-    const { error: updateError } = await supabaseAdmin
+    // Update wallet balance with optimistic locking to prevent race conditions
+    const { data: updateResult, error: updateError } = await supabaseAdmin
       .from('wallets')
       .update({ 
         balance: newBalance, 
         updated_at: new Date().toISOString() 
       })
-      .eq('user_id', user_id);
+      .eq('user_id', user_id)
+      .eq('balance', previousBalance) // Optimistic lock - only update if balance hasn't changed
+      .select('balance')
+      .single();
+    
+    // If no rows updated, balance was modified by concurrent transaction
+    if (!updateResult && !updateError) {
+      return new Response(
+        JSON.stringify({ error: 'CONCURRENT_MODIFICATION', message: 'Balance was modified by another transaction. Please retry.' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (updateError) {
       console.error('Balance update error:', updateError);

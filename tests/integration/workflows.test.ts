@@ -1,11 +1,6 @@
 // Integration Tests
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { describe, it, expect, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
-import { ToastProvider } from '../../../src/components/Toast';
 
 // Integration tests combining multiple components and hooks
 
@@ -17,9 +12,10 @@ describe('Cart Integration', () => {
       // This would be implemented with actual components rendered together
       // For now, we test the logic flow
       
+      interface CartItem { id?: string; product_id: string; name: string; price: number; quantity: number; image_url: string; }
       const cartState = {
-        items: [] as any[],
-        addItem: (item: any) => {
+        items: [] as CartItem[],
+        addItem: (item: Omit<CartItem, 'id'>) => {
           cartState.items.push({ ...item, id: 'cart-1' });
         },
         total: 0
@@ -38,9 +34,10 @@ describe('Cart Integration', () => {
     });
 
     it('increments quantity when adding same product', () => {
-      const items: any[] = [];
+      interface CartItem { id?: string; product_id: string; name: string; price: number; quantity: number; }
+      const items: CartItem[] = [];
       
-      const addItem = (item: any) => {
+      const addItem = (item: Omit<CartItem, 'id'>) => {
         const existing = items.find(i => i.product_id === item.product_id);
         if (existing) {
           existing.quantity += item.quantity;
@@ -70,7 +67,7 @@ describe('Cart Integration', () => {
     });
 
     it('validates child selection before checkout', async () => {
-      const validateCheckout = (childId: string | null, items: any[]) => {
+      const validateCheckout = (childId: string | null, items: Array<{ id: number }>) => {
         if (!childId) {
           throw new Error('Please select a child');
         }
@@ -291,10 +288,11 @@ describe('Child Management Integration', () => {
 
 describe('Offline Queue Integration', () => {
   it('queues order when offline', async () => {
-    const queue: any[] = [];
+    interface QueuedOrder { items: unknown[]; child_id: string; queued_at?: Date; }
+    const queue: QueuedOrder[] = [];
     const isOnline = () => false;
     
-    const createOrder = (order: any) => {
+    const createOrder = (order: Omit<QueuedOrder, 'queued_at'>) => {
       if (!isOnline()) {
         queue.push({ ...order, queued_at: new Date() });
         return { queued: true };

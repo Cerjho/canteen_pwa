@@ -369,7 +369,7 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
       const result = await uploadProductImage(compressedFile, product?.id);
 
       if (result.success && result.url) {
-        setFormData(prev => ({ ...prev, image_url: result.url! }));
+        setFormData(prev => ({ ...prev, image_url: result.url ?? '' }));
         showToast('Image uploaded successfully', 'success');
       } else {
         setUploadError(result.error || 'Failed to upload image');

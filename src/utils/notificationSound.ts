@@ -42,7 +42,7 @@ export function playNotificationSound(volume: number = 0.5): void {
     oscillator.stop(ctx.currentTime + 0.25);
   } catch {
     // Silently fail if audio is not supported
-    console.log('Notification sound not supported');
+    // (Audio context creation may fail in some environments)
   }
 }
 
@@ -74,6 +74,6 @@ export function playUrgentNotificationSound(volume: number = 0.5): void {
       oscillator.stop(ctx.currentTime + delay + 0.1);
     });
   } catch {
-    console.log('Notification sound not supported');
+    // Silently fail if audio is not supported
   }
 }

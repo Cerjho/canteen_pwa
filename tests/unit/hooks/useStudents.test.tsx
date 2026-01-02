@@ -15,7 +15,7 @@ vi.mock('../../../src/hooks/useAuth', () => ({
 const mockGetChildren = vi.fn();
 
 vi.mock('../../../src/services/students', () => ({
-  getChildren: (...args: any[]) => mockGetChildren(...args)
+  getChildren: (...args: unknown[]) => mockGetChildren(...args)
 }));
 
 import { useChildren } from '../../../src/hooks/useStudents';

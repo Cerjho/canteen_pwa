@@ -8,7 +8,7 @@ import { ReactNode } from 'react';
 const mockGetProducts = vi.fn();
 
 vi.mock('../../../src/services/products', () => ({
-  getProducts: (...args: any[]) => mockGetProducts(...args)
+  getProducts: (...args: unknown[]) => mockGetProducts(...args)
 }));
 
 import { useProducts } from '../../../src/hooks/useProducts';

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -39,7 +39,7 @@ import { supabase } from '../../../src/services/supabaseClient';
 import { getStudents, linkStudent, unlinkStudent, updateStudent } from '../../../src/services/students';
 
 // Mock global fetch for edge function calls
-const mockFetch = vi.fn();
+const _mockFetch = vi.fn();
 
 const mockProfile = {
   id: 'user-123',
@@ -82,7 +82,7 @@ const renderProfile = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ToastProvider>
           <Profile />
         </ToastProvider>
@@ -108,17 +108,16 @@ describe('Profile Page', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'john@test.com' },
-      session: { access_token: 'token' },
       loading: false,
-      signIn: vi.fn(),
+      error: null,
       signOut: mockSignOut
-    } as any);
+    } as unknown as ReturnType<typeof useAuth>);
 
     // Mock supabase.auth.getSession
     vi.mocked(supabase.auth.getSession).mockResolvedValue({
       data: { session: { access_token: 'test-token' } },
       error: null
-    } as any);
+    } as Awaited<ReturnType<typeof supabase.auth.getSession>>);
 
     // Mock supabase.from for wallet query
     vi.mocked(supabase.from).mockReturnValue({
@@ -127,12 +126,12 @@ describe('Profile Page', () => {
           single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
         })
       })
-    } as any);
+    } as unknown as ReturnType<typeof supabase.from>);
 
-    vi.mocked(getStudents).mockResolvedValue(mockStudents as any);
-    vi.mocked(linkStudent).mockResolvedValue(mockStudents[0] as any);
+    vi.mocked(getStudents).mockResolvedValue(mockStudents as Awaited<ReturnType<typeof getStudents>>);
+    vi.mocked(linkStudent).mockResolvedValue(mockStudents[0] as Awaited<ReturnType<typeof linkStudent>>);
     vi.mocked(unlinkStudent).mockResolvedValue(undefined);
-    vi.mocked(updateStudent).mockResolvedValue(mockStudents[0] as any);
+    vi.mocked(updateStudent).mockResolvedValue(mockStudents[0] as Awaited<ReturnType<typeof updateStudent>>);
   });
 
   describe('Rendering', () => {
@@ -195,7 +194,7 @@ describe('Profile Page', () => {
             )
           })
         })
-      } as any);
+      } as unknown as ReturnType<typeof supabase.from>);
 
       renderProfile();
       
@@ -277,11 +276,10 @@ describe('Profile Page', () => {
     it('does not fetch data when user is not logged in', async () => {
       vi.mocked(useAuth).mockReturnValue({
         user: null,
-        session: null,
         loading: false,
-        signIn: vi.fn(),
+        error: null,
         signOut: mockSignOut
-      } as any);
+      } as unknown as ReturnType<typeof useAuth>);
 
       renderProfile();
       
@@ -309,16 +307,15 @@ describe('Profile Page - Link Student Flow', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'john@test.com' },
-      session: { access_token: 'token' },
       loading: false,
-      signIn: vi.fn(),
+      error: null,
       signOut: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useAuth>);
 
     vi.mocked(supabase.auth.getSession).mockResolvedValue({
       data: { session: { access_token: 'test-token' } },
       error: null
-    } as any);
+    } as Awaited<ReturnType<typeof supabase.auth.getSession>>);
 
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -326,9 +323,9 @@ describe('Profile Page - Link Student Flow', () => {
           single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
         })
       })
-    } as any);
+    } as unknown as ReturnType<typeof supabase.from>);
 
-    vi.mocked(getStudents).mockResolvedValue(mockStudents as any);
+    vi.mocked(getStudents).mockResolvedValue(mockStudents as Awaited<ReturnType<typeof getStudents>>);
   });
 
   it('shows link student button', async () => {
@@ -357,16 +354,15 @@ describe('Profile Page - Unlink Student Flow', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'john@test.com' },
-      session: { access_token: 'token' },
       loading: false,
-      signIn: vi.fn(),
+      error: null,
       signOut: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useAuth>);
 
     vi.mocked(supabase.auth.getSession).mockResolvedValue({
       data: { session: { access_token: 'test-token' } },
       error: null
-    } as any);
+    } as Awaited<ReturnType<typeof supabase.auth.getSession>>);
 
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -374,9 +370,9 @@ describe('Profile Page - Unlink Student Flow', () => {
           single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
         })
       })
-    } as any);
+    } as unknown as ReturnType<typeof supabase.from>);
 
-    vi.mocked(getStudents).mockResolvedValue(mockStudents as any);
+    vi.mocked(getStudents).mockResolvedValue(mockStudents as Awaited<ReturnType<typeof getStudents>>);
     vi.mocked(unlinkStudent).mockResolvedValue(undefined);
   });
 
@@ -407,16 +403,15 @@ describe('Profile Page - Edit Student Flow', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'john@test.com' },
-      session: { access_token: 'token' },
       loading: false,
-      signIn: vi.fn(),
+      error: null,
       signOut: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useAuth>);
 
     vi.mocked(supabase.auth.getSession).mockResolvedValue({
       data: { session: { access_token: 'test-token' } },
       error: null
-    } as any);
+    } as Awaited<ReturnType<typeof supabase.auth.getSession>>);
 
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -424,10 +419,10 @@ describe('Profile Page - Edit Student Flow', () => {
           single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
         })
       })
-    } as any);
+    } as unknown as ReturnType<typeof supabase.from>);
 
-    vi.mocked(getStudents).mockResolvedValue(mockStudents as any);
-    vi.mocked(updateStudent).mockResolvedValue(mockStudents[0] as any);
+    vi.mocked(getStudents).mockResolvedValue(mockStudents as Awaited<ReturnType<typeof getStudents>>);
+    vi.mocked(updateStudent).mockResolvedValue(mockStudents[0] as Awaited<ReturnType<typeof updateStudent>>);
   });
 
   it('renders students with edit capability', async () => {

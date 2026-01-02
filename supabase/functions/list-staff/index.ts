@@ -1,25 +1,19 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 serve(async (req) => {
+  const origin = req.headers.get('Origin');
+  
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Verify the requesting user is an admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Missing authorization header', 401, origin);
     }
 
     // Extract token from Bearer header
@@ -36,28 +30,34 @@ serve(async (req) => {
     const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !requestingUser) {
-      console.log('Auth error:', authError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Unauthorized', 401, origin);
     }
 
     if (requestingUser.user_metadata?.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Only admins can list staff' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Only admins can list staff', 403, origin);
     }
 
-    // List all users with staff or admin roles
-    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    // Parse pagination parameters from request body or query
+    let page = 1;
+    let perPage = 50;
+    try {
+      if (req.method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        page = Math.max(1, parseInt(body.page) || 1);
+        perPage = Math.min(100, Math.max(1, parseInt(body.per_page) || 50));
+      }
+    } catch {
+      // Use defaults if parsing fails
+    }
+
+    // List users with pagination
+    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage
+    });
     
     if (listError) {
-      return new Response(
-        JSON.stringify({ error: listError.message }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse(listError.message, 400, origin);
     }
 
     // Filter staff and admin users
@@ -75,16 +75,17 @@ serve(async (req) => {
         created_at: user.created_at,
       }));
 
-    return new Response(
-      JSON.stringify({ staff: staffMembers }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return jsonResponse(
+      { 
+        staff: staffMembers,
+        pagination: { page, perPage, hasMore: users.length === perPage }
+      },
+      200,
+      origin
     );
 
   } catch (error) {
     console.error('Error in list-staff function:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse('Internal server error', 500, origin);
   }
 });

@@ -341,7 +341,7 @@ describe('Admin Weekly Menu Page', () => {
     });
 
     it('should show empty state for days without menu', () => {
-      const schedules: any[] = [];
+      const schedules: Array<{ id: string; product_id: string; scheduled_date: string }> = [];
       const daySchedules = schedules.filter(s => s.scheduled_date === '2026-01-05');
       expect(daySchedules).toHaveLength(0);
     });

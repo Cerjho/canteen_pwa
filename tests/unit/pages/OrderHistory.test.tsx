@@ -81,7 +81,7 @@ const renderOrderHistory = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <OrderHistory />
       </MemoryRouter>
     </QueryClientProvider>
@@ -94,11 +94,10 @@ describe('OrderHistory Page', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'parent@test.com' },
-      session: { access_token: 'token' },
       loading: false,
-      signIn: vi.fn(),
+      error: null,
       signOut: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useAuth>);
 
     vi.mocked(getOrderHistory).mockResolvedValue(mockOrders);
   });
@@ -232,11 +231,10 @@ describe('OrderHistory Page', () => {
     it('does not fetch orders when user is not logged in', async () => {
       vi.mocked(useAuth).mockReturnValue({
         user: null,
-        session: null,
         loading: false,
-        signIn: vi.fn(),
+        error: null,
         signOut: vi.fn()
-      } as any);
+      } as unknown as ReturnType<typeof useAuth>);
 
       renderOrderHistory();
       

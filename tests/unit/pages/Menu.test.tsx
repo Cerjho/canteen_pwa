@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../../../src/components/Toast';
 import Menu from '../../../src/pages/Parent/Menu';
 
@@ -66,27 +66,36 @@ const mockProducts = [
     name: 'Chicken Adobo',
     description: 'Filipino braised chicken',
     price: 65,
-    category: 'mains',
+    category: 'mains' as const,
     available: true,
-    image_url: 'https://example.com/adobo.jpg'
+    image_url: 'https://example.com/adobo.jpg',
+    stock_quantity: 50,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z'
   },
   {
     id: 'product-2',
     name: 'Banana Cue',
     description: 'Fried banana with caramel',
     price: 15,
-    category: 'snacks',
+    category: 'snacks' as const,
     available: true,
-    image_url: 'https://example.com/banana.jpg'
+    image_url: 'https://example.com/banana.jpg',
+    stock_quantity: 100,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z'
   },
   {
     id: 'product-3',
     name: 'Orange Juice',
     description: 'Fresh squeezed',
     price: 25,
-    category: 'drinks',
+    category: 'drinks' as const,
     available: true,
-    image_url: 'https://example.com/oj.jpg'
+    image_url: 'https://example.com/oj.jpg',
+    stock_quantity: 30,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z'
   }
 ];
 
@@ -109,7 +118,7 @@ const renderMenu = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ToastProvider>
           <Menu />
         </ToastProvider>
@@ -121,7 +130,7 @@ const renderMenu = () => {
 describe('Menu Page', () => {
   const mockAddItem = vi.fn();
   const mockCheckout = vi.fn();
-  const mockShowToast = vi.fn();
+  const _mockShowToast = vi.fn();
   const mockToggleFavorite = vi.fn();
 
   beforeEach(() => {
@@ -133,7 +142,7 @@ describe('Menu Page', () => {
       isLoading: false,
       error: null,
       refetch: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useStudents>);
 
     vi.mocked(useFavorites).mockReturnValue({
       favorites: ['product-1'],
@@ -146,19 +155,26 @@ describe('Menu Page', () => {
     vi.mocked(useCart).mockReturnValue({
       items: [],
       addItem: mockAddItem,
-      removeItem: vi.fn(),
       updateQuantity: vi.fn(),
       clearCart: vi.fn(),
       checkout: mockCheckout,
-      total: 0
+      total: 0,
+      notes: '',
+      setNotes: vi.fn(),
+      paymentMethod: 'cash',
+      setPaymentMethod: vi.fn(),
+      isLoading: false,
+      error: null,
+      clearError: vi.fn()
     });
 
     // Mock useAuth
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'user-123', email: 'test@example.com' },
+      user: { id: 'user-123', email: 'test@example.com' } as ReturnType<typeof useAuth>['user'],
       loading: false,
+      error: null,
       signOut: vi.fn()
-    } as any);
+    });
 
     // Create dates for testing
     const today = new Date();
@@ -319,7 +335,7 @@ describe('Menu Page', () => {
     });
 
     it('calls addItem when child is selected and add is clicked', async () => {
-      const user = userEvent.setup();
+      const _user = userEvent.setup();
       renderMenu();
       
       await waitFor(() => {
@@ -357,13 +373,19 @@ describe('Menu Page', () => {
       vi.mocked(useCart).mockReturnValue({
         items: mockCartItems,
         addItem: mockAddItem,
-        removeItem: vi.fn(),
         updateQuantity: vi.fn(),
         clearCart: vi.fn(),
         checkout: mockCheckout,
-        total: 130
+        total: 130,
+        notes: '',
+        setNotes: vi.fn(),
+        paymentMethod: 'cash',
+        setPaymentMethod: vi.fn(),
+        isLoading: false,
+        error: null,
+        clearError: vi.fn()
       });
-
+      
       renderMenu();
       
       await waitFor(() => {
@@ -396,7 +418,7 @@ describe('Menu Page', () => {
 
   describe('Favorites', () => {
     it('allows toggling favorite status', async () => {
-      const user = userEvent.setup();
+      const _user = userEvent.setup();
       renderMenu();
       
       await waitFor(() => {
@@ -404,7 +426,7 @@ describe('Menu Page', () => {
       });
 
       // Find and click heart button
-      const heartButtons = document.querySelectorAll('[data-testid="favorite-button"]');
+      const _heartButtons = document.querySelectorAll('[data-testid="favorite-button"]');
       // Favorites functionality is handled through useFavorites hook
     });
   });
@@ -415,17 +437,18 @@ describe('Menu Page - Canteen Closed', () => {
     vi.clearAllMocks();
     
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'user-123', email: 'test@example.com' },
+      user: { id: 'user-123', email: 'test@example.com' } as ReturnType<typeof useAuth>['user'],
       loading: false,
+      error: null,
       signOut: vi.fn()
-    } as any);
+    });
 
     vi.mocked(useStudents).mockReturnValue({
       data: mockStudents,
       isLoading: false,
       error: null,
       refetch: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useStudents>);
 
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
@@ -438,11 +461,17 @@ describe('Menu Page - Canteen Closed', () => {
     vi.mocked(useCart).mockReturnValue({
       items: [],
       addItem: vi.fn(),
-      removeItem: vi.fn(),
       updateQuantity: vi.fn(),
       clearCart: vi.fn(),
       checkout: vi.fn(),
-      total: 0
+      total: 0,
+      notes: '',
+      setNotes: vi.fn(),
+      paymentMethod: 'cash',
+      setPaymentMethod: vi.fn(),
+      isLoading: false,
+      error: null,
+      clearError: vi.fn()
     });
 
     // Create dates with holiday info - ALL dates are holidays so it can't auto-select an open day
@@ -492,17 +521,18 @@ describe('Menu Page - Empty States', () => {
     vi.clearAllMocks();
     
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'user-123', email: 'test@example.com' },
+      user: { id: 'user-123', email: 'test@example.com' } as ReturnType<typeof useAuth>['user'],
       loading: false,
+      error: null,
       signOut: vi.fn()
-    } as any);
+    });
 
     vi.mocked(useStudents).mockReturnValue({
       data: [],
       isLoading: false,
       error: null,
       refetch: vi.fn()
-    } as any);
+    } as unknown as ReturnType<typeof useStudents>);
 
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
@@ -515,11 +545,17 @@ describe('Menu Page - Empty States', () => {
     vi.mocked(useCart).mockReturnValue({
       items: [],
       addItem: vi.fn(),
-      removeItem: vi.fn(),
       updateQuantity: vi.fn(),
       clearCart: vi.fn(),
       checkout: vi.fn(),
-      total: 0
+      total: 0,
+      notes: '',
+      setNotes: vi.fn(),
+      paymentMethod: 'cash',
+      setPaymentMethod: vi.fn(),
+      isLoading: false,
+      error: null,
+      clearError: vi.fn()
     });
 
     const today = new Date();
@@ -538,7 +574,7 @@ describe('Menu Page - Empty States', () => {
     
     await waitFor(() => {
       // Should show some empty state message
-      const emptyMessage = screen.queryByText(/no.*available/i) || 
+      const _emptyMessage = screen.queryByText(/no.*available/i) || 
                           screen.queryByText(/no.*products/i);
       // Empty state handling depends on implementation
     });

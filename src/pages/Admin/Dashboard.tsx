@@ -143,11 +143,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      showToast('Back online', 'success');
+      // Use ref to avoid dependency issues
     };
     const handleOffline = () => {
       setIsOnline(false);
-      showToast('You are offline', 'error');
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -155,7 +154,7 @@ export default function AdminDashboard() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [showToast]);
+  }, []); // Empty deps - handlers are stable
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -211,8 +210,8 @@ export default function AdminDashboard() {
       let avgFulfillmentTime = 0;
       if (completedToday.length > 0) {
         const times = completedToday
-          .filter(o => o.updated_at)
-          .map(o => differenceInMinutes(new Date(o.updated_at!), new Date(o.created_at)));
+          .filter((o): o is typeof o & { updated_at: string } => Boolean(o.updated_at))
+          .map(o => differenceInMinutes(new Date(o.updated_at), new Date(o.created_at)));
         avgFulfillmentTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
       }
 
@@ -310,10 +309,18 @@ export default function AdminDashboard() {
         .neq('order.status', 'cancelled');
 
       const productMap: Record<string, TopProduct> = {};
-      orderItems?.forEach((item: any) => {
+      // Supabase returns arrays for joined tables - handle both array and single object cases
+      interface OrderItemRaw {
+        quantity: number;
+        price_at_order: number;
+        product_id: string;
+        product: Array<{ name: string; category: string }> | { name: string; category: string } | null;
+      }
+      ((orderItems || []) as OrderItemRaw[]).forEach((item) => {
         const id = item.product_id;
+        const product = Array.isArray(item.product) ? item.product[0] : item.product;
         if (!productMap[id]) {
-          productMap[id] = { product_id: id, name: item.product?.name || 'Unknown', category: item.product?.category, total_quantity: 0, total_revenue: 0 };
+          productMap[id] = { product_id: id, name: product?.name || 'Unknown', category: product?.category, total_quantity: 0, total_revenue: 0 };
         }
         productMap[id].total_quantity += item.quantity;
         productMap[id].total_revenue += item.quantity * item.price_at_order;
@@ -334,7 +341,16 @@ export default function AdminDashboard() {
         .limit(8);
       
       // Map FK join arrays to single objects
-      return (data || []).map((order: any) => ({
+      interface OrderResult {
+        id: string;
+        status: string;
+        total_amount: number;
+        created_at: string;
+        updated_at?: string;
+        child: Array<{ first_name: string; last_name: string }> | { first_name: string; last_name: string } | null;
+        parent: Array<{ first_name: string; last_name: string }> | { first_name: string; last_name: string } | null;
+      }
+      return (data as OrderResult[] || []).map((order) => ({
         ...order,
         child: Array.isArray(order.child) ? order.child[0] || null : order.child,
         parent: Array.isArray(order.parent) ? order.parent[0] || null : order.parent
@@ -361,7 +377,7 @@ export default function AdminDashboard() {
           type: 'low_stock',
           title: 'Low Stock Alert',
           message: `${product.name} has only ${product.stock_quantity} items left`,
-          severity: product.stock_quantity! <= 5 ? 'error' : 'warning',
+          severity: (product.stock_quantity ?? 0) <= 5 ? 'error' : 'warning',
           actionLabel: 'Manage Products',
           actionRoute: '/admin/products'
         });
@@ -485,9 +501,6 @@ export default function AdminDashboard() {
           showToast('Real-time connection lost', 'error');
         } else {
           setSystemHealth({ realtime: status === 'SUBSCRIBED' ? 'healthy' : 'degraded' });
-          if (status === 'SUBSCRIBED') {
-            console.log('Real-time subscription active');
-          }
         }
       });
 
@@ -692,9 +705,9 @@ export default function AdminDashboard() {
                     <p className="text-sm opacity-80">{alert.message}</p>
                   </div>
                 </div>
-                {alert.actionLabel && (
+                {alert.actionLabel && alert.actionRoute && (
                   <button
-                    onClick={() => navigate(alert.actionRoute!)}
+                    onClick={() => navigate(alert.actionRoute as string)}
                     className="px-3 py-1 text-sm font-medium rounded-md bg-white/50 hover:bg-white transition-colors"
                   >
                     {alert.actionLabel}

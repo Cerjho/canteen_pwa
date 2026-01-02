@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -48,10 +48,11 @@ export default function Menu() {
   const { data: walletData } = useQuery({
     queryKey: ['parent-wallet', user?.id],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('wallets')
         .select('balance')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .maybeSingle();
       
       if (error) throw error;
@@ -84,8 +85,11 @@ export default function Menu() {
     }
   }, [weekdaysInfo, selectedDate]);
   
-  // Use first available date or today as fallback
-  const effectiveDate = selectedDate || weekdaysInfo?.[0]?.date || new Date();
+  // Use first available date or today as fallback - memoize to prevent useCallback dependency issues
+  const effectiveDate = useMemo(
+    () => selectedDate || weekdaysInfo?.[0]?.date || new Date(),
+    [selectedDate, weekdaysInfo]
+  );
   
   // Check canteen status for selected date (use weekdayInfo if available)
   const { data: canteenStatus } = useQuery({
@@ -131,7 +135,8 @@ export default function Menu() {
     return result;
   }, [products, selectedCategory, searchQuery, favorites]);
 
-  const handleAddToCart = (productId: string) => {
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleAddToCart = useCallback((productId: string) => {
     if (!selectedChildId) {
       showToast('Please select a child first', 'error');
       return;
@@ -148,9 +153,9 @@ export default function Menu() {
       });
       showToast(`${product.name} added to cart`, 'success');
     }
-  };
+  }, [selectedChildId, products, addItem, showToast]);
 
-  const handleCheckout = async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string) => {
+  const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string) => {
     if (!selectedChildId) {
       showToast('Please select a child', 'error');
       return;
@@ -187,10 +192,10 @@ export default function Menu() {
       console.error('Checkout error:', error);
       showToast('Failed to place order. Please try again.', 'error');
     }
-  };
+  }, [selectedChildId, students, effectiveDate, checkout, queryClient, navigate, total, items.length, showToast]);
 
   // Navigate to next/prev date
-  const handlePrevDate = () => {
+  const handlePrevDate = useCallback(() => {
     if (!weekdaysInfo) return;
     const currentIdx = weekdaysInfo.findIndex(w => 
       w.dateStr === format(effectiveDate, 'yyyy-MM-dd')
@@ -198,9 +203,9 @@ export default function Menu() {
     if (currentIdx > 0) {
       setSelectedDate(weekdaysInfo[currentIdx - 1].date);
     }
-  };
+  }, [weekdaysInfo, effectiveDate]);
 
-  const handleNextDate = () => {
+  const handleNextDate = useCallback(() => {
     if (!weekdaysInfo) return;
     const currentIdx = weekdaysInfo.findIndex(w => 
       w.dateStr === format(effectiveDate, 'yyyy-MM-dd')
@@ -208,7 +213,7 @@ export default function Menu() {
     if (currentIdx < weekdaysInfo.length - 1) {
       setSelectedDate(weekdaysInfo[currentIdx + 1].date);
     }
-  };
+  }, [weekdaysInfo, effectiveDate]);
 
   // Show canteen closed message for the selected date (holiday)
   if (selectedWeekdayInfo && !selectedWeekdayInfo.isOpen) {

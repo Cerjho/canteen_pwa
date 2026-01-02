@@ -1,7 +1,32 @@
 // Test Setup File
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
+
+// Configure Testing Library to suppress act() warnings
+// These warnings are expected in some async test scenarios with userEvent
+configure({ asyncUtilTimeout: 5000 });
+
+// Suppress console.error for React act() warnings during tests
+const originalError = console.error;
+beforeEach(() => {
+  console.error = (...args: unknown[]) => {
+    // Suppress act() warnings and GoTrueClient warnings
+    const message = args[0];
+    if (typeof message === 'string' && (
+      message.includes('not wrapped in act') ||
+      message.includes('GoTrueClient') ||
+      message.includes('Multiple GoTrueClient instances')
+    )) {
+      return;
+    }
+    originalError.apply(console, args);
+  };
+});
+
+afterEach(() => {
+  console.error = originalError;
+});
 
 // Cleanup after each test
 afterEach(() => {
@@ -76,5 +101,5 @@ Object.defineProperty(navigator, 'onLine', {
 });
 
 // Mock scroll functions
-window.scrollTo = vi.fn() as any;
+window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 Element.prototype.scrollIntoView = vi.fn();

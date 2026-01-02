@@ -294,17 +294,32 @@ serve(async (req) => {
     // Deduct balance if payment method is 'balance'
     if (payment_method === 'balance') {
       const newBalance = currentBalance - totalAmount;
-      const { error: balanceError } = await supabaseAdmin
+      // Use optimistic locking to prevent race conditions
+      const { data: balanceResult, error: balanceError } = await supabaseAdmin
         .from('wallets')
         .update({ balance: newBalance, updated_at: new Date().toISOString() })
-        .eq('user_id', parent_id);
+        .eq('user_id', parent_id)
+        .eq('balance', currentBalance) // Only update if balance hasn't changed
+        .select('balance')
+        .single();
 
-      if (balanceError) {
+      if (balanceError || !balanceResult) {
         console.error('Balance deduction error:', balanceError);
-        // In production, rollback order and stock updates
+        // Rollback: restore stock for all items
+        for (const item of items) {
+          const product = productMap.get(item.product_id)!;
+          await supabaseAdmin
+            .from('products')
+            .update({ stock_quantity: product.stock_quantity })
+            .eq('id', item.product_id);
+        }
+        // Delete the order
+        await supabaseAdmin.from('order_items').delete().eq('order_id', order.id);
+        await supabaseAdmin.from('orders').delete().eq('id', order.id);
+        
         return new Response(
-          JSON.stringify({ error: 'BALANCE_DEDUCTION_FAILED', message: 'Failed to deduct balance' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: 'BALANCE_DEDUCTION_FAILED', message: 'Failed to deduct balance. Balance may have changed. Please retry.' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }

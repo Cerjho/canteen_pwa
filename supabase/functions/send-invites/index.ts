@@ -1,10 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCorsPrefllight, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 // Generate a short, readable invite code
 function generateInviteCode(): string {
@@ -22,17 +18,16 @@ interface InviteRequest {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Missing authorization header', 401, origin);
     }
 
     // Extract token from Bearer header
@@ -48,34 +43,21 @@ serve(async (req) => {
     const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !requestingUser) {
-      console.log('Auth error:', authError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Unauthorized', 401, origin);
     }
 
     if (requestingUser.user_metadata?.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Only admins can send invitations' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Only admins can send invitations', 403, origin);
     }
 
     const { emails, role = 'parent' }: InviteRequest = await req.json();
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'At least one email is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('At least one email is required', 400, origin);
     }
 
     if (!['parent', 'staff', 'admin'].includes(role)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid role' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Invalid role', 400, origin);
     }
 
     const results: { email: string; success: boolean; code?: string; error?: string }[] = [];
@@ -89,9 +71,28 @@ serve(async (req) => {
         continue;
       }
 
-      // Check if email already has an account
-      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const existingUser = existingUsers?.users?.find(u => u.email === trimmedEmail);
+      // Check if email already has an account (use search instead of listing all users)
+      // Note: listUsers with filter is more efficient than fetching all users
+      let existingUser = null;
+      let page = 1;
+      const perPage = 100;
+      
+      // Search for user by email using pagination to avoid loading all users
+      while (true) {
+        const { data: usersPage } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+        if (!usersPage?.users || usersPage.users.length === 0) break;
+        
+        existingUser = usersPage.users.find(u => u.email === trimmedEmail);
+        if (existingUser) break;
+        
+        // If we got fewer users than requested, we've reached the end
+        if (usersPage.users.length < perPage) break;
+        page++;
+        
+        // Safety limit to prevent infinite loop
+        if (page > 100) break;
+      }
+      
       if (existingUser) {
         results.push({ email: trimmedEmail, success: false, error: 'Email already registered' });
         continue;
@@ -154,22 +155,20 @@ serve(async (req) => {
     // Generate registration URL
     const registrationBaseUrl = `${siteUrl}/register`;
 
-    return new Response(
-      JSON.stringify({ 
+    return jsonResponse(
+      { 
         success: successCount > 0,
         message: `${successCount} invitation(s) created${failCount > 0 ? `, ${failCount} failed` : ''}`,
         registrationUrl: registrationBaseUrl,
         results,
         summary: { total: emails.length, success: successCount, failed: failCount }
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      },
+      200,
+      origin
     );
 
   } catch (error) {
     console.error('Error in send-invites function:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse('Internal server error', 500, origin);
   }
 });

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
@@ -8,16 +9,19 @@ export function useActiveOrderCount() {
   const { data: count = 0 } = useQuery({
     queryKey: ['active-order-count', user?.id],
     queryFn: async () => {
+      // Safety check - should not happen due to enabled flag but TypeScript needs it
+      if (!user?.id) return 0;
+      
       const { count, error } = await supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
-        .eq('parent_id', user!.id)
+        .eq('parent_id', user.id)
         .in('status', ['pending', 'preparing', 'ready']);
       
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!user,
+    enabled: !!user?.id, // Only run when user is authenticated
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 

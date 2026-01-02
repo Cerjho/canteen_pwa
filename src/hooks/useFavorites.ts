@@ -1,50 +1,103 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 // Favorites are stored locally for now
 import { useAuth } from './useAuth';
 
 const FAVORITES_KEY = 'canteen_favorites';
 
+// Type guard to validate favorites array
+function isValidFavoritesArray(data: unknown): data is string[] {
+  return Array.isArray(data) && data.every(item => typeof item === 'string');
+}
+
 export function useFavorites() {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<string[]>([]);
 
-  // Load favorites from localStorage on mount
+  // Load favorites from localStorage on mount or user change
   useEffect(() => {
-    if (user) {
-      const stored = localStorage.getItem(`${FAVORITES_KEY}_${user.id}`);
-      if (stored) {
-        setFavorites(JSON.parse(stored));
+    const userId = user?.id;
+    if (userId) {
+      try {
+        const stored = localStorage.getItem(`${FAVORITES_KEY}_${userId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          // Validate the parsed data
+          if (isValidFavoritesArray(parsed)) {
+            setFavorites(parsed);
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn('Invalid favorites data in localStorage, resetting');
+            setFavorites([]);
+          }
+        } else {
+          setFavorites([]);
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to parse favorites from localStorage:', error);
+        setFavorites([]);
       }
+    } else {
+      // Clear favorites when user logs out
+      setFavorites([]);
     }
   }, [user]);
 
-  // Save to localStorage whenever favorites change
-  const saveFavorites = (newFavorites: string[]) => {
-    if (user) {
-      localStorage.setItem(`${FAVORITES_KEY}_${user.id}`, JSON.stringify(newFavorites));
-      setFavorites(newFavorites);
-    }
-  };
+  const addFavorite = useCallback((productId: string) => {
+    const userId = user?.id;
+    setFavorites(current => {
+      if (!current.includes(productId)) {
+        const newFavorites = [...current, productId];
+        if (userId) {
+          try {
+            localStorage.setItem(`${FAVORITES_KEY}_${userId}`, JSON.stringify(newFavorites));
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to save favorites:', e);
+          }
+        }
+        return newFavorites;
+      }
+      return current;
+    });
+  }, [user]);
 
-  const addFavorite = (productId: string) => {
-    if (!favorites.includes(productId)) {
-      saveFavorites([...favorites, productId]);
-    }
-  };
+  const removeFavorite = useCallback((productId: string) => {
+    const userId = user?.id;
+    setFavorites(current => {
+      const newFavorites = current.filter(id => id !== productId);
+      if (userId) {
+        try {
+          localStorage.setItem(`${FAVORITES_KEY}_${userId}`, JSON.stringify(newFavorites));
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to save favorites:', e);
+        }
+      }
+      return newFavorites;
+    });
+  }, [user]);
 
-  const removeFavorite = (productId: string) => {
-    saveFavorites(favorites.filter(id => id !== productId));
-  };
+  const toggleFavorite = useCallback((productId: string) => {
+    const userId = user?.id;
+    setFavorites(current => {
+      const newFavorites = current.includes(productId)
+        ? current.filter(id => id !== productId)
+        : [...current, productId];
+      
+      if (userId) {
+        try {
+          localStorage.setItem(`${FAVORITES_KEY}_${userId}`, JSON.stringify(newFavorites));
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to save favorites:', e);
+        }
+      }
+      return newFavorites;
+    });
+  }, [user]);
 
-  const toggleFavorite = (productId: string) => {
-    if (favorites.includes(productId)) {
-      removeFavorite(productId);
-    } else {
-      addFavorite(productId);
-    }
-  };
-
-  const isFavorite = (productId: string) => favorites.includes(productId);
+  const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
 
   return {
     favorites,

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from './useAuth';
@@ -12,48 +12,71 @@ export function useOrderSubscription() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  
+  // Use refs for callbacks to avoid re-subscription
+  const showToastRef = useRef(showToast);
+  const queryClientRef = useRef(queryClient);
+  
+  // Keep refs updated
+  useEffect(() => {
+    showToastRef.current = showToast;
+    queryClientRef.current = queryClient;
+  }, [showToast, queryClient]);
+
+  // Memoized handler to avoid re-creating subscription
+  const handleOrderUpdate = useCallback((payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => {
+    const newStatus = payload.new?.status as string | undefined;
+    const oldStatus = payload.old?.status as string | undefined;
+
+    // Show toast notification for status changes
+    if (newStatus && newStatus !== oldStatus) {
+      const messages: Record<string, string> = {
+        preparing: '👨‍🍳 Your order is being prepared!',
+        ready: '✅ Your order is ready for pickup!',
+        completed: '🎉 Order completed!',
+        cancelled: '❌ Your order was cancelled'
+      };
+
+      if (messages[newStatus]) {
+        showToastRef.current(messages[newStatus], newStatus === 'cancelled' ? 'error' : 'success');
+      }
+    }
+
+    // Invalidate orders query to refresh the list
+    queryClientRef.current.invalidateQueries({ queryKey: ['orders'] });
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
+    // Only subscribe if user exists and has an ID
+    const userId = user?.id;
+    if (!userId) return;
 
     // Subscribe to order changes for this parent
     const channel = supabase
-      .channel('order-updates')
+      .channel(`order-updates-${userId}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'orders',
-          filter: `parent_id=eq.${user.id}`
+          filter: `parent_id=eq.${userId}`
         },
-        (payload) => {
-          const newStatus = payload.new.status;
-          const oldStatus = payload.old.status;
-
-          // Show toast notification for status changes
-          if (newStatus !== oldStatus) {
-            const messages: Record<string, string> = {
-              preparing: '👨‍🍳 Your order is being prepared!',
-              ready: '✅ Your order is ready for pickup!',
-              completed: '🎉 Order completed!',
-              cancelled: '❌ Your order was cancelled'
-            };
-
-            if (messages[newStatus]) {
-              showToast(messages[newStatus], newStatus === 'cancelled' ? 'error' : 'success');
-            }
-          }
-
-          // Invalidate orders query to refresh the list
-          queryClient.invalidateQueries({ queryKey: ['orders'] });
-        }
+        handleOrderUpdate
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) {
+          console.error('Order subscription error:', err);
+        }
+        if (status === 'SUBSCRIBED' && import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.log('Order subscription active for user:', userId);
+        }
+      });
 
-    // Cleanup on unmount
+    // Cleanup on unmount or user change
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, queryClient, showToast]);
+  }, [user?.id, handleOrderUpdate]); // Only re-subscribe when user ID changes
 }

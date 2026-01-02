@@ -31,7 +31,7 @@ const renderStaffDashboard = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ToastProvider>
           <StaffDashboard />
         </ToastProvider>
@@ -59,9 +59,9 @@ describe('Staff Dashboard', () => {
       update: vi.fn().mockReturnThis()
     };
     
-    vi.mocked(supabase.from).mockReturnValue(chainMock as any);
-    vi.mocked(supabase.channel).mockReturnValue(mockChannel as any);
-    vi.mocked(supabase.removeChannel).mockReturnValue(undefined as any);
+    vi.mocked(supabase.from).mockReturnValue(chainMock as unknown as ReturnType<typeof supabase.from>);
+    vi.mocked(supabase.channel).mockReturnValue(mockChannel as unknown as ReturnType<typeof supabase.channel>);
+    vi.mocked(supabase.removeChannel).mockReturnValue(undefined as unknown as ReturnType<typeof supabase.removeChannel>);
   });
 
   describe('Rendering', () => {

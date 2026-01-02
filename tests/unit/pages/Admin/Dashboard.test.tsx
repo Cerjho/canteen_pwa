@@ -27,7 +27,7 @@ const renderAdminDashboard = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ToastProvider>
           <AdminDashboard />
         </ToastProvider>
@@ -59,9 +59,9 @@ describe('Admin Dashboard', () => {
       then: vi.fn((resolve) => resolve({ data: [], error: null, count: 0 }))
     };
     
-    vi.mocked(supabase.from).mockReturnValue(chainMock as any);
-    vi.mocked(supabase.channel).mockReturnValue(mockChannel as any);
-    vi.mocked(supabase.removeChannel).mockReturnValue(undefined as any);
+    vi.mocked(supabase.from).mockReturnValue(chainMock as ReturnType<typeof supabase.from>);
+    vi.mocked(supabase.channel).mockReturnValue(mockChannel as ReturnType<typeof supabase.channel>);
+    vi.mocked(supabase.removeChannel).mockReturnValue(undefined as ReturnType<typeof supabase.removeChannel>);
   });
 
   describe('Rendering', () => {

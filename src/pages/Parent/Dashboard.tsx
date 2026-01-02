@@ -103,6 +103,7 @@ export default function ParentDashboard() {
   const { data: todayOrders, isLoading: loadingToday, refetch: refetchToday } = useQuery<Order[]>({
     queryKey: ['active-orders', user?.id, todayStr],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -113,7 +114,7 @@ export default function ParentDashboard() {
             product:products(name, image_url)
           )
         `)
-        .eq('parent_id', user!.id)
+        .eq('parent_id', user.id)
         .eq('scheduled_for', todayStr)
         .in('status', ['pending', 'preparing', 'ready'])
         .order('created_at', { ascending: false });
@@ -129,6 +130,7 @@ export default function ParentDashboard() {
   const { data: scheduledOrders, isLoading: loadingScheduled, refetch: refetchScheduled } = useQuery<Order[]>({
     queryKey: ['scheduled-orders', user?.id, todayStr],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -139,7 +141,7 @@ export default function ParentDashboard() {
             product:products(name, image_url)
           )
         `)
-        .eq('parent_id', user!.id)
+        .eq('parent_id', user.id)
         .gt('scheduled_for', todayStr)
         .in('status', ['pending'])
         .order('scheduled_for', { ascending: true });

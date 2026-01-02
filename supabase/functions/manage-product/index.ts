@@ -4,10 +4,19 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Allow specific origins in production, fallback to * for development
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '*').split(',');
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = ALLOWED_ORIGINS.includes('*') 
+    ? '*' 
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]);
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
 
 type ProductCategory = 'mains' | 'snacks' | 'drinks';
 type Action = 'create' | 'update' | 'delete' | 'toggle-availability' | 'update-stock';
@@ -37,6 +46,9 @@ const MAX_NAME_LENGTH = 100;
 const VALID_CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
 
 serve(async (req) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

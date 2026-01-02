@@ -17,16 +17,13 @@ const queryClient = new QueryClient({
   }
 });
 
-// Register Service Worker (only in production)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.error('Service Worker registration failed:', error);
-    });
-  });
-}
+// Note: Service Worker registration is handled by vite-plugin-pwa with registerType: 'autoUpdate'
+// Manual registration removed to avoid conflicts
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Root element not found');
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <QueryClientProvider client={queryClient}>

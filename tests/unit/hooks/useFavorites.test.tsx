@@ -1,5 +1,5 @@
 // useFavorites Hook Tests - Simplified
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // Simple unit tests for favorites logic without React hooks
 describe('useFavorites Logic', () => {

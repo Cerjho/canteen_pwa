@@ -11,7 +11,12 @@ export function useOrders() {
 
   const ordersQuery = useQuery<OrderWithDetails[]>({
     queryKey: ['orders', user?.id],
-    queryFn: () => getOrderHistory(user!.id),
+    queryFn: async () => {
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      return getOrderHistory(user.id);
+    },
     enabled: !!user
   });
 

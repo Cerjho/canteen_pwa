@@ -84,13 +84,15 @@ export default function Register() {
 
   // Auto-verify code from URL (with delay to prevent abuse)
   useEffect(() => {
-    if (codeFromUrl && codeFromUrl.length === 6) {
+    if (codeFromUrl && codeFromUrl.length === 6 && step === 'code' && !invitation) {
       const timer = setTimeout(() => {
         verifyCode(codeFromUrl);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [codeFromUrl, verifyCode]);
+    // Only run when codeFromUrl changes, not on every verifyCode change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeFromUrl]);
 
   // Reset attempts after 1 minute
   useEffect(() => {

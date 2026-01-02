@@ -22,20 +22,39 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Optional: Verify admin/staff for manual triggers
+    // Verify authentication - either API key for cron jobs or user token
     const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
+    const cronSecret = req.headers.get('X-Cron-Secret');
+    const expectedCronSecret = Deno.env.get('CRON_SECRET');
+    
+    // Allow cron jobs with valid secret
+    const isCronJob = cronSecret && expectedCronSecret && cronSecret === expectedCronSecret;
+    
+    if (!isCronJob) {
+      // Require user authentication for manual triggers
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'UNAUTHORIZED', message: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       const token = authHeader.replace('Bearer ', '');
       const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
       
-      if (!authError && user) {
-        const userRole = user.user_metadata?.role;
-        if (!['admin', 'staff'].includes(userRole)) {
-          return new Response(
-            JSON.stringify({ error: 'FORBIDDEN', message: 'Admin or staff access required' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const userRole = user.user_metadata?.role;
+      if (!['admin', 'staff'].includes(userRole)) {
+        return new Response(
+          JSON.stringify({ error: 'FORBIDDEN', message: 'Admin or staff access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
     }
 

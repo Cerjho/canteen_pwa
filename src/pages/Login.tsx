@@ -14,24 +14,37 @@ export default function Login() {
     setLoading(true);
     setError('');
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      // Route based on user role
-      const role = data.user?.user_metadata?.role;
-      if (role === 'admin') {
-        navigate('/admin');
-      } else if (role === 'staff') {
-        navigate('/staff');
+      if (error) {
+        // Sanitize error message - don't expose internal details
+        const userFriendlyError = error.message?.includes('Invalid login')
+          ? 'Invalid email or password'
+          : error.message?.includes('Email not confirmed')
+          ? 'Please verify your email before logging in'
+          : 'Login failed. Please try again.';
+        setError(userFriendlyError);
+        setLoading(false);
       } else {
-        navigate('/menu');
+        // Reset loading state before navigation
+        setLoading(false);
+        // Route based on user role
+        const role = data.user?.user_metadata?.role;
+        if (role === 'admin') {
+          navigate('/admin');
+        } else if (role === 'staff') {
+          navigate('/staff');
+        } else {
+          navigate('/menu');
+        }
       }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      setLoading(false);
     }
   };
 

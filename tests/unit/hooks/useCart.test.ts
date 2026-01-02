@@ -13,7 +13,7 @@ vi.mock('../../../src/hooks/useAuth', () => ({
 // Mock createOrder
 const mockCreateOrder = vi.fn();
 vi.mock('../../../src/services/orders', () => ({
-  createOrder: (data: any) => mockCreateOrder(data)
+  createOrder: (data: Record<string, unknown>) => mockCreateOrder(data)
 }));
 
 describe('useCart Hook', () => {

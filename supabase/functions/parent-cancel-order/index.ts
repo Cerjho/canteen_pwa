@@ -3,27 +3,26 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCorsPrefllight, jsonResponse } from '../_shared/cors.ts';
 
 interface CancelOrderRequest {
   order_id: string;
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'UNAUTHORIZED', message: 'Missing authorization header' },
+        401,
+        origin
       );
     }
 
@@ -38,18 +37,20 @@ serve(async (req) => {
     // Verify user
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'UNAUTHORIZED', message: 'Invalid token' },
+        401,
+        origin
       );
     }
 
     // Check if user is a parent
     const userRole = user.user_metadata?.role;
     if (userRole !== 'parent') {
-      return new Response(
-        JSON.stringify({ error: 'FORBIDDEN', message: 'Parent access required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'FORBIDDEN', message: 'Parent access required' },
+        403,
+        origin
       );
     }
 
@@ -57,18 +58,20 @@ serve(async (req) => {
     const { order_id } = body;
 
     if (!order_id) {
-      return new Response(
-        JSON.stringify({ error: 'VALIDATION_ERROR', message: 'order_id is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'VALIDATION_ERROR', message: 'order_id is required' },
+        400,
+        origin
       );
     }
 
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(order_id)) {
-      return new Response(
-        JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Invalid order ID format' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'VALIDATION_ERROR', message: 'Invalid order ID format' },
+        400,
+        origin
       );
     }
 
@@ -81,21 +84,23 @@ serve(async (req) => {
       .single();
 
     if (fetchError || !order) {
-      return new Response(
-        JSON.stringify({ error: 'ORDER_NOT_FOUND', message: 'Order not found or does not belong to you' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'ORDER_NOT_FOUND', message: 'Order not found or does not belong to you' },
+        404,
+        origin
       );
     }
 
     // Can only cancel pending orders
     if (order.status !== 'pending') {
-      return new Response(
-        JSON.stringify({ 
+      return jsonResponse(
+        { 
           error: 'INVALID_STATUS', 
           message: `Cannot cancel order with status '${order.status}'. Only pending orders can be cancelled.`,
           current_status: order.status
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        },
+        400,
+        origin
       );
     }
 
@@ -110,13 +115,14 @@ serve(async (req) => {
         .single();
       
       if (currentOrder?.status !== 'pending') {
-        return new Response(
-          JSON.stringify({ 
+        return jsonResponse(
+          { 
             error: 'STATUS_CHANGED', 
             message: 'Order status has changed. It may already be preparing.',
             current_status: currentOrder?.status
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          },
+          400,
+          origin
         );
       }
     }
@@ -134,9 +140,10 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Order cancel error:', updateError);
-      return new Response(
-        JSON.stringify({ error: 'CANCEL_FAILED', message: 'Failed to cancel order' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'CANCEL_FAILED', message: 'Failed to cancel order' },
+        500,
+        origin
       );
     }
 
@@ -148,32 +155,34 @@ serve(async (req) => {
 
     if (orderItems && orderItems.length > 0) {
       for (const item of orderItems) {
-        // Increment stock for each item
-        const { error: stockError } = await supabaseAdmin
-          .from('products')
-          .update({
-            stock_quantity: supabaseAdmin.rpc('increment', { x: item.quantity }),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', item.product_id);
-        
-        // If that doesn't work, do a manual increment
-        if (stockError) {
-          const { data: product } = await supabaseAdmin
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single();
+        // Try RPC first for atomic increment, fallback to manual update
+        try {
+          const { error: rpcError } = await supabaseAdmin.rpc('increment_stock', { 
+            p_product_id: item.product_id, 
+            p_quantity: item.quantity 
+          });
           
-          if (product) {
-            await supabaseAdmin
+          // If RPC doesn't exist or fails, do manual increment
+          if (rpcError) {
+            const { data: product } = await supabaseAdmin
               .from('products')
-              .update({
-                stock_quantity: (product.stock_quantity || 0) + item.quantity,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', item.product_id);
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single();
+            
+            if (product) {
+              await supabaseAdmin
+                .from('products')
+                .update({
+                  stock_quantity: (product.stock_quantity || 0) + item.quantity,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', item.product_id);
+            }
           }
+        } catch (stockError) {
+          // Log but don't fail the cancellation
+          console.error('Stock restoration error for product', item.product_id, ':', stockError);
         }
       }
     }
@@ -219,8 +228,8 @@ serve(async (req) => {
 
     console.log(`[AUDIT] Parent ${user.email} cancelled order ${order_id}. Refund: ${refundApplied ? '₱' + order.total_amount : 'N/A'}`);
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         order_id,
         refund_applied: refundApplied,
@@ -228,15 +237,17 @@ serve(async (req) => {
         message: refundApplied 
           ? `Order cancelled. ₱${order.total_amount.toFixed(2)} has been refunded to your wallet.`
           : 'Order cancelled successfully.'
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      },
+      200,
+      origin
     );
 
   } catch (error) {
     console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'SERVER_ERROR', message: 'An unexpected error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return jsonResponse(
+      { error: 'SERVER_ERROR', message: 'An unexpected error occurred' },
+      500,
+      origin
     );
   }
 });

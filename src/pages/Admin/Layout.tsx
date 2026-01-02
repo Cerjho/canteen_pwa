@@ -23,7 +23,7 @@ const navItems = [
   { to: '/admin/weekly-menu', icon: Calendar, label: 'Weekly Menu' },
   { to: '/admin/students', icon: GraduationCap, label: 'Students' },
   { to: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
-  { to: '/admin/users', icon: Users, label: 'Parents' },
+  { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
   { to: '/admin/audit-logs', icon: History, label: 'Audit Logs' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },

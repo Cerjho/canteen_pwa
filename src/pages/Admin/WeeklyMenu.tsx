@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Calendar, 
@@ -157,25 +157,6 @@ export default function AdminWeeklyMenu() {
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
   const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-  // Check if a specific date is a holiday
-  const isHoliday = (date: Date): Holiday | undefined => {
-    if (!holidays || holidays.length === 0) return undefined;
-    
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const monthDay = dateStr.slice(5); // MM-DD
-    
-    return holidays.find(h => {
-      // Holiday date from DB might be 'YYYY-MM-DD' format
-      const holidayDateStr = h.date.split('T')[0]; // Handle if it has time component
-      const holidayMonthDay = holidayDateStr.slice(5); // MM-DD
-      
-      if (h.is_recurring) {
-        return holidayMonthDay === monthDay;
-      }
-      return holidayDateStr === dateStr;
-    });
-  };
-
   // Check if a specific Saturday is a make-up day
   const isMakeupDay = (date: Date): MakeupDay | undefined => {
     if (!makeupDays || makeupDays.length === 0) return undefined;
@@ -225,6 +206,25 @@ export default function AdminWeeklyMenu() {
       return data;
     }
   });
+
+  // Check if a specific date is a holiday
+  const isHoliday = useCallback((date: Date): Holiday | undefined => {
+    if (!holidays || holidays.length === 0) return undefined;
+    
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const monthDay = dateStr.slice(5); // MM-DD
+    
+    return holidays.find(h => {
+      // Holiday date from DB might be 'YYYY-MM-DD' format
+      const holidayDateStr = h.date.split('T')[0]; // Handle if it has time component
+      const holidayMonthDay = holidayDateStr.slice(5); // MM-DD
+      
+      if (h.is_recurring) {
+        return holidayMonthDay === monthDay;
+      }
+      return holidayDateStr === dateStr;
+    });
+  }, [holidays]);
 
   // Helper function to call manage-menu edge function
   const callManageMenu = async (body: Record<string, unknown>) => {
@@ -538,9 +538,11 @@ export default function AdminWeeklyMenu() {
   
   const weekStats = useMemo(() => {
     const stats = dynamicWeekdays.map(day => {
+      // Inline getDateForDay logic to avoid function reference dependency
+      const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
       const dayDate = day.value === 6 
         ? saturdayDate 
-        : getDateForDay(day.value);
+        : addDays(weekStart, day.value - 1);
       const dayDateStr = format(dayDate, 'yyyy-MM-dd');
       const dayItems = schedules?.filter(s => s.scheduled_date === dayDateStr) || [];
       const activeItems = dayItems.filter(s => s.is_active);
@@ -561,7 +563,7 @@ export default function AdminWeeklyMenu() {
       };
     });
     return stats;
-  }, [schedules, selectedWeek, holidays, makeupDays, dynamicWeekdays]);
+  }, [schedules, selectedWeek, dynamicWeekdays, saturdayDate, saturdayMakeupDay, isHoliday]);
 
   const handlePrevDay = () => {
     const idx = dynamicWeekdays.findIndex(d => d.value === selectedDay);
@@ -1541,7 +1543,7 @@ function MakeupDayModal({
   const getNextSaturdays = () => {
     const saturdays: Date[] = [];
     const today = new Date();
-    let checkDate = new Date(today);
+    const checkDate = new Date(today);
     
     while (saturdays.length < 8) {
       if (checkDate.getDay() === 6 && checkDate >= today) {

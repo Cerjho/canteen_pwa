@@ -387,6 +387,14 @@ export default function AdminStudents() {
     </div>
   );
 }
+// Student form data type
+interface StudentFormData {
+  first_name: string;
+  last_name: string;
+  grade_level: string;
+  section?: string;
+  dietary_restrictions?: string;
+}
 
 // Student Add/Edit Modal
 function StudentModal({
@@ -397,7 +405,7 @@ function StudentModal({
 }: {
   student?: Student;
   onClose: () => void;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: StudentFormData) => void;
   isLoading: boolean;
 }) {
   const [firstName, setFirstName] = useState(student?.first_name || '');
@@ -619,8 +627,9 @@ function ImportModal({
         queryClient.invalidateQueries({ queryKey: ['admin-students'] });
         showToast(`Imported ${data.imported} students`, 'success');
       }
-    } catch (err: any) {
-      showToast(err.message || 'Failed to import', 'error');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to import';
+      showToast(message, 'error');
     } finally {
       setImporting(false);
     }

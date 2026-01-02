@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { User } from '@supabase/supabase-js';
 import { useAuth } from './hooks/useAuth';
+import type { UserRole } from './types';
 // Parent pages
 import ParentMenu from './pages/Parent/Menu';
 import ParentDashboard from './pages/Parent/Dashboard';
@@ -32,9 +34,6 @@ import AdminProfile from './pages/Admin/Profile';
 import AdminSettings from './pages/Admin/Settings';
 import AdminAuditLogs from './pages/Admin/AuditLogs';
 
-// Role types
-type UserRole = 'parent' | 'staff' | 'admin';
-
 // Role-based route protection component
 function RoleRoute({ 
   children, 
@@ -44,7 +43,7 @@ function RoleRoute({
 }: { 
   children: React.ReactNode;
   allowedRoles: UserRole[];
-  user: any;
+  user: User | null;
   userRole: UserRole;
 }) {
   if (!user) {

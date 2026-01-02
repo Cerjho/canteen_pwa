@@ -22,8 +22,8 @@ const mockGetOrderHistory = vi.fn();
 const mockCreateOrder = vi.fn();
 
 vi.mock('../../../src/services/orders', () => ({
-  getOrderHistory: (...args: any[]) => mockGetOrderHistory(...args),
-  createOrder: (...args: any[]) => mockCreateOrder(...args)
+  getOrderHistory: (...args: unknown[]) => mockGetOrderHistory(...args),
+  createOrder: (...args: unknown[]) => mockCreateOrder(...args)
 }));
 
 import { useOrders } from '../../../src/hooks/useOrders';
@@ -118,7 +118,7 @@ describe('useOrders Hook', () => {
 
       result.current.createOrder({
         parent_id: 'test-user-123',
-        child_id: 'child-1',
+        student_id: 'child-1',
         client_order_id: 'client-1',
         items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
         payment_method: 'cash'
@@ -143,7 +143,7 @@ describe('useOrders Hook', () => {
 
       result.current.createOrder({
         parent_id: 'test-user-123',
-        child_id: 'child-1',
+        student_id: 'child-1',
         client_order_id: 'client-1',
         items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
         payment_method: 'cash'
@@ -171,7 +171,7 @@ describe('useOrders Hook', () => {
 
       result.current.createOrder({
         parent_id: 'test-user-123',
-        child_id: 'child-1',
+        student_id: 'child-1',
         client_order_id: 'client-1',
         items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
         payment_method: 'cash'
@@ -199,7 +199,7 @@ describe('useOrders Hook', () => {
 
       result.current.createOrder({
         parent_id: 'test-user-123',
-        child_id: 'child-1',
+        student_id: 'child-1',
         client_order_id: 'client-1',
         items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
         payment_method: 'cash'
@@ -216,7 +216,7 @@ describe('useOrders Hook', () => {
     it('should set isCreating state during mutation', async () => {
       mockGetOrderHistory.mockResolvedValue([]);
       
-      let resolveCreate: (value: any) => void;
+      let resolveCreate: ((value: { id: string }) => void) | undefined;
       mockCreateOrder.mockImplementation(() => new Promise((resolve) => {
         resolveCreate = resolve;
       }));
@@ -231,7 +231,7 @@ describe('useOrders Hook', () => {
 
       result.current.createOrder({
         parent_id: 'test-user-123',
-        child_id: 'child-1',
+        student_id: 'child-1',
         client_order_id: 'client-1',
         items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
         payment_method: 'cash'
@@ -241,7 +241,9 @@ describe('useOrders Hook', () => {
         expect(result.current.isCreating).toBe(true);
       });
 
-      resolveCreate!({ id: 'new-order' });
+      if (resolveCreate) {
+        resolveCreate({ id: 'new-order' });
+      }
 
       await waitFor(() => {
         expect(result.current.isCreating).toBe(false);

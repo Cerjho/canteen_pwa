@@ -28,7 +28,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Use injectManifest to include custom service worker logic
+      strategies: 'injectManifest',
+      srcDir: 'src/pwa',
+      filename: 'service-worker.ts',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: 'School Canteen',
@@ -44,45 +49,36 @@ export default defineConfig({
             src: '/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
           },
           {
             src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },
-      workbox: {
-        cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              networkTimeoutSeconds: 5,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 300 // 5 minutes
-              }
-            }
-          },
-          {
-            urlPattern: /\.(png|jpg|jpeg|svg|gif|webp)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
-              }
-            }
-          }
-        ]
+      // injectManifest options for custom service worker
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module'
       }
     })
   ],

@@ -18,6 +18,7 @@ export function useProducts() {
     products: productsQuery.data || [],
     isLoading: productsQuery.isLoading,
     isError: productsQuery.isError,
+    error: productsQuery.error,
     refetch: productsQuery.refetch,
     refreshProducts
   };

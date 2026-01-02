@@ -1,9 +1,9 @@
 // Login Page Tests
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import Login from '../../../src/pages/Login';
 
 // Mock navigate
@@ -21,14 +21,14 @@ const mockSignInWithPassword = vi.fn();
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     auth: {
-      signInWithPassword: (...args: any[]) => mockSignInWithPassword(...args)
+      signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args)
     }
   }
 }));
 
 function renderLogin() {
   return render(
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Login />
     </BrowserRouter>
   );
@@ -190,7 +190,8 @@ describe('Login Page', () => {
       await user.click(screen.getByRole('button', { name: /login/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/Invalid login credentials/i)).toBeInTheDocument();
+        // Login.tsx sanitizes error messages to user-friendly versions
+        expect(screen.getByText(/Invalid email or password/i)).toBeInTheDocument();
       });
     });
 
@@ -218,7 +219,7 @@ describe('Login Page', () => {
       // First submission fails
       mockSignInWithPassword.mockResolvedValueOnce({
         data: { user: null },
-        error: { message: 'Invalid credentials' }
+        error: { message: 'Some error' }
       });
 
       renderLogin();
@@ -228,7 +229,8 @@ describe('Login Page', () => {
       await user.click(screen.getByRole('button', { name: /login/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/Invalid credentials/i)).toBeInTheDocument();
+        // Login.tsx shows sanitized error
+        expect(screen.getByText(/Login failed/i)).toBeInTheDocument();
       });
 
       // Second submission succeeds

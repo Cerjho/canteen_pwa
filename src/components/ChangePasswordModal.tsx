@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Key, Eye, EyeOff, X, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
@@ -18,6 +18,30 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  
+  // Track timeout for cleanup
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isLoading) {
+        onClose();
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, isLoading, onClose]);
 
   const resetForm = () => {
     setCurrentPassword('');
@@ -31,6 +55,10 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
   };
 
   const handleClose = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     resetForm();
     onClose();
   };
@@ -104,8 +132,8 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
 
       setSuccess(true);
       
-      // Auto-close after success
-      setTimeout(() => {
+      // Auto-close after success (with cleanup on unmount)
+      timeoutRef.current = setTimeout(() => {
         handleClose();
         onSuccess?.();
       }, 2000);
@@ -124,10 +152,16 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
       <div 
         className="fixed inset-0 bg-black/50 z-50 transition-opacity"
         onClick={handleClose}
+        aria-hidden="true"
       />
       
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="change-password-title"
+      >
         <div 
           className="bg-white rounded-2xl shadow-xl max-w-md w-full"
           onClick={(e) => e.stopPropagation()}
@@ -138,11 +172,12 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
               <div className="p-2 bg-primary-100 rounded-lg">
                 <Key size={20} className="text-primary-600" />
               </div>
-              <h2 className="text-lg font-semibold">Change Password</h2>
+              <h2 id="change-password-title" className="text-lg font-semibold">Change Password</h2>
             </div>
             <button
               onClick={handleClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Close modal"
             >
               <X size={20} className="text-gray-500" />
             </button>

@@ -1,5 +1,5 @@
 // Visual Regression and Critical User Flow E2E Tests
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 // ============================================
 // Visual Regression Tests
@@ -406,7 +406,7 @@ test.describe('Toast Notifications', () => {
     await expect(page.getByText(/invalid|error|failed/i)).toBeVisible({ timeout: 15000 });
   });
 
-  test.skip('shows success toast on successful action', async ({ page }) => {
+  test.skip('shows success toast on successful action', async ({ page: _page }) => {
     // Login successfully
     // Add to cart
     // Should see success toast

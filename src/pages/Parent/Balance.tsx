@@ -24,15 +24,16 @@ export default function Balance() {
   const { data: walletData, isLoading: loadingParent, refetch } = useQuery({
     queryKey: ['parent-balance', user?.id],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('wallets')
         .select('user_id, balance')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .maybeSingle();
       
       if (error) throw error;
       // If no wallet exists, return default
-      return data || { user_id: user!.id, balance: 0 };
+      return data || { user_id: user.id, balance: 0 };
     },
     enabled: !!user
   });
@@ -40,10 +41,11 @@ export default function Balance() {
   const { data: transactions, isLoading: loadingTx } = useQuery<Transaction[]>({
     queryKey: ['transactions', user?.id],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
-        .eq('parent_id', user!.id)
+        .eq('parent_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
       

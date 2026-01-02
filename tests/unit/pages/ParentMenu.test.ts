@@ -70,7 +70,7 @@ describe('Parent Menu Page', () => {
       const selectedDate = '2026-01-05';
       
       // Verify the query uses scheduled_date
-      const query = mockSupabase.from('menu_schedules')
+      const _query = mockSupabase.from('menu_schedules')
         .select('*, products(*)')
         .eq('scheduled_date', selectedDate)
         .eq('available', true);
@@ -131,7 +131,8 @@ describe('Parent Menu Page', () => {
 
   describe('Add to Cart', () => {
     it('should add product to cart', () => {
-      const cart: any[] = [];
+      interface CartProduct { id: string; name: string; price: number; quantity: number; }
+      const cart: CartProduct[] = [];
       const product = {
         id: 'product-1',
         name: 'Burger',
@@ -210,7 +211,7 @@ describe('Parent Menu Page', () => {
 
   describe('Empty State', () => {
     it('should show empty state when no menu for date', () => {
-      const menuItems: any[] = [];
+      const menuItems: Array<{ id: string; product_id: string; available: boolean }> = [];
       const showEmptyState = menuItems.length === 0;
       expect(showEmptyState).toBe(true);
     });

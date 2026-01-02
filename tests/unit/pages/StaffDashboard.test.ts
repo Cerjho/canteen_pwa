@@ -265,7 +265,7 @@ describe('Staff Dashboard', () => {
 
   describe('Real-time Updates', () => {
     it('should subscribe to order changes', () => {
-      const mockSubscribe = vi.fn().mockReturnValue({
+      const _mockSubscribe = vi.fn().mockReturnValue({
         on: vi.fn().mockReturnThis(),
         subscribe: vi.fn()
       });

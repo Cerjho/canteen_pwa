@@ -3,15 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock supabase client
 const mockInvoke = vi.fn();
-const mockSelect = vi.fn();
+const _mockSelect = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     functions: {
-      invoke: (...args: any[]) => mockInvoke(...args)
+      invoke: (...args: unknown[]) => mockInvoke(...args)
     },
-    from: (...args: any[]) => mockFrom(...args)
+    from: (...args: unknown[]) => mockFrom(...args)
   }
 }));
 

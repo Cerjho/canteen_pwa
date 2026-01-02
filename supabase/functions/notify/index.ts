@@ -3,11 +3,11 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { handleCorsPrefllight, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Valid notification types
+const VALID_NOTIFICATION_TYPES = ['order_placed', 'order_preparing', 'order_ready', 'order_completed', 'order_cancelled', 'custom'] as const;
+type NotificationType = typeof VALID_NOTIFICATION_TYPES[number];
 
 interface NotifyRequest {
   parent_id: string;
@@ -46,18 +46,20 @@ const NOTIFICATION_TEMPLATES = {
 };
 
 serve(async (req) => {
+  const origin = req.headers.get('Origin');
+
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Get auth token from request
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'UNAUTHORIZED', message: 'Missing authorization header' },
+        401,
+        origin
       );
     }
 
@@ -74,18 +76,19 @@ serve(async (req) => {
     // Get user from token using admin client
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
-      console.log('Auth error:', authError?.message);
-      return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'UNAUTHORIZED', message: 'Invalid token' },
+        401,
+        origin
       );
     }
 
     const userRole = user.user_metadata?.role;
     if (!['staff', 'admin'].includes(userRole)) {
-      return new Response(
-        JSON.stringify({ error: 'FORBIDDEN', message: 'Staff or admin access required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'FORBIDDEN', message: 'Staff or admin access required' },
+        403,
+        origin
       );
     }
 
@@ -94,9 +97,22 @@ serve(async (req) => {
     const { parent_id, type, order_id, message, title } = body;
 
     if (!parent_id || !type) {
-      return new Response(
-        JSON.stringify({ error: 'VALIDATION_ERROR', message: 'parent_id and type are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'VALIDATION_ERROR', message: 'parent_id and type are required' },
+        400,
+        origin
+      );
+    }
+
+    // Validate notification type
+    if (!VALID_NOTIFICATION_TYPES.includes(type as NotificationType)) {
+      return jsonResponse(
+        { 
+          error: 'VALIDATION_ERROR', 
+          message: `Invalid notification type. Must be one of: ${VALID_NOTIFICATION_TYPES.join(', ')}` 
+        },
+        400,
+        origin
       );
     }
 
@@ -108,9 +124,10 @@ serve(async (req) => {
       .single();
 
     if (parentError || !parent) {
-      return new Response(
-        JSON.stringify({ error: 'NOT_FOUND', message: 'User not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { error: 'NOT_FOUND', message: 'User not found' },
+        404,
+        origin
       );
     }
 
@@ -202,8 +219,8 @@ serve(async (req) => {
       console.log(`[Notify] Failed: ${errors.join(', ')}`);
     }
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         channels,
         message_id: crypto.randomUUID(),
@@ -213,15 +230,17 @@ serve(async (req) => {
           order_id
         },
         errors: errors.length > 0 ? errors : undefined
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      },
+      200,
+      origin
     );
 
   } catch (error) {
     console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'SERVER_ERROR', message: 'An unexpected error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return jsonResponse(
+      { error: 'SERVER_ERROR', message: 'An unexpected error occurred' },
+      500,
+      origin
     );
   }
 });

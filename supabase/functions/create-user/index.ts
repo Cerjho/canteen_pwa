@@ -142,12 +142,14 @@ serve(async (req) => {
       const successCount = results.filter(r => r.success).length;
       const failCount = results.filter(r => !r.success).length;
 
+      // Security: Don't expose the default password in response
+      // Admin should communicate the password through secure channels
       return new Response(
         JSON.stringify({ 
           success: successCount > 0,
           mode: 'invite',
-          defaultPassword, // Return so admin can share it
-          message: `${successCount} user(s) created${failCount > 0 ? `, ${failCount} failed` : ''}`,
+          message: `${successCount} user(s) created${failCount > 0 ? `, ${failCount} failed` : ''}. Users must change their password on first login.`,
+          passwordResetRequired: true, // Flag indicating users need password setup
           results,
           summary: { total: emailList.length, success: successCount, failed: failCount }
         }),

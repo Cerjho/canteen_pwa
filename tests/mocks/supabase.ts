@@ -115,8 +115,40 @@ export function createMockSupabase(options: {
 }
 
 // Create mock query builder
-function createMockQueryBuilder(table: string) {
-  const builder: any = {
+interface MockQueryBuilder {
+  _table: string;
+  _data: unknown;
+  _error: unknown;
+  select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  gt: ReturnType<typeof vi.fn>;
+  gte: ReturnType<typeof vi.fn>;
+  lt: ReturnType<typeof vi.fn>;
+  lte: ReturnType<typeof vi.fn>;
+  like: ReturnType<typeof vi.fn>;
+  ilike: ReturnType<typeof vi.fn>;
+  is: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  contains: ReturnType<typeof vi.fn>;
+  containedBy: ReturnType<typeof vi.fn>;
+  range: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  limit: ReturnType<typeof vi.fn>;
+  offset: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+  maybeSingle: ReturnType<typeof vi.fn>;
+  then: (resolve: (value: { data: unknown; error: unknown }) => void) => void;
+  _setMockData: (data: unknown) => MockQueryBuilder;
+  _setMockError: (error: unknown) => MockQueryBuilder;
+}
+
+function createMockQueryBuilder(table: string): MockQueryBuilder {
+  const builder: MockQueryBuilder = {
     _table: table,
     _data: null,
     _error: null,
@@ -146,16 +178,16 @@ function createMockQueryBuilder(table: string) {
     maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     
     // Make the builder awaitable
-    then: (resolve: (value: any) => void) => {
+    then: (resolve: (value: { data: unknown; error: unknown }) => void) => {
       resolve({ data: builder._data, error: builder._error });
     },
     
     // Set mock data
-    _setMockData: (data: any) => {
+    _setMockData: (data: unknown) => {
       builder._data = data;
       return builder;
     },
-    _setMockError: (error: any) => {
+    _setMockError: (error: unknown) => {
       builder._error = error;
       return builder;
     }

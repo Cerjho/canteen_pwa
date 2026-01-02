@@ -68,7 +68,7 @@ export default function AdminAuditLogs() {
       
       if (error) {
         // Table might not exist yet
-        console.log('Audit logs table not found');
+        // Audit logs table might not exist yet - silently handle
         return [];
       }
       return data || [];
@@ -90,20 +90,29 @@ export default function AdminAuditLogs() {
   const entityTypes = [...new Set(logs?.map(l => l.entity_type) || [])];
 
   const formatChangeDescription = (log: AuditLog): string => {
+    interface AuditData {
+      name?: string;
+      first_name?: string;
+      [key: string]: unknown;
+    }
     if (log.action === 'CREATE') {
-      const name = (log.new_data as any)?.name || (log.new_data as any)?.first_name || log.entity_id?.slice(0, 8);
+      const newData = log.new_data as AuditData | null;
+      const name = newData?.name || newData?.first_name || log.entity_id?.slice(0, 8);
       return `Created ${log.entity_type.slice(0, -1)} "${name}"`;
     }
     if (log.action === 'DELETE') {
-      const name = (log.old_data as any)?.name || (log.old_data as any)?.first_name || log.entity_id?.slice(0, 8);
+      const oldData = log.old_data as AuditData | null;
+      const name = oldData?.name || oldData?.first_name || log.entity_id?.slice(0, 8);
       return `Deleted ${log.entity_type.slice(0, -1)} "${name}"`;
     }
     if (log.action === 'UPDATE') {
       // Find what changed
       const changes: string[] = [];
-      if (log.old_data && log.new_data) {
-        Object.keys(log.new_data).forEach(key => {
-          if (JSON.stringify(log.old_data![key]) !== JSON.stringify(log.new_data![key])) {
+      const oldData = log.old_data as AuditData | null;
+      const newData = log.new_data as AuditData | null;
+      if (oldData && newData) {
+        Object.keys(newData).forEach(key => {
+          if (JSON.stringify(oldData[key]) !== JSON.stringify(newData[key])) {
             if (key !== 'updated_at') {
               changes.push(key);
             }

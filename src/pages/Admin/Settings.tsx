@@ -63,7 +63,7 @@ export default function AdminSettings() {
       
       if (error) {
         // Table might not exist yet
-        console.log('Settings table not found, using defaults');
+        // Settings table not found, using defaults silently
         return [];
       }
       return data || [];

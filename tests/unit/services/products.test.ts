@@ -6,7 +6,7 @@ const mockFrom = vi.fn();
 
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
-    from: (...args: any[]) => mockFrom(...args)
+    from: (...args: unknown[]) => mockFrom(...args)
   }
 }));
 
@@ -19,6 +19,9 @@ import {
   getAvailableOrderDates,
   getMenuSchedules
 } from '../../../src/services/products';
+
+// Note: getProducts() takes no arguments (uses current date)
+// Use getProductsForDate(date) to test with specific dates
 
 describe('Products Service', () => {
   beforeEach(() => {
@@ -59,7 +62,7 @@ describe('Products Service', () => {
       const saturday = new Date('2024-01-06');
       mockQueryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null }); // no makeup day
       
-      const result = await getProducts(saturday);
+      const result = await getProductsForDate(saturday);
       
       expect(result).toEqual([]);
     });
@@ -68,9 +71,9 @@ describe('Products Service', () => {
       const monday = new Date('2024-01-08');
       mockQueryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null }); // no holiday
       
-      await getProducts(monday);
+      await getProductsForDate(monday);
       
-      // getProducts calls holidays, then menu_schedules
+      // getProductsForDate calls holidays, then menu_schedules
       expect(mockFrom).toHaveBeenCalledWith('menu_schedules');
     });
   });

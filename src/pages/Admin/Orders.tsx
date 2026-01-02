@@ -190,7 +190,8 @@ export default function AdminOrders() {
       preparing: 'bg-yellow-100 text-yellow-700',
       ready: 'bg-green-100 text-green-700',
       completed: 'bg-blue-100 text-blue-700',
-      cancelled: 'bg-red-100 text-red-700'
+      cancelled: 'bg-red-100 text-red-700',
+      awaiting_payment: 'bg-purple-100 text-purple-700'
     };
     return colors[status];
   };

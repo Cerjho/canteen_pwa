@@ -70,16 +70,26 @@ export async function findStudentById(studentId: string): Promise<Student | null
 
 // Link a student to parent account (via Edge Function for security)
 export async function linkStudent(studentId: string): Promise<Student> {
+  if (!studentId || typeof studentId !== 'string') {
+    throw new Error('Valid student ID is required');
+  }
+
   const { data, error } = await supabase.functions.invoke('link-student', {
-    body: { action: 'link', student_id: studentId }
+    body: { action: 'link', student_id: studentId.trim() }
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to link student');
+    // Handle network/infrastructure errors
+    throw new Error(error.message || 'Network error while linking student');
   }
   
   if (data?.error) {
-    throw new Error(data.message || 'Failed to link student');
+    // Handle application-level errors
+    throw new Error(data.message || data.error || 'Failed to link student');
+  }
+
+  if (!data?.student) {
+    throw new Error('Invalid response: student data missing');
   }
   
   return data.student;
@@ -87,16 +97,22 @@ export async function linkStudent(studentId: string): Promise<Student> {
 
 // Unlink a student from parent (via Edge Function for security)
 export async function unlinkStudent(studentId: string): Promise<void> {
+  if (!studentId || typeof studentId !== 'string') {
+    throw new Error('Valid student ID is required');
+  }
+
   const { data, error } = await supabase.functions.invoke('link-student', {
-    body: { action: 'unlink', student_id: studentId }
+    body: { action: 'unlink', student_id: studentId.trim() }
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to unlink student');
+    // Handle network/infrastructure errors
+    throw new Error(error.message || 'Network error while unlinking student');
   }
   
   if (data?.error) {
-    throw new Error(data.message || 'Failed to unlink student');
+    // Handle application-level errors
+    throw new Error(data.message || data.error || 'Failed to unlink student');
   }
 }
 

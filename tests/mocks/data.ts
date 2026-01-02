@@ -3,7 +3,6 @@ import type {
   Product, 
   Child, 
   Student,
-  Order, 
   OrderWithDetails, 
   CartItem,
   Parent,

@@ -128,7 +128,7 @@ test.describe('PWA Features', () => {
     await page.goto('/');
     
     // Wait for service worker registration
-    const swRegistered = await page.evaluate(async () => {
+    const _swRegistered = await page.evaluate(async () => {
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.getRegistration();
         return !!registration;

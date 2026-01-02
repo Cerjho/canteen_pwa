@@ -11,7 +11,7 @@ async function waitForPageLoad(page: Page) {
 }
 
 // Helper to login
-async function login(page: Page, email: string, password: string) {
+async function _login(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);
@@ -246,7 +246,7 @@ test.describe('Order History', () => {
     await page.goto('/orders');
     
     // Different status badges
-    const statusBadges = ['pending', 'preparing', 'ready', 'completed'];
+    const _statusBadges = ['pending', 'preparing', 'ready', 'completed'];
     // Check for any of these
   });
 
@@ -254,7 +254,7 @@ test.describe('Order History', () => {
     await page.goto('/orders');
     
     // If no orders, show empty state
-    const emptyState = page.getByText(/no.*orders|empty/i);
+    const _emptyState = page.getByText(/no.*orders|empty/i);
     // This depends on whether user has orders
   });
 });
@@ -332,7 +332,7 @@ test.describe('PWA Features', () => {
   test('should have Apple mobile web app meta tags', async ({ page }) => {
     await page.goto('/');
     
-    const appleMobileWebAppCapable = await page.$('meta[name="apple-mobile-web-app-capable"]');
+    const _appleMobileWebAppCapable = await page.$('meta[name="apple-mobile-web-app-capable"]');
     // May or may not be present
   });
 });
@@ -557,7 +557,7 @@ test.describe('Error Handling', () => {
     await page.goto('/nonexistent-route-12345');
     
     // Should either redirect to login or show a proper error page
-    const url = page.url();
+    const _url = page.url();
     
     // Should not show raw error
     const hasError = await page.getByText(/stack trace|undefined|null/i).isVisible().catch(() => false);

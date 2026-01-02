@@ -292,15 +292,13 @@ export default function AdminUsers() {
         const { success, failed } = result.summary;
         
         if (success > 0) {
-          // Show invite codes in console for admin to share
-          console.log('Invitation codes:', result.results);
           showToast(
             `${success} invitation(s) created! Check the Invitations tab for codes.`, 
             'success'
           );
         }
         if (failed > 0) {
-          const firstError = result.results?.find((r: any) => !r.success);
+          const firstError = result.results?.find((r: { success: boolean; error?: string }) => !r.success);
           showToast(`${failed} failed: ${firstError?.error || 'Unknown error'}`, 'error');
         }
       } else {

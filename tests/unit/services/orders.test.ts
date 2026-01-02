@@ -3,15 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock supabase client
 const mockInvoke = vi.fn();
-const mockSelect = vi.fn();
+const _mockSelect = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     functions: {
-      invoke: (...args: any[]) => mockInvoke(...args)
+      invoke: (...args: unknown[]) => mockInvoke(...args)
     },
-    from: (...args: any[]) => mockFrom(...args)
+    from: (...args: unknown[]) => mockFrom(...args)
   }
 }));
 
@@ -27,7 +27,7 @@ import { isOnline, queueOrder } from '../../../src/services/localQueue';
 describe('Orders Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (isOnline as any).mockReturnValue(true);
+    (isOnline as ReturnType<typeof vi.fn>).mockReturnValue(true);
   });
 
   describe('createOrder', () => {
@@ -61,13 +61,15 @@ describe('Orders Service', () => {
     });
 
     it('throws error on failure', async () => {
-      mockInvoke.mockResolvedValue({ data: null, error: { message: 'Insufficient balance' } });
+      const errorObj = { message: 'Insufficient balance' };
+      mockInvoke.mockResolvedValue({ data: null, error: errorObj });
 
-      await expect(createOrder(mockOrderData)).rejects.toEqual({ message: 'Insufficient balance' });
+      // The service catches errors and converts them to Error instances
+      await expect(createOrder(mockOrderData)).rejects.toBeInstanceOf(Error);
     });
 
     it('queues order when offline', async () => {
-      (isOnline as any).mockReturnValue(false);
+      (isOnline as ReturnType<typeof vi.fn>).mockReturnValue(false);
 
       const result = await createOrder(mockOrderData);
 

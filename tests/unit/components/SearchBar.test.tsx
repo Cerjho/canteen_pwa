@@ -15,7 +15,8 @@ describe('SearchBar Component', () => {
     it('renders input field', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      expect(screen.getByRole('textbox')).toBeInTheDocument();
+      // type="search" input, query by placeholder
+      expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
     });
 
     it('renders with default placeholder', () => {
@@ -43,16 +44,16 @@ describe('SearchBar Component', () => {
 
   describe('Value', () => {
     it('displays current value', () => {
-      render(<SearchBar value="chicken" onChange={mockOnChange} />);
+      render(<SearchBar value="chicken" onChange={mockOnChange} placeholder="Search..." />);
 
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByPlaceholderText('Search...') as HTMLInputElement;
       expect(input.value).toBe('chicken');
     });
 
     it('calls onChange when typing', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox');
+      const input = screen.getByPlaceholderText('Search...');
       fireEvent.change(input, { target: { value: 'adobo' } });
 
       expect(mockOnChange).toHaveBeenCalledWith('adobo');
@@ -61,7 +62,7 @@ describe('SearchBar Component', () => {
     it('handles empty value', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByPlaceholderText('Search...') as HTMLInputElement;
       expect(input.value).toBe('');
     });
   });
@@ -96,7 +97,7 @@ describe('SearchBar Component', () => {
     it('can focus input', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('searchbox');
       input.focus();
 
       expect(document.activeElement).toBe(input);
@@ -105,7 +106,7 @@ describe('SearchBar Component', () => {
     it('handles rapid typing', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('searchbox');
       
       fireEvent.change(input, { target: { value: 'a' } });
       fireEvent.change(input, { target: { value: 'ad' } });
@@ -122,14 +123,14 @@ describe('SearchBar Component', () => {
     it('applies appropriate classes for padding', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('searchbox');
       expect(input).toHaveClass('pl-10'); // Left padding for search icon
     });
 
     it('applies focus styles', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('searchbox');
       expect(input).toHaveClass('focus:ring-2');
     });
   });
@@ -138,13 +139,13 @@ describe('SearchBar Component', () => {
     it('input is accessible by role', () => {
       render(<SearchBar value="" onChange={mockOnChange} />);
 
-      expect(screen.getByRole('textbox')).toBeInTheDocument();
+      expect(screen.getByRole('searchbox')).toBeInTheDocument();
     });
 
     it('is keyboard navigable', () => {
       render(<SearchBar value="test" onChange={mockOnChange} />);
 
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('searchbox');
       input.focus();
       
       // Tab to clear button

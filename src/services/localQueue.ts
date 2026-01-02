@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { supabase } from './supabaseClient';
 
 interface QueuedOrder {
   id: string;
@@ -26,26 +27,29 @@ interface CanteenDB extends DBSchema {
   };
 }
 
-let db: IDBPDatabase<CanteenDB> | null = null;
+// Use promise-based singleton to prevent race conditions
+let dbPromise: Promise<IDBPDatabase<CanteenDB>> | null = null;
 
-async function getDB() {
-  if (db) return db;
-
-  db = await openDB<CanteenDB>('canteen-offline', 2, {
-    upgrade(database, oldVersion) {
-      // Delete old store if upgrading from v1
-      if (oldVersion < 2 && database.objectStoreNames.contains('order-queue')) {
-        database.deleteObjectStore('order-queue');
+async function getDB(): Promise<IDBPDatabase<CanteenDB>> {
+  if (!dbPromise) {
+    dbPromise = openDB<CanteenDB>('canteen-offline', 2, {
+      upgrade(database, oldVersion) {
+        // Delete old store if upgrading from v1
+        if (oldVersion < 2 && database.objectStoreNames.contains('order-queue')) {
+          database.deleteObjectStore('order-queue');
+        }
+        if (!database.objectStoreNames.contains('order-queue')) {
+          const store = database.createObjectStore('order-queue', {
+            keyPath: 'id'
+          });
+          store.createIndex('by-student', 'student_id');
+          store.createIndex('by-queued', 'queued_at');
+        }
       }
-      const store = database.createObjectStore('order-queue', {
-        keyPath: 'id'
-      });
-      store.createIndex('by-student', 'student_id');
-      store.createIndex('by-queued', 'queued_at');
-    }
-  });
+    });
+  }
 
-  return db;
+  return dbPromise;
 }
 
 export function isOnline(): boolean {
@@ -53,6 +57,15 @@ export function isOnline(): boolean {
 }
 
 export async function queueOrder(orderData: Omit<QueuedOrder, 'id' | 'queued_at' | 'retry_count'>) {
+  // Validate required fields
+  if (!orderData.parent_id || !orderData.student_id || !orderData.items?.length) {
+    throw new Error('Invalid order data: missing required fields (parent_id, student_id, or items)');
+  }
+  
+  if (orderData.items.some(item => !item.product_id || item.quantity <= 0)) {
+    throw new Error('Invalid order item: product_id required and quantity must be positive');
+  }
+
   const database = await getDB();
   
   const queuedOrder: QueuedOrder = {
@@ -68,9 +81,16 @@ export async function queueOrder(orderData: Omit<QueuedOrder, 'id' | 'queued_at'
   if ('serviceWorker' in navigator && 'SyncManager' in window) {
     try {
       const registration = await navigator.serviceWorker.ready;
-      // Use type assertion for Background Sync API
-      await (registration as any).sync.register('sync-orders');
+      // Use type assertion for Background Sync API (not yet in TypeScript lib)
+      interface SyncManager {
+        register(tag: string): Promise<void>;
+      }
+      interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
+        sync: SyncManager;
+      }
+      await (registration as ServiceWorkerRegistrationWithSync).sync.register('sync-orders');
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Background sync registration failed:', error);
     }
   }
@@ -126,7 +146,6 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
   let failed = 0;
   
   // Get auth token from Supabase session
-  const { supabase } = await import('./supabaseClient');
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session) {
@@ -163,7 +182,11 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
       if (data?.error) {
         if (data.error === 'DUPLICATE_ORDER') {
           // Order already exists - this is fine, remove from queue
+        // Order already processed (dedupe check)
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
           console.log('Order already processed (duplicate):', order.client_order_id);
+        }
           await removeQueuedOrder(order.id);
           processed++;
           continue;
@@ -185,7 +208,10 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
       }
 
       // Success - remove from queue
-      console.log('Order processed successfully:', data.order_id);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('Order processed successfully:', data.order_id);
+      }
       await removeQueuedOrder(order.id);
       processed++;
 
@@ -271,9 +297,19 @@ export async function retryFailedOrder(clientOrderId: string): Promise<void> {
 // Listen for online event
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    console.log('Back online, processing queue...');
-    processQueue().then(({ processed, failed }) => {
-      console.log(`Queue processed: ${processed} successful, ${failed} failed`);
-    });
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('Back online, processing queue...');
+    }
+    processQueue()
+      .then(({ processed, failed }) => {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.log(`Queue processed: ${processed} successful, ${failed} failed`);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to process queue on reconnect:', error);
+      });
   });
 }

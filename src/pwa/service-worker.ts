@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+/* eslint-disable no-console */
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -6,7 +7,7 @@ declare const self: ServiceWorkerGlobalScope;
 interface SyncEvent extends Event {
   tag: string;
   lastChance: boolean;
-  waitUntil(promise: Promise<any>): void;
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 import { precacheAndRoute } from 'workbox-precaching';
@@ -187,7 +188,23 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-function getAllQueuedOrders(db: IDBDatabase): Promise<any[]> {
+interface QueuedOrderData {
+  id: string;
+  parent_id: string;
+  student_id: string;
+  client_order_id: string;
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    price_at_order: number;
+  }>;
+  payment_method: string;
+  notes?: string;
+  scheduled_for?: string;
+  retry_count: number;
+}
+
+function getAllQueuedOrders(db: IDBDatabase): Promise<QueuedOrderData[]> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('order-queue', 'readonly');
     const store = transaction.objectStore('order-queue');
@@ -244,21 +261,36 @@ async function getStoredAuthToken(): Promise<string | null> {
 }
 
 async function getSupabaseUrl(): Promise<string> {
-  // Get Supabase URL from cached config or environment
+  // Get Supabase URL from cached config (stored by main app during initialization)
   try {
     const cache = await caches.open('config-cache');
     const response = await cache.match('supabase-url');
     if (response) {
-      return await response.text();
+      const url = await response.text();
+      if (url && url.trim()) {
+        return url.trim();
+      }
     }
   } catch (error) {
-    console.warn('[SW] Failed to get Supabase URL:', error);
+    console.warn('[SW] Failed to get Supabase URL from cache:', error);
   }
-  // Fallback - this should be set during build
-  return 'https://your-project.supabase.co';
+  
+  // Fallback: try to extract from origin for Supabase-hosted projects
+  // (Supabase uses format: https://<project-ref>.supabase.co)
+  const clientUrls = await self.clients.matchAll({ type: 'window' });
+  for (const client of clientUrls) {
+    if (client.url.includes('supabase.co')) {
+      const url = new URL(client.url);
+      return url.origin;
+    }
+  }
+  
+  // Final fallback - no URL available
+  console.error('[SW] No Supabase URL configured. App must cache the URL on init.');
+  return '';
 }
 
-async function notifyClients(type: string, data: any): Promise<void> {
+async function notifyClients(type: string, data: Record<string, unknown>): Promise<void> {
   const clients = await self.clients.matchAll({ type: 'window' });
   for (const client of clients) {
     client.postMessage({ type, data });

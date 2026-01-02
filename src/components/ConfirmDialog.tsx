@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
 import { ReactNode } from 'react';
 
@@ -83,7 +84,7 @@ export function ConfirmDialog({
 }
 
 // Hook for easier usage
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 
 interface UseConfirmOptions {
   title: string;
@@ -99,28 +100,48 @@ export function useConfirm() {
     title: '',
     message: ''
   });
-  const [resolveCallback, setResolveCallback] = useState<((value: boolean) => void) | null>(null);
+  // Use ref to store resolve callback to avoid stale closure
+  const resolveRef = useRef<((value: boolean) => void) | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Resolve with false if unmounting while open
+      if (resolveRef.current) {
+        resolveRef.current(false);
+        resolveRef.current = null;
+      }
+    };
+  }, []);
 
   const confirm = useCallback((opts: UseConfirmOptions): Promise<boolean> => {
     setOptions(opts);
     setIsOpen(true);
     
     return new Promise((resolve) => {
-      setResolveCallback(() => resolve);
+      resolveRef.current = resolve;
     });
   }, []);
 
   const handleConfirm = useCallback(() => {
     setIsOpen(false);
-    resolveCallback?.(true);
-  }, [resolveCallback]);
+    if (resolveRef.current) {
+      resolveRef.current(true);
+      resolveRef.current = null;
+    }
+  }, []);
 
   const handleCancel = useCallback(() => {
     setIsOpen(false);
-    resolveCallback?.(false);
-  }, [resolveCallback]);
+    if (resolveRef.current) {
+      resolveRef.current(false);
+      resolveRef.current = null;
+    }
+  }, []);
 
-  const ConfirmDialogComponent = useCallback(() => (
+  // Memoize the dialog element to prevent unnecessary re-renders
+  // This is an element, not a component - render it directly in JSX
+  const ConfirmDialogElement = useMemo(() => (
     <ConfirmDialog
       isOpen={isOpen}
       title={options.title}
@@ -133,5 +154,5 @@ export function useConfirm() {
     />
   ), [isOpen, options, handleConfirm, handleCancel]);
 
-  return { confirm, ConfirmDialog: ConfirmDialogComponent };
+  return { confirm, ConfirmDialogElement };
 }

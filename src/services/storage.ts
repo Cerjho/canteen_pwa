@@ -68,6 +68,13 @@ export async function deleteProductImage(imageUrl: string): Promise<boolean> {
     
     const filePath = urlParts[1];
     
+    // Security: Validate the file path to prevent path traversal attacks
+    // Only allow files within the 'products/' directory
+    if (!filePath.startsWith('products/') || filePath.includes('..')) {
+      console.error('Invalid file path - potential path traversal attempt:', filePath);
+      return false;
+    }
+    
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .remove([filePath]);
@@ -90,44 +97,69 @@ export async function deleteProductImage(imageUrl: string): Promise<boolean> {
 export async function compressImage(file: File, maxWidth: number = 800, quality: number = 0.8): Promise<File> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
     const img = new Image();
+    let objectUrl: string | null = null;
     
-    img.onload = () => {
-      // Calculate new dimensions
-      let width = img.width;
-      let height = img.height;
-      
-      if (width > maxWidth) {
-        height = (height * maxWidth) / width;
-        width = maxWidth;
+    const cleanup = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
       }
-      
-      canvas.width = width;
-      canvas.height = height;
-      
-      // Draw and compress
-      ctx?.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now()
-            });
-            resolve(compressedFile);
-          } else {
-            reject(new Error('Failed to compress image'));
-          }
-        },
-        'image/jpeg',
-        quality
-      );
     };
     
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      try {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          cleanup();
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        
+        // Calculate new dimensions
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => {
+            cleanup();
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            } else {
+              reject(new Error('Failed to compress image'));
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    };
+    
+    img.onerror = () => {
+      cleanup();
+      reject(new Error('Failed to load image'));
+    };
+    
+    objectUrl = URL.createObjectURL(file);
+    img.src = objectUrl;
   });
 }
 

@@ -66,7 +66,7 @@ export interface Product {
 
 export type ProductCategory = 'mains' | 'snacks' | 'drinks';
 
-export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment';
 
 export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymongo';
 
@@ -100,8 +100,8 @@ export interface Transaction {
   order_id?: string;
   type: 'payment' | 'refund' | 'topup';
   amount: number;
-  method: PaymentMethod | 'cash';
-  status: 'pending' | 'completed' | 'failed';
+  method: PaymentMethod;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
   reference_id?: string;
   created_at: string;
 }

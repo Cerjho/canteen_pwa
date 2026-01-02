@@ -37,37 +37,52 @@ function formatDateLocal(date: Date): string {
 
 // Check if a date matches a holiday (including recurring holidays)
 async function checkHoliday(targetDate: Date): Promise<{ name: string } | null> {
-  const dateStr = formatDateLocal(targetDate);
-  const monthDay = dateStr.slice(5); // Extract MM-DD (e.g., "12-25" for Christmas)
-  
-  // Check for exact date match (non-recurring holidays)
-  const { data: exactHoliday } = await supabase
-    .from('holidays')
-    .select('name, is_recurring')
-    .eq('date', dateStr)
-    .maybeSingle();
-  
-  if (exactHoliday) {
-    return { name: exactHoliday.name };
-  }
-  
-  // Check for recurring holidays (match month-day pattern)
-  // Get all recurring holidays and check if any match the month-day
-  const { data: recurringHolidays } = await supabase
-    .from('holidays')
-    .select('name, date')
-    .eq('is_recurring', true);
-  
-  if (recurringHolidays) {
-    for (const holiday of recurringHolidays) {
-      const holidayMonthDay = holiday.date.slice(5); // Extract MM-DD from stored date
-      if (holidayMonthDay === monthDay) {
-        return { name: holiday.name };
+  try {
+    const dateStr = formatDateLocal(targetDate);
+    const monthDay = dateStr.slice(5); // Extract MM-DD (e.g., "12-25" for Christmas)
+    
+    // Check for exact date match (non-recurring holidays)
+    const { data: exactHoliday, error: exactError } = await supabase
+      .from('holidays')
+      .select('name, is_recurring')
+      .eq('date', dateStr)
+      .maybeSingle();
+    
+    if (exactError) {
+      console.warn('Error checking exact holiday:', exactError.message);
+      // Continue to check recurring holidays instead of failing
+    }
+    
+    if (exactHoliday) {
+      return { name: exactHoliday.name };
+    }
+    
+    // Check for recurring holidays (match month-day pattern)
+    // Get all recurring holidays and check if any match the month-day
+    const { data: recurringHolidays, error: recurringError } = await supabase
+      .from('holidays')
+      .select('name, date')
+      .eq('is_recurring', true);
+    
+    if (recurringError) {
+      console.warn('Error checking recurring holidays:', recurringError.message);
+      return null;
+    }
+    
+    if (recurringHolidays) {
+      for (const holiday of recurringHolidays) {
+        const holidayMonthDay = holiday.date.slice(5); // Extract MM-DD from stored date
+        if (holidayMonthDay === monthDay) {
+          return { name: holiday.name };
+        }
       }
     }
+    
+    return null;
+  } catch (error) {
+    console.warn('Unexpected error checking holiday:', error);
+    return null;
   }
-  
-  return null;
 }
 
 // Check if a Saturday is a make-up day
@@ -169,7 +184,7 @@ export async function getWeekdaysWithStatus(daysAhead: number = 5): Promise<Week
     makeupDayDates.set(makeupDateStr, m.name);
   });
   
-  let checkDate = new Date(today);
+  const checkDate = new Date(today);
   // Continue until we have enough days (need to check more days to find make-up Saturdays)
   const maxDaysToCheck = daysAhead * 3; // Check up to 3 weeks ahead
   let daysChecked = 0;
@@ -233,7 +248,7 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
     }
   });
   
-  let checkDate = new Date(today);
+  const checkDate = new Date(today);
   while (dates.length < daysAhead) {
     const dayOfWeek = checkDate.getDay();
     const dateStr = formatDateLocal(checkDate);

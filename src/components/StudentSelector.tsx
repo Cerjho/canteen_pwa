@@ -17,6 +17,7 @@ interface ChildSelectorProps {
   // Legacy prop name - for backward compatibility  
   selectedChildId?: string | null;
   onSelect: (id: string) => void;
+  required?: boolean;
 }
 
 export function ChildSelector({
@@ -24,21 +25,33 @@ export function ChildSelector({
   children,
   selectedStudentId,
   selectedChildId,
-  onSelect
+  onSelect,
+  required = false
 }: ChildSelectorProps) {
   // Support both 'students' and 'children' prop for backward compatibility
   const studentList = students || children || [];
   const selectedId = selectedStudentId ?? selectedChildId ?? null;
   
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    // Only call onSelect with valid non-empty values
+    if (value && value.trim() !== '') {
+      onSelect(value);
+    }
+  };
+  
   return (
     <div className="mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Order for:
+      <label htmlFor="student-selector" className="block text-sm font-medium text-gray-700 mb-2">
+        Order for:{required && <span className="text-red-500 ml-1">*</span>}
       </label>
       <select
+        id="student-selector"
         value={selectedId || ''}
-        onChange={(e) => onSelect(e.target.value)}
+        onChange={handleChange}
         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+        required={required}
+        aria-required={required}
       >
         <option value="">Select a student</option>
         {studentList.map((student) => (
@@ -49,7 +62,7 @@ export function ChildSelector({
         ))}
       </select>
       {studentList.length === 0 && (
-        <p className="text-sm text-amber-600 mt-2">
+        <p className="text-sm text-amber-600 mt-2" role="alert">
           You haven't linked any students yet. Please link a student profile first.
         </p>
       )}

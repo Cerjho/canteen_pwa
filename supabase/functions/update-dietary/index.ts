@@ -75,17 +75,15 @@ serve(async (req) => {
       );
     }
 
-    // Verify the child belongs to this parent
-    const { data: child, error: findError } = await supabaseAdmin
     // Verify parent has link to this student
-    const { data: link, error: findError } = await supabaseAdmin
+    const { data: link, error: linkError } = await supabaseAdmin
       .from('parent_students')
       .select('id, student_id')
       .eq('student_id', child_id)
       .eq('parent_id', user.id)
       .single();
 
-    if (findError || !link) {
+    if (linkError || !link) {
       return new Response(
         JSON.stringify({ error: 'NOT_FOUND', message: 'Student not linked to your account' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

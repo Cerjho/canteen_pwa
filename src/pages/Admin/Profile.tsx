@@ -99,31 +99,33 @@ export default function AdminProfile() {
     if (darkMode) {
       document.documentElement.classList.add('dark');
     }
-  }, []);
+  }, [darkMode]);
 
   // Fetch admin profile
   const { data: profile } = useQuery({
     queryKey: ['admin-profile', user?.id],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('id', user!.id)
+        .eq('id', user.id)
         .maybeSingle();
       
       if (error) {
+        // eslint-disable-next-line no-console
         console.error('Error fetching admin profile:', error);
       }
       
       if (!data) {
         // Return basic info from auth user
         return {
-          id: user!.id,
-          email: user!.email || '',
-          first_name: user!.user_metadata?.first_name || '',
-          last_name: user!.user_metadata?.last_name || '',
-          phone_number: user!.user_metadata?.phone_number || '',
-          created_at: user!.created_at
+          id: user.id,
+          email: user.email || '',
+          first_name: user.user_metadata?.first_name || '',
+          last_name: user.user_metadata?.last_name || '',
+          phone_number: user.user_metadata?.phone_number || '',
+          created_at: user.created_at
         } as AdminProfileData;
       }
       return data as AdminProfileData;
@@ -134,12 +136,13 @@ export default function AdminProfile() {
   // Update profile mutation
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<AdminProfileData>) => {
+      if (!user) throw new Error('User not authenticated');
       // Update in user_profiles table
       const { error: dbError } = await supabase
         .from('user_profiles')
         .upsert({
-          id: user!.id,
-          email: user!.email,
+          id: user.id,
+          email: user.email,
           ...data,
           updated_at: new Date().toISOString()
         });

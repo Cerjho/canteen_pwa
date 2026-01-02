@@ -1,5 +1,5 @@
 // CartDrawer Component Tests
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 describe('CartDrawer Component', () => {
   describe('Cart Display', () => {
@@ -29,7 +29,7 @@ describe('CartDrawer Component', () => {
     });
 
     it('should show empty cart message', () => {
-      const items: any[] = [];
+      const items: Array<{ product_id: string; name: string; price: number; quantity: number }> = [];
       const showEmptyMessage = items.length === 0;
       expect(showEmptyMessage).toBe(true);
     });
@@ -109,7 +109,7 @@ describe('CartDrawer Component', () => {
 
     it('should show balance amount for balance payment', () => {
       const paymentMethod = 'balance';
-      const balance = 500.00;
+      const _balance = 500.00;
       const showBalance = paymentMethod === 'balance';
       expect(showBalance).toBe(true);
     });
@@ -230,8 +230,8 @@ describe('CartDrawer Component', () => {
 
   describe('Success State', () => {
     it('should clear cart after successful order', () => {
-      const items = [{ product_id: 'p1' }];
-      const clearedCart: any[] = [];
+      const _items = [{ product_id: 'p1' }];
+      const clearedCart: unknown[] = [];
       expect(clearedCart).toHaveLength(0);
     });
 

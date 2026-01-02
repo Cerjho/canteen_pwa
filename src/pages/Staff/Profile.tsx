@@ -41,25 +41,27 @@ export default function StaffProfilePage() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['staff-profile', user?.id],
     queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('id', user!.id)
+        .eq('id', user.id)
         .maybeSingle();
       
       if (error) {
+        // eslint-disable-next-line no-console
         console.error('Error fetching staff profile:', error);
       }
       
       // If no profile exists, create basic info from user metadata
       if (!data) {
         return {
-          id: user!.id,
-          email: user!.email || '',
-          first_name: user!.user_metadata?.first_name || '',
-          last_name: user!.user_metadata?.last_name || '',
-          phone_number: user!.user_metadata?.phone_number || '',
-          created_at: user!.created_at
+          id: user.id,
+          email: user.email || '',
+          first_name: user.user_metadata?.first_name || '',
+          last_name: user.user_metadata?.last_name || '',
+          phone_number: user.user_metadata?.phone_number || '',
+          created_at: user.created_at
         } as StaffProfile;
       }
       return data as StaffProfile;

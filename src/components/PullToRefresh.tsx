@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, ReactNode } from 'react';
+import { useState, useRef, useCallback, useEffect, ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 interface PullToRefreshProps {
@@ -13,9 +13,18 @@ export function PullToRefresh({ children, onRefresh, className = '' }: PullToRef
   const [pullDistance, setPullDistance] = useState(0);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
 
   const threshold = 80;
   const maxPull = 120;
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (containerRef.current?.scrollTop === 0) {
@@ -45,12 +54,20 @@ export function PullToRefresh({ children, onRefresh, className = '' }: PullToRef
       try {
         await onRefresh();
       } finally {
-        setIsRefreshing(false);
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          setIsRefreshing(false);
+        }
       }
     }
     
-    setIsPulling(false);
-    setPullDistance(0);
+    // Only update state if component is still mounted
+    if (isMountedRef.current) {
+      setIsPulling(false);
+      setPullDistance(0);
+    }
+    // Reset startY for next gesture
+    startY.current = 0;
   }, [isPulling, pullDistance, isRefreshing, onRefresh]);
 
   const progress = Math.min(pullDistance / threshold, 1);
