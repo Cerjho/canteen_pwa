@@ -166,15 +166,15 @@ export default function AdminStudents() {
     if (filterGrade !== 'all' && student.grade_level !== filterGrade) return false;
     
     // Linked status filter
-    if (filterLinked === 'linked' && !student.parent_id) return false;
-    if (filterLinked === 'unlinked' && student.parent_id) return false;
+    if (filterLinked === 'linked' && !student.parent) return false;
+    if (filterLinked === 'unlinked' && student.parent) return false;
     
     return true;
   });
 
   // Stats
   const totalStudents = students?.length || 0;
-  const linkedStudents = students?.filter(s => s.parent_id).length || 0;
+  const linkedStudents = students?.filter(s => s.parent).length || 0;
   const unlinkedStudents = totalStudents - linkedStudents;
 
   if (isLoading) {
@@ -287,7 +287,7 @@ export default function AdminStudents() {
                       <h3 className="font-semibold text-gray-900">
                         {student.first_name} {student.last_name}
                       </h3>
-                      {student.parent_id ? (
+                      {student.parent ? (
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1">
                           <UserCheck size={12} />
                           Linked
@@ -324,7 +324,7 @@ export default function AdminStudents() {
                     >
                       <Edit2 size={16} className="text-gray-600" />
                     </button>
-                    {student.parent_id && (
+                    {student.parent && (
                       <button
                         onClick={() => {
                           if (confirm('Unlink this student from their parent?')) {
