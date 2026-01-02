@@ -260,16 +260,16 @@ export default function Menu() {
                         dayInfo.isHoliday
                           ? isSelected
                             ? 'bg-red-600 text-white'
-                            : 'bg-red-50 text-red-600 border-2 border-red-200'
+                            : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-800'
                           : dayInfo.isMakeupDay
                           ? isSelected
                             ? 'bg-emerald-600 text-white'
-                            : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
+                            : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-2 border-emerald-200 dark:border-emerald-800'
                           : isSelected
                           ? 'bg-primary-600 text-white'
                           : isTodayDate
-                          ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border-2 border-primary-200 dark:border-primary-800'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                       }`}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -288,18 +288,18 @@ export default function Menu() {
           </div>
           
           <div className="mt-8 text-center">
-            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CalendarOff size={48} className="text-red-500" />
+            <div className="w-24 h-24 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CalendarOff size={48} className="text-red-500 dark:text-red-400" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               {isToday(effectiveDate) ? 'Canteen Closed Today' : 'Canteen Closed'}
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               The canteen is closed for<br />
-              <span className="font-semibold text-red-600">{selectedWeekdayInfo.holidayName || 'Holiday'}</span>
+              <span className="font-semibold text-red-600 dark:text-red-400">{selectedWeekdayInfo.holidayName || 'Holiday'}</span>
             </p>
-            <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 max-w-sm mx-auto">
-              <p className="text-sm text-primary-800">
+            <div className="bg-primary-50 dark:bg-primary-900/30 border border-primary-100 dark:border-primary-800 rounded-xl p-4 max-w-sm mx-auto">
+              <p className="text-sm text-primary-800 dark:text-primary-300">
                 <strong>💡 Tip:</strong> Select a different day above<br />
                 to order for other available dates!
               </p>
@@ -317,7 +317,7 @@ export default function Menu() {
           title="Menu"
           subtitle={
             <span className="flex items-center gap-1.5">
-              <Calendar size={14} className="text-primary-500" />
+              <Calendar size={14} className="text-primary-500 dark:text-primary-400" />
               {isToday(effectiveDate) ? "Today's Menu" : `Menu for ${format(effectiveDate, 'EEE, MMM d')}`}
             </span>
           }
@@ -340,11 +340,11 @@ export default function Menu() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <Calendar size={16} className="text-primary-500" />
+              <Calendar size={16} className="text-primary-500 dark:text-primary-400" />
               Order for:
             </span>
             {!isToday(effectiveDate) && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+              <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">
                 Advance Order
               </span>
             )}
@@ -363,16 +363,16 @@ export default function Menu() {
                       dayInfo.isHoliday
                         ? isSelected
                           ? 'bg-red-600 text-white'
-                          : 'bg-red-50 text-red-600 border-2 border-red-200'
+                          : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-800'
                         : dayInfo.isMakeupDay
                         ? isSelected
                           ? 'bg-emerald-600 text-white'
-                          : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
+                          : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-2 border-emerald-200 dark:border-emerald-800'
                         : isSelected
                         ? 'bg-primary-600 text-white'
                         : isTodayDate
-                        ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border-2 border-primary-200 dark:border-primary-800'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
                     <div className="flex items-center justify-center gap-1">
@@ -447,7 +447,7 @@ export default function Menu() {
                       <button
                         key={dayInfo.dateStr}
                         onClick={() => setSelectedDate(dayInfo.date)}
-                        className="px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100"
+                        className="px-3 py-1.5 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded-lg text-sm font-medium hover:bg-primary-100 dark:hover:bg-primary-900/50"
                       >
                         {isToday(dayInfo.date) ? 'Today' : format(dayInfo.date, 'EEE, MMM d')}
                       </button>

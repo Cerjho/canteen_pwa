@@ -90,10 +90,10 @@ export function PullToRefresh({ children, onRefresh, className = '' }: PullToRef
         }}
       >
         <div
-          className={`p-2 bg-primary-100 rounded-full ${isRefreshing ? 'animate-spin' : ''}`}
+          className={`p-2 bg-primary-100 dark:bg-primary-900/30 rounded-full ${isRefreshing ? 'animate-spin' : ''}`}
           style={{ transform: isRefreshing ? undefined : `rotate(${rotation}deg)` }}
         >
-          <RefreshCw size={20} className="text-primary-600" />
+          <RefreshCw size={20} className="text-primary-600 dark:text-primary-400" />
         </div>
       </div>
 

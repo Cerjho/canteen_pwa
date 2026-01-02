@@ -207,7 +207,7 @@ export function CartDrawer({
                       <option.icon 
                         size={20} 
                         className={`mx-auto mb-1 ${
-                          paymentMethod === option.id ? 'text-primary-600' : 'text-gray-500'
+                          paymentMethod === option.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'
                         }`} 
                       />
                       <div className={`text-xs font-medium ${
@@ -252,7 +252,7 @@ export function CartDrawer({
 
             <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
               <span className="text-lg font-medium text-gray-900 dark:text-gray-100">Total:</span>
-              <span className="text-2xl font-bold text-primary-600">
+              <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
                 ₱{total.toFixed(2)}
               </span>
             </div>

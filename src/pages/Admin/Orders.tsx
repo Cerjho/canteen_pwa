@@ -186,12 +186,12 @@ export default function AdminOrders() {
 
   const getStatusColor = (status: OrderStatus) => {
     const colors: Record<OrderStatus, string> = {
-      pending: 'bg-gray-100 text-gray-700',
-      preparing: 'bg-yellow-100 text-yellow-700',
-      ready: 'bg-green-100 text-green-700',
-      completed: 'bg-blue-100 text-blue-700',
-      cancelled: 'bg-red-100 text-red-700',
-      awaiting_payment: 'bg-purple-100 text-purple-700'
+      pending: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+      preparing: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+      ready: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+      completed: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+      cancelled: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+      awaiting_payment: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
     };
     return colors[status];
   };
@@ -258,7 +258,7 @@ export default function AdminOrders() {
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
           {/* Search */}
           <div className="flex-1 relative">
-            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               placeholder="Search by name or order ID..."
@@ -367,7 +367,7 @@ export default function AdminOrders() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setSelectedOrder(order)}
-                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                          className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                           title="View Details"
                         >
                           <Eye size={18} />
@@ -375,7 +375,7 @@ export default function AdminOrders() {
                         {order.status !== 'cancelled' && order.status !== 'completed' && (
                           <button
                             onClick={() => setRefundOrder(order)}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg"
+                            className="p-2 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg"
                             title="Refund Order"
                           >
                             <RotateCcw size={18} />
@@ -424,11 +424,11 @@ export default function AdminOrders() {
                 <AlertTriangle size={20} />
                 <span className="font-medium">This action cannot be undone</span>
               </div>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-400">
                 Refund <span className="font-semibold">₱{refundOrder.total_amount.toFixed(2)}</span> to{' '}
                 <span className="font-semibold">{refundOrder.parent.first_name} {refundOrder.parent.last_name}</span>?
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 The order will be cancelled and the amount will be added back to the parent's balance.
               </p>
             </div>
@@ -478,33 +478,33 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Grade</span>
-                <span className="font-medium">
+                <span className="text-gray-500 dark:text-gray-400">Grade</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
                   {order.child.grade_level} {order.child.section && `- ${order.child.section}`}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Parent</span>
-                <span className="font-medium">
+                <span className="text-gray-500 dark:text-gray-400">Parent</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
                   {order.parent.first_name} {order.parent.last_name}
                 </span>
               </div>
               {order.parent.phone_number && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Phone</span>
-                  <span className="font-medium">{order.parent.phone_number}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Phone</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{order.parent.phone_number}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-gray-500">Payment</span>
-                <span className="font-medium capitalize">{order.payment_method}</span>
+                <span className="text-gray-500 dark:text-gray-400">Payment</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">{order.payment_method}</span>
               </div>
             </div>
 
             {/* Order Notes */}
             {order.notes && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                <p className="text-sm text-yellow-800">📝 {order.notes}</p>
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">📝 {order.notes}</p>
               </div>
             )}
 
@@ -553,8 +553,8 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
                     onClick={() => onUpdateStatus(status)}
                     className={`px-4 py-2 rounded-lg font-medium capitalize ${
                       status === 'cancelled' 
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
                     {status}
@@ -567,7 +567,7 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
             {order.status !== 'cancelled' && order.status !== 'completed' && (
               <button
                 onClick={onRefund}
-                className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 font-medium"
+                className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 font-medium"
               >
                 <RotateCcw size={18} />
                 Refund Order

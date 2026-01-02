@@ -80,9 +80,9 @@ const CATEGORY_ICONS: Record<ProductCategory, React.ReactNode> = {
 };
 
 const CATEGORY_COLORS: Record<ProductCategory, string> = {
-  mains: 'bg-orange-100 text-orange-700',
-  snacks: 'bg-purple-100 text-purple-700',
-  drinks: 'bg-blue-100 text-blue-700',
+  mains: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+  snacks: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+  drinks: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
 };
 
 // Get the week's date range label
@@ -635,7 +635,7 @@ export default function AdminWeeklyMenu() {
             className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
               activeTab === 'menu'
                 ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-600 border border-gray-200'
+                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
             }`}
           >
             <Calendar size={18} className="inline mr-2" />
@@ -646,14 +646,14 @@ export default function AdminWeeklyMenu() {
             className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
               activeTab === 'holidays'
                 ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-600 border border-gray-200'
+                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
             }`}
           >
             <CalendarOff size={18} className="inline mr-2" />
             Holidays
             {holidays && holidays.length > 0 && (
               <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${
-                activeTab === 'holidays' ? 'bg-primary-500' : 'bg-gray-100'
+                activeTab === 'holidays' ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
               }`}>
                 {holidays.length}
               </span>
@@ -674,7 +674,7 @@ export default function AdminWeeklyMenu() {
                     <CalendarDays size={18} className="text-primary-500" />
                     <span className="font-semibold text-gray-900 dark:text-gray-100">{getWeekLabel(selectedWeek)}</span>
                     {isCurrentWeek(selectedWeek) && (
-                      <span className="px-2 py-0.5 bg-primary-100 text-primary-700 text-xs rounded-full">
+                      <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs rounded-full">
                         This Week
                       </span>
                     )}
@@ -696,14 +696,14 @@ export default function AdminWeeklyMenu() {
                 <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 ml-auto">
                   <button
                     onClick={() => setViewMode('day')}
-                    className={`p-1.5 rounded ${viewMode === 'day' ? 'bg-white shadow-sm' : ''}`}
+                    className={`p-1.5 rounded ${viewMode === 'day' ? 'bg-white dark:bg-gray-600 shadow-sm' : ''}`}
                     title="Day view"
                   >
                     <List size={16} />
                   </button>
                   <button
                     onClick={() => setViewMode('week')}
-                    className={`p-1.5 rounded ${viewMode === 'week' ? 'bg-white shadow-sm' : ''}`}
+                    className={`p-1.5 rounded ${viewMode === 'week' ? 'bg-white dark:bg-gray-600 shadow-sm' : ''}`}
                     title="Week view"
                   >
                     <Grid3X3 size={16} />
@@ -724,7 +724,7 @@ export default function AdminWeeklyMenu() {
                       <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                         {dynamicWeekdays.find(d => d.value === selectedDay)?.label || WEEKDAYS.find(d => d.value === selectedDay)?.label}
                       </h2>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
                         {format(selectedDay === 6 ? saturdayDate : getDateForDay(selectedDay), 'MMM d')} • {activeItemsCount}/{daySchedules.length} active
                       </p>
                     </div>
@@ -750,16 +750,16 @@ export default function AdminWeeklyMenu() {
                             dayIsHoliday
                               ? selectedDay === day.value
                                 ? 'bg-red-600 text-white'
-                                : 'bg-red-50 text-red-600 border-2 border-red-200'
+                                : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-800'
                               : dayIsMakeupDay
                               ? selectedDay === day.value
                                 ? 'bg-emerald-600 text-white'
-                                : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
+                                : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-2 border-emerald-200 dark:border-emerald-800'
                               : selectedDay === day.value
                               ? 'bg-primary-600 text-white'
                               : isTodayDate
-                              ? 'bg-primary-50 text-primary-700 border-2 border-primary-200'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border-2 border-primary-200 dark:border-primary-800'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                           }`}
                         >
                           <span className="flex items-center gap-0.5">
@@ -780,8 +780,8 @@ export default function AdminWeeklyMenu() {
                           ) : (stat?.total || 0) > 0 && (
                             <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] flex items-center justify-center ${
                               dayIsMakeupDay
-                                ? selectedDay === day.value ? 'bg-white text-emerald-600' : 'bg-emerald-100 text-emerald-600'
-                                : selectedDay === day.value ? 'bg-white text-primary-600' : 'bg-primary-100 text-primary-600'
+                                ? selectedDay === day.value ? 'bg-white dark:bg-gray-700 text-emerald-600' : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400'
+                                : selectedDay === day.value ? 'bg-white dark:bg-gray-700 text-primary-600' : 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400'
                             }`}>
                               {stat?.active || 0}
                             </span>
@@ -794,12 +794,12 @@ export default function AdminWeeklyMenu() {
 
                 {/* Make-up Day Info */}
                 {selectedDay === 6 && saturdayMakeupDay && !selectedDayHoliday && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-                    <CalendarDays className="text-emerald-600 flex-shrink-0 mt-0.5" size={20} />
+                  <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-start gap-3">
+                    <CalendarDays className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" size={20} />
                     <div>
-                      <p className="font-medium text-emerald-800">{saturdayMakeupDay.name}</p>
+                      <p className="font-medium text-emerald-800 dark:text-emerald-300">{saturdayMakeupDay.name}</p>
                       {saturdayMakeupDay.reason && (
-                        <p className="text-sm text-emerald-600">{saturdayMakeupDay.reason}</p>
+                        <p className="text-sm text-emerald-600 dark:text-emerald-400">{saturdayMakeupDay.reason}</p>
                       )}
                     </div>
                   </div>
@@ -807,11 +807,11 @@ export default function AdminWeeklyMenu() {
 
                 {/* Holiday Warning */}
                 {selectedDayHoliday && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-                    <CalendarOff className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                  <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
+                    <CalendarOff className="text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
                     <div>
-                      <p className="font-medium text-red-800">Holiday: {selectedDayHoliday.name}</p>
-                      <p className="text-sm text-red-600">
+                      <p className="font-medium text-red-800 dark:text-red-300">Holiday: {selectedDayHoliday.name}</p>
+                      <p className="text-sm text-red-600 dark:text-red-400">
                         The canteen is closed on this day. Menu items set here will not be available to parents.
                       </p>
                     </div>
@@ -825,7 +825,7 @@ export default function AdminWeeklyMenu() {
                     disabled={!!selectedDayHoliday}
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors ${
                       selectedDayHoliday
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
                   >
@@ -839,10 +839,10 @@ export default function AdminWeeklyMenu() {
                       <div className="relative group">
                         <button 
                           disabled={copyToDay.isPending || copyToAllDays.isPending}
-                          className={`px-4 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 transition-colors flex items-center gap-2 ${
+                          className={`px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl font-medium text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-2 ${
                             copyToDay.isPending || copyToAllDays.isPending
                               ? 'opacity-70 cursor-wait'
-                              : 'hover:bg-gray-50'
+                              : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                           }`}
                         >
                           {copyToDay.isPending || copyToAllDays.isPending ? (
@@ -872,22 +872,22 @@ export default function AdminWeeklyMenu() {
                                   disabled={!!targetHoliday}
                                   className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${
                                     targetHoliday
-                                      ? 'text-gray-400 cursor-not-allowed bg-gray-50'
-                                      : 'hover:bg-gray-50'
+                                      ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed bg-gray-50 dark:bg-gray-900'
+                                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                                   }`}
                                 >
                                   <span>{day.label}</span>
                                   {targetHoliday ? (
                                     <CalendarOff size={14} className="text-red-400" />
                                   ) : hasExistingItems ? (
-                                    <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                    <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">
                                       {targetStat?.total} items
                                     </span>
                                   ) : null}
                                 </button>
                               );
                             })}
-                            <div className="border-t border-gray-100 my-1" />
+                            <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
                             <button
                               onClick={() => copyToAllDays.mutate(selectedDay)}
                               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-primary-600 dark:text-primary-400 font-medium"
@@ -911,9 +911,9 @@ export default function AdminWeeklyMenu() {
 
                 {/* Menu Items */}
                 {daySchedules.length === 0 ? (
-                  <div className="bg-white rounded-xl p-8 text-center">
-                    <Calendar size={48} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-gray-500 mb-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                    <Calendar size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
                       No menu items for {WEEKDAYS.find(d => d.value === selectedDay)?.label}
                     </p>
                     <button
@@ -935,7 +935,7 @@ export default function AdminWeeklyMenu() {
                         <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
                           <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-500">{CATEGORY_ICONS[category]}</span>
+                              <span className="text-gray-500 dark:text-gray-400">{CATEGORY_ICONS[category]}</span>
                               <h3 className="font-semibold text-gray-900 dark:text-gray-100 capitalize">{category}</h3>
                               <span className="text-sm text-gray-400 dark:text-gray-500">({activeCount}/{items.length})</span>
                             </div>
@@ -944,7 +944,7 @@ export default function AdminWeeklyMenu() {
                             {items.map(schedule => (
                               <div
                                 key={schedule.id}
-                                className={`flex items-center gap-3 p-3 ${!schedule.is_active ? 'opacity-50 bg-gray-50' : ''}`}
+                                className={`flex items-center gap-3 p-3 ${!schedule.is_active ? 'opacity-50 bg-gray-50 dark:bg-gray-900' : ''}`}
                               >
                                 {schedule.product?.image_url ? (
                                   <img
@@ -954,7 +954,7 @@ export default function AdminWeeklyMenu() {
                                   />
                                 ) : (
                                   <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                    <Package size={20} className="text-gray-400" />
+                                    <Package size={20} className="text-gray-400 dark:text-gray-500" />
                                   </div>
                                 )}
                                 <div className="flex-1 min-w-0">
@@ -979,8 +979,8 @@ export default function AdminWeeklyMenu() {
                                   })}
                                   className={`p-2 rounded-lg ${
                                     schedule.is_active 
-                                      ? 'text-green-600 hover:bg-green-50' 
-                                      : 'text-gray-400 hover:bg-gray-100'
+                                      ? 'text-green-600 dark:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30' 
+                                      : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
                                   }`}
                                   title={schedule.is_active ? 'Hide item' : 'Show item'}
                                 >
@@ -988,7 +988,7 @@ export default function AdminWeeklyMenu() {
                                 </button>
                                 <button
                                   onClick={() => removeFromSchedule.mutate(schedule.id)}
-                                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                  className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                                 >
                                   <Trash2 size={18} />
                                 </button>
@@ -1018,8 +1018,8 @@ export default function AdminWeeklyMenu() {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[600px]">
                     <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Category</th>
+                      <tr className="bg-gray-50 dark:bg-gray-900">
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-24">Category</th>
                         {WEEKDAYS.map(day => {
                           const dayDate = getDateForDay(day.value);
                           const isTodayDate = isCurrentWeek(selectedWeek) && isToday(dayDate);
@@ -1027,7 +1027,7 @@ export default function AdminWeeklyMenu() {
                             <th 
                               key={day.value} 
                               className={`px-2 py-2 text-center text-xs font-medium ${
-                                isTodayDate ? 'bg-primary-50 text-primary-700' : 'text-gray-500'
+                                isTodayDate ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'
                               }`}
                             >
                               <div>{day.short}</div>
@@ -1037,7 +1037,7 @@ export default function AdminWeeklyMenu() {
                         })}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {(['mains', 'snacks', 'drinks'] as ProductCategory[]).map(category => (
                         <tr key={category}>
                           <td className="px-3 py-3">
@@ -1062,14 +1062,14 @@ export default function AdminWeeklyMenu() {
                                 {dayItems.length > 0 ? (
                                   <button
                                     onClick={() => { setSelectedDay(day.value); setViewMode('day'); }}
-                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 text-primary-700 text-sm font-medium hover:bg-primary-200"
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-sm font-medium hover:bg-primary-200 dark:hover:bg-primary-900/50"
                                     title={`${activeItems.length} active of ${dayItems.length}`}
                                   >
                                     {activeItems.length}
                                   </button>
                                 ) : dayHoliday ? (
                                   <span
-                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-400 text-sm"
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 text-red-400 dark:text-red-400 text-sm"
                                     title={`Holiday: ${dayHoliday.name}`}
                                   >
                                     <CalendarOff size={14} />
@@ -1111,8 +1111,8 @@ export default function AdminWeeklyMenu() {
                 onClick={() => setHolidaySubTab('holidays')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   holidaySubTab === 'holidays'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 🚫 Holidays {holidays && holidays.length > 0 && `(${holidays.length})`}
@@ -1121,8 +1121,8 @@ export default function AdminWeeklyMenu() {
                 onClick={() => setHolidaySubTab('makeup')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   holidaySubTab === 'makeup'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 📚 Make-up Days {makeupDays && makeupDays.length > 0 && `(${makeupDays.length})`}
@@ -1139,12 +1139,12 @@ export default function AdminWeeklyMenu() {
                   Add Holiday
                 </button>
 
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
                   <div className="flex gap-3">
-                    <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-800">
+                    <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-800 dark:text-amber-300">
                       <p className="font-medium mb-1">Holidays will close the canteen</p>
-                      <p>On holidays, the menu will not be available for ordering. Parents will see a "Canteen Closed" message.</p>
+                      <p className="text-amber-700 dark:text-amber-400">On holidays, the menu will not be available for ordering. Parents will see a "Canteen Closed" message.</p>
                     </div>
                   </div>
                 </div>
@@ -1152,9 +1152,9 @@ export default function AdminWeeklyMenu() {
                 {holidaysLoading ? (
                   <LoadingSpinner size="sm" />
                 ) : !holidays || holidays.length === 0 ? (
-                  <div className="bg-white rounded-xl p-8 text-center">
-                <CalendarOff size={48} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 mb-4">No upcoming holidays</p>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                <CalendarOff size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 mb-4">No upcoming holidays</p>
                 <button onClick={() => setShowHolidayModal(true)} className="text-primary-600 hover:underline">
                   Add first holiday
                 </button>
@@ -1162,33 +1162,33 @@ export default function AdminWeeklyMenu() {
             ) : (
               <div className="space-y-3">
                 {holidays.map(holiday => (
-                  <div key={holiday.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div key={holiday.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                          <CalendarOff size={24} className="text-red-600" />
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                          <CalendarOff size={24} className="text-red-600 dark:text-red-400" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-gray-900">{holiday.name}</h3>
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{holiday.name}</h3>
                             {holiday.is_recurring && (
-                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded flex items-center gap-1">
+                              <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded flex items-center gap-1">
                                 <RefreshCw size={10} />
                                 Yearly
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
                             {format(new Date(holiday.date), 'EEEE, MMMM d, yyyy')}
                           </p>
                           {holiday.description && (
-                            <p className="text-sm text-gray-400 mt-1">{holiday.description}</p>
+                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{holiday.description}</p>
                           )}
                         </div>
                       </div>
                       <button
                         onClick={() => removeHoliday.mutate(holiday.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                        className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -1210,12 +1210,12 @@ export default function AdminWeeklyMenu() {
                   Add Make-up Day
                 </button>
 
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
                   <div className="flex gap-3">
-                    <CalendarDays size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-emerald-800">
+                    <CalendarDays size={20} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-emerald-800 dark:text-emerald-300">
                       <p className="font-medium mb-1">Make-up days open the canteen on Saturdays</p>
-                      <p>When a Saturday is marked as a make-up day, parents can order food for that day. Remember to set the menu!</p>
+                      <p className="text-emerald-700 dark:text-emerald-400">When a Saturday is marked as a make-up day, parents can order food for that day. Remember to set the menu!</p>
                     </div>
                   </div>
                 </div>
@@ -1223,9 +1223,9 @@ export default function AdminWeeklyMenu() {
                 {makeupDaysLoading ? (
                   <LoadingSpinner size="sm" />
                 ) : !makeupDays || makeupDays.length === 0 ? (
-                  <div className="bg-white rounded-xl p-8 text-center">
-                    <CalendarDays size={48} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-gray-500 mb-4">No make-up days scheduled</p>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                    <CalendarDays size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">No make-up days scheduled</p>
                     <button onClick={() => setShowMakeupModal(true)} className="text-emerald-600 hover:underline">
                       Add first make-up day
                     </button>
@@ -1233,25 +1233,25 @@ export default function AdminWeeklyMenu() {
                 ) : (
                   <div className="space-y-3">
                     {makeupDays.map(makeupDay => (
-                      <div key={makeupDay.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                      <div key={makeupDay.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3">
-                            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                              <CalendarDays size={24} className="text-emerald-600" />
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+                              <CalendarDays size={24} className="text-emerald-600 dark:text-emerald-400" />
                             </div>
                             <div>
-                              <h3 className="font-semibold text-gray-900">{makeupDay.name}</h3>
-                              <p className="text-sm text-gray-500">
+                              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{makeupDay.name}</h3>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
                                 {format(new Date(makeupDay.date), 'EEEE, MMMM d, yyyy')}
                               </p>
                               {makeupDay.reason && (
-                                <p className="text-sm text-gray-400 mt-1">{makeupDay.reason}</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{makeupDay.reason}</p>
                               )}
                             </div>
                           </div>
                           <button
                             onClick={() => removeMakeupDay.mutate(makeupDay.id)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                            className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -1271,31 +1271,31 @@ export default function AdminWeeklyMenu() {
       {showAddModal && (
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowAddModal(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl max-h-[85vh] flex flex-col">
-            <div className="p-4 border-b border-gray-100">
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-white dark:bg-gray-800 rounded-t-2xl max-h-[85vh] flex flex-col">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-bold">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                   Add to {WEEKDAYS.find(d => d.value === selectedDay)?.label}
                 </h3>
-                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
                   <X size={20} />
                 </button>
               </div>
 
               {/* Holiday Warning */}
               {selectedDayHoliday && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3 flex items-start gap-2">
-                  <CalendarOff className="text-red-500 flex-shrink-0 mt-0.5" size={18} />
+                <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 mb-3 flex items-start gap-2">
+                  <CalendarOff className="text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" size={18} />
                   <div>
-                    <p className="font-medium text-red-800 text-sm">Holiday: {selectedDayHoliday.name}</p>
-                    <p className="text-xs text-red-600">Cannot add menu items on holidays</p>
+                    <p className="font-medium text-red-800 dark:text-red-300 text-sm">Holiday: {selectedDayHoliday.name}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">Cannot add menu items on holidays</p>
                   </div>
                 </div>
               )}
 
               {/* Search */}
               <div className="relative mb-3">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -1314,7 +1314,7 @@ export default function AdminWeeklyMenu() {
                     className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${
                       selectedCategory === cat
                         ? 'bg-primary-600 text-white'
-                        : 'bg-gray-100 text-gray-600'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                     }`}
                   >
                     {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -1327,7 +1327,7 @@ export default function AdminWeeklyMenu() {
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => handleAddAll(selectedCategory)}
-                    className="flex-1 text-sm py-2 px-3 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 flex items-center justify-center gap-2"
+                    className="flex-1 text-sm py-2 px-3 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 flex items-center justify-center gap-2"
                   >
                     <Layers size={16} />
                     Add All ({filteredAvailableProducts.length})
@@ -1338,12 +1338,12 @@ export default function AdminWeeklyMenu() {
 
             <div className="flex-1 overflow-y-auto p-4">
               {selectedDayHoliday ? (
-                <div className="text-center py-8 text-gray-500">
-                  <CalendarOff size={48} className="mx-auto text-red-300 mb-3" />
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <CalendarOff size={48} className="mx-auto text-red-300 dark:text-red-700 mb-3" />
                   <p>Adding items is disabled on holidays</p>
                 </div>
               ) : filteredAvailableProducts?.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   {searchQuery 
                     ? 'No products match your search'
                     : availableProducts?.length === 0
@@ -1367,7 +1367,7 @@ export default function AdminWeeklyMenu() {
                         />
                       ) : (
                         <div className="w-full h-20 rounded-lg bg-gray-100 dark:bg-gray-600 flex items-center justify-center mb-2">
-                          <Package size={24} className="text-gray-400" />
+                          <Package size={24} className="text-gray-400 dark:text-gray-500" />
                         </div>
                       )}
                       <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{product.name}</p>
@@ -1489,7 +1489,7 @@ function HolidayModal({
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
             {/* Quick Add */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Quick Add (Philippine Holidays)
               </label>
               <div className="flex flex-wrap gap-2">
@@ -1507,7 +1507,7 @@ function HolidayModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Holiday Name *
               </label>
               <input
@@ -1515,13 +1515,13 @@ function HolidayModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Christmas Day"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Date *
               </label>
               <input
@@ -1529,13 +1529,13 @@ function HolidayModal({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 min={formatDateLocal(new Date())}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Description (optional)
               </label>
               <input
@@ -1543,25 +1543,25 @@ function HolidayModal({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., School closed for the holidays"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
 
             {/* Recurring Toggle */}
             <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div>
-                <p className="font-medium text-sm">Recurring Yearly</p>
-                <p className="text-xs text-gray-500">Automatically repeats every year</p>
+                <p className="font-medium text-sm text-gray-900 dark:text-gray-100">Recurring Yearly</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Automatically repeats every year</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsRecurring(!isRecurring)}
                 className={`relative w-11 h-6 rounded-full transition-colors ${
-                  isRecurring ? 'bg-primary-600' : 'bg-gray-300'
+                  isRecurring ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
               >
                 <span
-                  className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-gray-200 rounded-full transition-transform ${
                     isRecurring ? 'translate-x-5' : ''
                   }`}
                 />
@@ -1644,10 +1644,10 @@ function MakeupDayModal({
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-bold">Add Make-up Day</h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Add Make-up Day</h2>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
               <X size={20} />
             </button>
           </div>
@@ -1655,7 +1655,7 @@ function MakeupDayModal({
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
             {/* Quick Saturday Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Quick Select Saturday
               </label>
               <div className="grid grid-cols-4 gap-2">
@@ -1667,7 +1667,7 @@ function MakeupDayModal({
                     className={`px-2 py-2 text-xs rounded-lg border transition-colors ${
                       date === formatDateLocal(sat)
                         ? 'bg-emerald-600 text-white border-emerald-600'
-                        : 'bg-white text-gray-700 border-gray-200 hover:bg-emerald-50 hover:border-emerald-200'
+                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-200 dark:hover:border-emerald-800'
                     }`}
                   >
                     <div className="font-medium">{format(sat, 'MMM d')}</div>
@@ -1677,7 +1677,7 @@ function MakeupDayModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Name *
               </label>
               <input
@@ -1685,13 +1685,13 @@ function MakeupDayModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Make-up Class"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Date (Saturday only) *
               </label>
               <input
@@ -1699,14 +1699,14 @@ function MakeupDayModal({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 min={formatDateLocal(new Date())}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">Only Saturdays can be selected as make-up days</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Only Saturdays can be selected as make-up days</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Reason (optional)
               </label>
               <input
@@ -1714,7 +1714,7 @@ function MakeupDayModal({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g., Due to Typhoon Kristine class cancellation"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
 

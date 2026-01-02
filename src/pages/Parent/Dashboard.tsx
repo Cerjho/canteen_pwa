@@ -216,7 +216,7 @@ export default function ParentDashboard() {
         return { 
           icon: Clock, 
           label: 'Pending', 
-          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600',
           message: 'Waiting for kitchen',
           progress: 25
         };
@@ -224,7 +224,7 @@ export default function ParentDashboard() {
         return { 
           icon: ChefHat, 
           label: 'Preparing', 
-          color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+          color: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
           message: 'Being prepared now',
           progress: 60
         };
@@ -232,7 +232,7 @@ export default function ParentDashboard() {
         return { 
           icon: Bell, 
           label: 'Ready!', 
-          color: 'bg-green-50 text-green-700 border-green-200',
+          color: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
           message: 'Ready for pickup',
           progress: 100
         };
@@ -240,7 +240,7 @@ export default function ParentDashboard() {
         return { 
           icon: Clock, 
           label: status, 
-          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600',
           message: '',
           progress: 0
         };
@@ -281,7 +281,7 @@ export default function ParentDashboard() {
               Today's Orders
               {todayOrders && todayOrders.length > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-xs ${
-                  activeTab === 'today' ? 'bg-primary-500' : 'bg-gray-100'
+                  activeTab === 'today' ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-700'
                 }`}>
                   {todayOrders.length}
                 </span>
@@ -299,7 +299,7 @@ export default function ParentDashboard() {
               Scheduled
               {scheduledOrders && scheduledOrders.length > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-xs ${
-                  activeTab === 'scheduled' ? 'bg-primary-500' : 'bg-amber-100 text-amber-700'
+                  activeTab === 'scheduled' ? 'bg-primary-500' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                 }`}>
                   {scheduledOrders.length}
                 </span>
@@ -320,7 +320,7 @@ export default function ParentDashboard() {
                   <div 
                     key={order.id} 
                     className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
-                      isFutureOrder ? 'border-amber-200' : status.color
+                      isFutureOrder ? 'border-amber-200 dark:border-amber-800' : status.color
                     } ${order.status === 'ready' ? 'animate-pulse-subtle ring-2 ring-green-400' : ''}`}
                   >
                     {/* Progress Bar */}
@@ -338,7 +338,7 @@ export default function ParentDashboard() {
                     
                     {/* Status Banner */}
                     <div className={`px-4 py-3 flex items-center justify-between ${
-                      isFutureOrder ? 'bg-amber-50 text-amber-700' : status.color
+                      isFutureOrder ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : status.color
                     }`}>
                       <div className="flex items-center gap-2">
                         {isFutureOrder ? (
@@ -387,15 +387,15 @@ export default function ParentDashboard() {
                             }
                           </p>
                         </div>
-                        <span className="text-xl font-bold text-primary-600">
+                        <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
                           ₱{order.total_amount.toFixed(2)}
                         </span>
                       </div>
 
                       {/* Order Notes */}
                       {order.notes && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-3">
-                          <p className="text-sm text-yellow-800">📝 {order.notes}</p>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2 mb-3">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-300">📝 {order.notes}</p>
                         </div>
                       )}
 
@@ -423,7 +423,7 @@ export default function ParentDashboard() {
                         {/* Reorder button - available for all orders */}
                         <button
                           onClick={() => handleReorder(order)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                          className="flex-1 flex items-center justify-center gap-2 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors"
                         >
                           <RotateCcw size={16} />
                           <span className="text-sm font-medium">Reorder</span>
@@ -433,7 +433,7 @@ export default function ParentDashboard() {
                         {order.status === 'pending' && (
                           <button
                             onClick={() => setShowCancelDialog(order.id)}
-                            className="flex-1 flex items-center justify-center gap-2 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="flex-1 flex items-center justify-center gap-2 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                           >
                             <X size={16} />
                             <span className="text-sm font-medium">Cancel</span>
@@ -442,7 +442,7 @@ export default function ParentDashboard() {
                         
                         {/* Pickup location for ready orders */}
                         {order.status === 'ready' && (
-                          <div className="flex-1 flex items-center justify-center gap-2 py-2 text-green-600 bg-green-50 rounded-lg">
+                          <div className="flex-1 flex items-center justify-center gap-2 py-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 rounded-lg">
                             <MapPin size={16} />
                             <span className="text-sm font-medium">Pickup at Canteen</span>
                           </div>

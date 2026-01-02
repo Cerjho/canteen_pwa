@@ -204,8 +204,8 @@ export default function Register() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
         <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Shield size={32} className="text-primary-600" />
+            <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Shield size={32} className="text-primary-600 dark:text-primary-400" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Join School Canteen</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
@@ -215,7 +215,7 @@ export default function Register() {
 
           <form onSubmit={handleVerifyCode} className="space-y-4">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
                 <XCircle size={18} className="flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
@@ -276,21 +276,21 @@ export default function Register() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
         <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User size={32} className="text-primary-600" />
+            <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <User size={32} className="text-primary-600 dark:text-primary-400" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Complete Registration</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
               Set up your account for <strong>{invitation?.email}</strong>
             </p>
-            <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full capitalize">
+            <span className="inline-block mt-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs rounded-full capitalize">
               {invitation?.role} Account
             </span>
           </div>
 
           <form onSubmit={handleRegister} className="space-y-4">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
                 <XCircle size={18} className="flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
@@ -335,7 +335,7 @@ export default function Register() {
                   Phone Number
                 </label>
                 <div className="relative">
-                  <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                   <input
                     type="tel"
                     value={phoneNumber}
@@ -430,8 +430,8 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle size={32} className="text-green-600" />
+        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CheckCircle size={32} className="text-green-600 dark:text-green-400" />
         </div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Account Created!</h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">

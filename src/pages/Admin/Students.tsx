@@ -193,26 +193,26 @@ export default function AdminStudents() {
         <div className="space-y-4 mt-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-gray-500 mb-1">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 mb-1">
               <GraduationCap size={16} />
               <span className="text-xs">Total</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{totalStudents}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalStudents}</p>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-green-600 mb-1">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-500 mb-1">
               <UserCheck size={16} />
               <span className="text-xs">Linked</span>
             </div>
-            <p className="text-2xl font-bold text-green-600">{linkedStudents}</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-500">{linkedStudents}</p>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-amber-600 mb-1">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 mb-1">
               <UserX size={16} />
               <span className="text-xs">Unlinked</span>
             </div>
-            <p className="text-2xl font-bold text-amber-600">{unlinkedStudents}</p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-500">{unlinkedStudents}</p>
           </div>
         </div>
 
@@ -235,22 +235,22 @@ export default function AdminStudents() {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white rounded-xl p-3 shadow-sm space-y-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm space-y-3">
           <div className="relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               placeholder="Search by name, ID, or parent email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div className="flex gap-2">
             <select
               value={filterGrade}
               onChange={(e) => setFilterGrade(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm"
+              className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
             >
               <option value="all">All Grades</option>
               {GRADE_LEVELS.map(grade => (
@@ -260,7 +260,7 @@ export default function AdminStudents() {
             <select
               value={filterLinked}
               onChange={(e) => setFilterLinked(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm"
+              className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
             >
               <option value="all">All Status</option>
               <option value="linked">Linked</option>
@@ -273,8 +273,8 @@ export default function AdminStudents() {
         <div className="space-y-3">
           {filteredStudents?.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
-              <GraduationCap size={48} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-500">No students found</p>
+              <GraduationCap size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">No students found</p>
             </div>
           ) : (
             filteredStudents?.map(student => (
@@ -289,12 +289,12 @@ export default function AdminStudents() {
                         {student.first_name} {student.last_name}
                       </h3>
                       {student.parent ? (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1">
+                        <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full flex items-center gap-1">
                           <UserCheck size={12} />
                           Linked
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full flex items-center gap-1">
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs rounded-full flex items-center gap-1">
                           <UserX size={12} />
                           Unlinked
                         </span>
@@ -313,7 +313,7 @@ export default function AdminStudents() {
                       </p>
                     )}
                     {student.dietary_restrictions && (
-                      <p className="text-xs text-amber-600 mt-1">
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                         ⚠️ {student.dietary_restrictions}
                       </p>
                     )}
@@ -321,9 +321,9 @@ export default function AdminStudents() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setEditingStudent(student)}
-                      className="p-2 hover:bg-gray-100 rounded-lg"
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                     >
-                      <Edit2 size={16} className="text-gray-600" />
+                      <Edit2 size={16} className="text-gray-600 dark:text-gray-400" />
                     </button>
                     {student.parent && (
                       <button
@@ -332,10 +332,10 @@ export default function AdminStudents() {
                             unlinkStudent.mutate(student.id);
                           }
                         }}
-                        className="p-2 hover:bg-amber-100 rounded-lg"
+                        className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg"
                         title="Unlink from parent"
                       >
-                        <UserX size={16} className="text-amber-600" />
+                        <UserX size={16} className="text-amber-600 dark:text-amber-400" />
                       </button>
                     )}
                     <button
@@ -344,9 +344,9 @@ export default function AdminStudents() {
                           deleteStudent.mutate(student.id);
                         }
                       }}
-                      className="p-2 hover:bg-red-100 rounded-lg"
+                      className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
                     >
-                      <Trash2 size={16} className="text-red-500" />
+                      <Trash2 size={16} className="text-red-500 dark:text-red-400" />
                     </button>
                   </div>
                 </div>
@@ -436,7 +436,7 @@ function StudentModal({
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {student ? 'Edit Student' : 'Add Student'}
             </h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
               <X size={20} />
             </button>
           </div>
@@ -444,7 +444,7 @@ function StudentModal({
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   First Name *
                 </label>
                 <input
@@ -452,11 +452,11 @@ function StudentModal({
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Last Name *
                 </label>
                 <input
@@ -464,21 +464,21 @@ function StudentModal({
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Grade Level *
                 </label>
                 <select
                   value={gradeLevel}
                   onChange={(e) => setGradeLevel(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Select grade</option>
                   {GRADE_LEVELS.map(grade => (
@@ -487,7 +487,7 @@ function StudentModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Section
                 </label>
                 <input
@@ -495,13 +495,13 @@ function StudentModal({
                   value={section}
                   onChange={(e) => setSection(e.target.value)}
                   placeholder="e.g., A, B, Rose"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Dietary Restrictions / Allergies
               </label>
               <textarea
@@ -509,14 +509,14 @@ function StudentModal({
                 onChange={(e) => setDietaryRestrictions(e.target.value)}
                 placeholder="e.g., No peanuts, vegetarian"
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
 
             {student && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-sm text-gray-600">
-                  Student ID: <span className="font-mono font-medium">{student.student_id}</span>
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Student ID: <span className="font-mono font-medium text-gray-900 dark:text-gray-100">{student.student_id}</span>
                 </p>
               </div>
             )}
@@ -525,7 +525,7 @@ function StudentModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
+                className="flex-1 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -641,13 +641,13 @@ function ImportModal({
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-          <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+          <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <FileSpreadsheet size={20} />
               Import Students
             </h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
               <X size={20} />
             </button>
           </div>
@@ -655,12 +655,12 @@ function ImportModal({
           <div className="p-4 space-y-4">
             {!results ? (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-medium text-blue-800 mb-2">CSV Format</h3>
-                  <p className="text-sm text-blue-700 mb-3">
+                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h3 className="font-medium text-blue-800 dark:text-blue-300 mb-2">CSV Format</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
                     Upload a CSV file with the following columns:
                   </p>
-                  <div className="bg-white rounded p-2 font-mono text-xs text-gray-600">
+                  <div className="bg-white dark:bg-gray-700 rounded p-2 font-mono text-xs text-gray-600 dark:text-gray-300">
                     first_name, last_name, grade_level, section, dietary_restrictions
                   </div>
                   <button
@@ -702,25 +702,25 @@ function ImportModal({
               <>
                 <div className="space-y-3">
                   <div className="flex gap-3">
-                    <div className="flex-1 bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                      <CheckCircle size={24} className="mx-auto text-green-600 mb-1" />
-                      <p className="text-2xl font-bold text-green-600">{results.success}</p>
-                      <p className="text-sm text-green-700">Imported</p>
+                    <div className="flex-1 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
+                      <CheckCircle size={24} className="mx-auto text-green-600 dark:text-green-400 mb-1" />
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">{results.success}</p>
+                      <p className="text-sm text-green-700 dark:text-green-500">Imported</p>
                     </div>
                     {results.failed > 0 && (
-                      <div className="flex-1 bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                        <AlertCircle size={24} className="mx-auto text-red-600 mb-1" />
-                        <p className="text-2xl font-bold text-red-600">{results.failed}</p>
-                        <p className="text-sm text-red-700">Failed</p>
+                      <div className="flex-1 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-center">
+                        <AlertCircle size={24} className="mx-auto text-red-600 dark:text-red-400 mb-1" />
+                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">{results.failed}</p>
+                        <p className="text-sm text-red-700 dark:text-red-500">Failed</p>
                       </div>
                     )}
                   </div>
 
                   {results.errors.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-h-40 overflow-y-auto">
-                      <p className="text-sm font-medium text-red-800 mb-2">Errors:</p>
+                    <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">Errors:</p>
                       {results.errors.map((err, i) => (
-                        <p key={i} className="text-xs text-red-600">{err}</p>
+                        <p key={i} className="text-xs text-red-600 dark:text-red-400">{err}</p>
                       ))}
                     </div>
                   )}

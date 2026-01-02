@@ -185,11 +185,12 @@ export async function getWeekdaysWithStatus(daysAhead: number = 5): Promise<Week
   });
   
   const checkDate = new Date(today);
-  // Continue until we have enough days (need to check more days to find make-up Saturdays)
+  // Continue until we have enough WEEKDAYS (Mon-Fri), makeup Saturdays are extra
   const maxDaysToCheck = daysAhead * 3; // Check up to 3 weeks ahead
   let daysChecked = 0;
+  let weekdayCount = 0; // Count only Mon-Fri days
   
-  while (weekdays.length < daysAhead && daysChecked < maxDaysToCheck) {
+  while (weekdayCount < daysAhead && daysChecked < maxDaysToCheck) {
     const dayOfWeek = checkDate.getDay();
     const dateStr = formatDateLocal(checkDate);
     const monthDay = dateStr.slice(5); // MM-DD
@@ -216,6 +217,12 @@ export async function getWeekdaysWithStatus(daysAhead: number = 5): Promise<Week
         makeupDayName,
         isSaturday
       });
+      
+      // Only count Mon-Fri towards the daysAhead limit
+      // Makeup Saturdays are bonus days that don't count against the limit
+      if (!isSaturday) {
+        weekdayCount++;
+      }
     }
     
     checkDate.setDate(checkDate.getDate() + 1);

@@ -371,7 +371,7 @@ export default function AdminUsers() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
               activeTab === 'parents'
                 ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
             }`}
           >
             <Users size={18} />
@@ -382,7 +382,7 @@ export default function AdminUsers() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
               activeTab === 'staff'
                 ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
             }`}
           >
             <ShieldCheck size={18} />
@@ -393,7 +393,7 @@ export default function AdminUsers() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
               activeTab === 'invitations'
                 ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
             }`}
           >
             <Ticket size={18} />
@@ -409,7 +409,7 @@ export default function AdminUsers() {
               placeholder={activeTab === 'parents' ? 'Search parents...' : 'Search staff...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <button
@@ -425,9 +425,9 @@ export default function AdminUsers() {
         {activeTab === 'parents' && (
           <div className="space-y-3">
             {filteredParents?.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 text-center">
-                <Users size={48} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">No parents found</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                <Users size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">No parents found</p>
                 <button
                   onClick={() => openCreateModal('parent')}
                   className="mt-4 text-primary-600 hover:underline"
@@ -443,8 +443,8 @@ export default function AdminUsers() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-                        <User size={24} className="text-primary-600" />
+                      <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                        <User size={24} className="text-primary-600 dark:text-primary-400" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -469,39 +469,39 @@ export default function AdminUsers() {
                         setSelectedParent(parent);
                         setShowTopUpModal(true);
                       }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-sm font-medium"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 text-sm font-medium"
                     >
                       <Plus size={16} />
                       Top Up
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <Baby size={16} className="text-blue-600" />
+                      <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <Baby size={16} className="text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">Children</p>
-                        <p className="font-semibold text-gray-900">{parent.children_count}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Children</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">{parent.children_count}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-                        <ShoppingBag size={16} className="text-purple-600" />
+                      <div className="w-8 h-8 bg-purple-50 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                        <ShoppingBag size={16} className="text-purple-600 dark:text-purple-400" />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">Orders</p>
-                        <p className="font-semibold text-gray-900">{parent.orders_count}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Orders</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">{parent.orders_count}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                        <Wallet size={16} className="text-green-600" />
+                      <div className="w-8 h-8 bg-green-50 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                        <Wallet size={16} className="text-green-600 dark:text-green-400" />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">Balance</p>
-                        <p className="font-semibold text-green-600">₱{parent.balance.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Balance</p>
+                        <p className="font-semibold text-green-600 dark:text-green-400">₱{parent.balance.toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
@@ -519,9 +519,9 @@ export default function AdminUsers() {
         {activeTab === 'staff' && (
           <div className="space-y-3">
             {filteredStaff?.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 text-center">
-                <Shield size={48} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">No staff members found</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                <Shield size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">No staff members found</p>
                 <button
                   onClick={() => openCreateModal('staff')}
                   className="mt-4 text-primary-600 hover:underline"
@@ -533,33 +533,33 @@ export default function AdminUsers() {
               filteredStaff?.map((staff) => (
                 <div
                   key={staff.id}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                  className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        staff.role === 'admin' ? 'bg-purple-100' : 'bg-blue-100'
+                        staff.role === 'admin' ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-blue-100 dark:bg-blue-900/30'
                       }`}>
                         {staff.role === 'admin' ? (
-                          <ShieldCheck size={24} className="text-purple-600" />
+                          <ShieldCheck size={24} className="text-purple-600 dark:text-purple-400" />
                         ) : (
-                          <Shield size={24} className="text-blue-600" />
+                          <Shield size={24} className="text-blue-600 dark:text-blue-400" />
                         )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-gray-900">
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                             {staff.first_name} {staff.last_name}
                           </h3>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                             staff.role === 'admin'
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-blue-100 text-blue-700'
+                              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                              : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                           }`}>
                             {staff.role}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
                           <Mail size={14} />
                           {staff.email}
                         </p>
@@ -579,9 +579,9 @@ export default function AdminUsers() {
         {activeTab === 'invitations' && (
           <div className="space-y-4">
             {/* Registration URL Info */}
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-              <p className="text-sm text-blue-800 font-medium mb-2">📋 How to invite parents:</p>
-              <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-xl p-4">
+              <p className="text-sm text-blue-800 dark:text-blue-300 font-medium mb-2">📋 How to invite parents:</p>
+              <ol className="text-sm text-blue-700 dark:text-blue-400 space-y-1 list-decimal list-inside">
                 <li>Click "Send Invite" and enter email addresses</li>
                 <li>Share the invite code with parents (WhatsApp, print, etc.)</li>
                 <li>Parents visit: <strong>{window.location.origin}/register</strong></li>
@@ -590,9 +590,9 @@ export default function AdminUsers() {
             </div>
 
             {filteredInvitations?.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 text-center">
-                <Ticket size={48} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">No pending invitations</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                <Ticket size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">No pending invitations</p>
                 <button
                   onClick={() => openCreateModal('parent')}
                   className="mt-4 text-primary-600 hover:underline"
@@ -605,12 +605,12 @@ export default function AdminUsers() {
                 {filteredInvitations?.map((invitation) => (
                   <div
                     key={invitation.id}
-                    className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                    className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
-                          <Ticket size={24} className="text-amber-600" />
+                        <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+                          <Ticket size={24} className="text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
                           <p className="text-sm text-gray-500">{invitation.email}</p>
@@ -620,7 +620,7 @@ export default function AdminUsers() {
                             </code>
                             <button
                               onClick={() => copyToClipboard(invitation.code)}
-                              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600"
+                              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                               title="Copy code"
                             >
                               <Copy size={16} />
@@ -633,8 +633,8 @@ export default function AdminUsers() {
                             </span>
                             <span className={`px-2 py-0.5 rounded-full ${
                               invitation.role === 'parent' 
-                                ? 'bg-primary-100 text-primary-700' 
-                                : 'bg-blue-100 text-blue-700'
+                                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400' 
+                                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                             }`}>
                               {invitation.role}
                             </span>
@@ -643,7 +643,7 @@ export default function AdminUsers() {
                       </div>
                       <button
                         onClick={() => copyToClipboard(`${window.location.origin}/register?code=${invitation.code}`)}
-                        className="px-3 py-1.5 text-sm bg-primary-50 text-primary-600 rounded-lg hover:bg-primary-100 flex items-center gap-1"
+                        className="px-3 py-1.5 text-sm bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 flex items-center gap-1"
                       >
                         <Copy size={14} />
                         Copy Link
@@ -707,25 +707,25 @@ function TopUpModal({ parent, onClose, onSubmit, isLoading }: TopUpModalProps) {
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-          <div className="flex items-center justify-between p-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold">Top Up Balance</h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Top Up Balance</h2>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
               <X size={20} />
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-500">Parent</p>
-              <p className="font-medium">{parent.first_name} {parent.last_name}</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Current Balance: <span className="text-green-600 font-medium">₱{parent.balance.toFixed(2)}</span>
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Parent</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">{parent.first_name} {parent.last_name}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Current Balance: <span className="text-green-600 dark:text-green-400 font-medium">₱{parent.balance.toFixed(2)}</span>
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Amount to Add (₱)
               </label>
               <input
@@ -735,7 +735,7 @@ function TopUpModal({ parent, onClose, onSubmit, isLoading }: TopUpModalProps) {
                 min="1"
                 step="0.01"
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 placeholder="Enter amount"
               />
             </div>
@@ -746,7 +746,7 @@ function TopUpModal({ parent, onClose, onSubmit, isLoading }: TopUpModalProps) {
                   key={preset}
                   type="button"
                   onClick={() => setAmount(preset.toString())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-900 dark:text-gray-100"
                 >
                   ₱{preset}
                 </button>
@@ -754,8 +754,8 @@ function TopUpModal({ parent, onClose, onSubmit, isLoading }: TopUpModalProps) {
             </div>
 
             {amount && parseFloat(amount) > 0 && (
-              <div className="bg-green-50 rounded-lg p-3">
-                <p className="text-sm text-green-700">
+              <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3">
+                <p className="text-sm text-green-700 dark:text-green-400">
                   New Balance: <span className="font-bold">₱{(parent.balance + parseFloat(amount)).toFixed(2)}</span>
                 </p>
               </div>
@@ -765,7 +765,7 @@ function TopUpModal({ parent, onClose, onSubmit, isLoading }: TopUpModalProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -932,30 +932,30 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
     <>
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full my-8">
-          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full my-8">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                type === 'parent' ? 'bg-primary-100' : 'bg-blue-100'
+                type === 'parent' ? 'bg-primary-100 dark:bg-primary-900/30' : 'bg-blue-100 dark:bg-blue-900/30'
               }`}>
                 {type === 'parent' ? (
-                  <User size={20} className="text-primary-600" />
+                  <User size={20} className="text-primary-600 dark:text-primary-400" />
                 ) : (
-                  <Shield size={20} className="text-blue-600" />
+                  <Shield size={20} className="text-blue-600 dark:text-blue-400" />
                 )}
               </div>
               <div>
-                <h2 className="text-lg font-bold">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                   {type === 'parent' ? 'Add Parent' : 'Add Staff Member'}
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   {form.mode === 'invite' 
                     ? 'Send invitation email' 
                     : 'Create account with password'}
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
               <X size={20} />
             </button>
           </div>
@@ -963,7 +963,7 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
             {/* Mode Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Registration Method
               </label>
               <div className="flex gap-2">
@@ -972,8 +972,8 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                   onClick={() => updateForm('mode', 'invite')}
                   className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${
                     form.mode === 'invite'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   <Users size={18} />
@@ -984,15 +984,15 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                   onClick={() => updateForm('mode', 'create')}
                   className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${
                     form.mode === 'create'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   <UserPlus size={18} />
                   <span className="font-medium text-sm">Full Details</span>
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                 {form.mode === 'invite' 
                   ? '⚡ Bulk add by email only - users complete setup on first login' 
                   : '📝 Add one user with full details and custom password'}
@@ -1002,7 +1002,7 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
             {/* Role Selection (for staff only) */}
             {type === 'staff' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Role
                 </label>
                 <div className="flex gap-3">
@@ -1011,8 +1011,8 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                     onClick={() => updateForm('role', 'staff')}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${
                       form.role === 'staff'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     <Shield size={20} />
@@ -1023,15 +1023,15 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                     onClick={() => updateForm('role', 'admin')}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${
                       form.role === 'admin'
-                        ? 'border-purple-500 bg-purple-50 text-purple-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     <ShieldCheck size={20} />
                     <span className="font-medium">Admin</span>
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                   {form.role === 'staff' 
                     ? 'Can fulfill orders and manage daily operations' 
                     : 'Full access to all features including user management'}
@@ -1042,22 +1042,22 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
             {/* INVITE MODE - Bulk Email Input */}
             {form.mode === 'invite' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Email Addresses {emailCount > 0 && <span className="text-primary-600">({emailCount})</span>}
                 </label>
                 <textarea
                   value={form.emails}
                   onChange={(e) => updateForm('emails', e.target.value)}
                   rows={4}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
-                    errors.emails ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    errors.emails ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                   }`}
                   placeholder="Enter email addresses (one per line, or separated by commas)&#10;&#10;Example:&#10;parent1@email.com&#10;parent2@email.com, parent3@email.com"
                 />
                 {errors.emails && (
                   <p className="text-xs text-red-500 mt-1">{errors.emails}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Separate multiple emails with commas, semicolons, or new lines
                 </p>
               </div>
@@ -1069,15 +1069,15 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                 {/* Name Fields */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       First Name *
                     </label>
                     <input
                       type="text"
                       value={form.firstName}
                       onChange={(e) => updateForm('firstName', e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
-                        errors.firstName ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                        errors.firstName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                       }`}
                       placeholder="Juan"
                     />
@@ -1086,15 +1086,15 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Last Name *
                     </label>
                     <input
                       type="text"
                       value={form.lastName}
                       onChange={(e) => updateForm('lastName', e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
-                        errors.lastName ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                        errors.lastName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                       }`}
                       placeholder="Dela Cruz"
                     />
@@ -1106,17 +1106,17 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
 
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Email Address *
                   </label>
                   <div className="relative">
-                    <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                     <input
                       type="email"
                       value={form.email}
                       onChange={(e) => updateForm('email', e.target.value)}
-                      className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
-                        errors.email ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                        errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                       }`}
                       placeholder="email@example.com"
                     />
@@ -1129,16 +1129,16 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                 {/* Phone (for parents only) */}
                 {type === 'parent' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Phone Number
                     </label>
                     <div className="relative">
-                      <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                       <input
                         type="tel"
                         value={form.phoneNumber}
                         onChange={(e) => updateForm('phoneNumber', e.target.value)}
-                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         placeholder="+63 917 123 4567"
                       />
                     </div>
@@ -1147,7 +1147,7 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
 
                 {/* Password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Password *
                   </label>
                   <div className="relative">
@@ -1155,15 +1155,15 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                       type={showPassword ? 'text' : 'password'}
                       value={form.password}
                       onChange={(e) => updateForm('password', e.target.value)}
-                      className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
-                        errors.password ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                        errors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                       }`}
                       placeholder="Min. 6 characters"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -1175,15 +1175,15 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
 
                 {/* Confirm Password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Confirm Password *
                   </label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={form.confirmPassword}
                     onChange={(e) => updateForm('confirmPassword', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
-                      errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                      errors.confirmPassword ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
                     placeholder="Confirm password"
                   />
@@ -1196,8 +1196,8 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
 
             {/* Invite Mode Info */}
             {form.mode === 'invite' && (
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                <p className="text-sm text-blue-700">
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
                   <strong>📧 Invitation Email</strong><br />
                   An email will be sent to <strong>{form.email || 'the user'}</strong> with a link to set their password and complete registration.
                 </p>
@@ -1210,7 +1210,7 @@ function CreateUserModal({ type, onClose, onSubmit, isLoading }: CreateUserModal
                 type="button"
                 onClick={onClose}
                 disabled={isLoading}
-                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
               >
                 Cancel
               </button>

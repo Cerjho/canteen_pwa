@@ -162,15 +162,15 @@ export default function StaffProducts() {
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
-            <div className="text-2xl font-bold text-green-600">{products?.filter(p => p.available).length || 0}</div>
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">{products?.filter(p => p.available).length || 0}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Available</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
-            <div className="text-2xl font-bold text-red-600">{unavailableCount}</div>
+            <div className="text-2xl font-bold text-red-600 dark:text-red-400">{unavailableCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Unavailable</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
-            <div className="text-2xl font-bold text-amber-600">{lowStockCount}</div>
+            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{lowStockCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Low Stock</div>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function StaffProducts() {
           <button
             onClick={() => markAllAvailable.mutate()}
             disabled={markAllAvailable.isPending}
-            className="w-full mb-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg flex items-center justify-center gap-2 hover:bg-green-100"
+            className="w-full mb-4 py-2 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg flex items-center justify-center gap-2 hover:bg-green-100 dark:hover:bg-green-900/50"
           >
             <Check size={18} />
             Mark All Products Available ({unavailableCount} unavailable)
@@ -190,7 +190,7 @@ export default function StaffProducts() {
         {/* Search and Filter */}
         <div className="space-y-3 mb-4">
           <div className="relative">
-            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               placeholder="Search products..."
@@ -261,7 +261,7 @@ export default function StaffProducts() {
                       <h3 className="font-semibold text-gray-900 dark:text-gray-100">{product.name}</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{product.category}</p>
                     </div>
-                    <span className="text-lg font-bold text-primary-600">₱{product.price.toFixed(2)}</span>
+                    <span className="text-lg font-bold text-primary-600 dark:text-primary-400">₱{product.price.toFixed(2)}</span>
                   </div>
                   
                   {/* Stock & Availability Controls */}
@@ -283,7 +283,7 @@ export default function StaffProducts() {
                     
                     {/* Low Stock Warning */}
                     {(product.stock_quantity ?? 0) < 10 && (product.stock_quantity ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-amber-600">
+                      <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <AlertTriangle size={12} />
                         Low
                       </span>
@@ -294,8 +294,8 @@ export default function StaffProducts() {
                       onClick={() => toggleAvailability.mutate({ id: product.id, available: !product.available })}
                       className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium ${
                         product.available
-                          ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                          : 'bg-green-50 text-green-600 hover:bg-green-100'
+                          ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50'
+                          : 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50'
                       }`}
                     >
                       {product.available ? (
@@ -317,7 +317,7 @@ export default function StaffProducts() {
           ))}
           
           {filteredProducts?.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Package size={48} className="mx-auto mb-2 opacity-50" />
               <p>No products found</p>
             </div>

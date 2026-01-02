@@ -50,8 +50,8 @@ export function BottomNav() {
             className={({ isActive }) =>
               `relative flex flex-col items-center justify-center px-4 py-2 transition-colors ${
                 isActive
-                  ? 'text-primary-600'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-primary-600 dark:text-primary-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`
             }
           >

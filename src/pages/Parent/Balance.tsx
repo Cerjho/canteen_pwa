@@ -58,13 +58,13 @@ export default function Balance() {
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case 'topup':
-        return <ArrowUpCircle className="text-green-600" size={24} />;
+        return <ArrowUpCircle className="text-green-600 dark:text-green-400" size={24} />;
       case 'refund':
-        return <ArrowUpCircle className="text-blue-600" size={24} />;
+        return <ArrowUpCircle className="text-blue-600 dark:text-blue-400" size={24} />;
       case 'payment':
-        return <ArrowDownCircle className="text-red-600" size={24} />;
+        return <ArrowDownCircle className="text-red-600 dark:text-red-400" size={24} />;
       default:
-        return <Wallet className="text-gray-600" size={24} />;
+        return <Wallet className="text-gray-600 dark:text-gray-400" size={24} />;
     }
   };
 
@@ -72,11 +72,11 @@ export default function Balance() {
     switch (type) {
       case 'topup':
       case 'refund':
-        return 'text-green-600';
+        return 'text-green-600 dark:text-green-400';
       case 'payment':
-        return 'text-red-600';
+        return 'text-red-600 dark:text-red-400';
       default:
-        return 'text-gray-600';
+        return 'text-gray-600 dark:text-gray-400';
     }
   };
 
@@ -126,14 +126,14 @@ export default function Balance() {
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <button className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <div className="p-3 bg-green-100 rounded-full">
-              <TrendingUp size={20} className="text-green-600" />
+            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
+              <TrendingUp size={20} className="text-green-600 dark:text-green-400" />
             </div>
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Top Up</span>
           </button>
           <button className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <div className="p-3 bg-blue-100 rounded-full">
-              <RefreshCw size={20} className="text-blue-600" />
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+              <RefreshCw size={20} className="text-blue-600 dark:text-blue-400" />
             </div>
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Transfer</span>
           </button>

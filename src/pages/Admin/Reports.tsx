@@ -217,10 +217,10 @@ export default function AdminReports() {
 
   const getPaymentIcon = (method: string) => {
     switch (method) {
-      case 'cash': return <Banknote size={20} className="text-green-600" />;
-      case 'gcash': return <CreditCard size={20} className="text-blue-600" />;
-      case 'balance': return <Wallet size={20} className="text-purple-600" />;
-      default: return <DollarSign size={20} className="text-gray-600" />;
+      case 'cash': return <Banknote size={20} className="text-green-600 dark:text-green-400" />;
+      case 'gcash': return <CreditCard size={20} className="text-blue-600 dark:text-blue-400" />;
+      case 'balance': return <Wallet size={20} className="text-purple-600 dark:text-purple-400" />;
+      default: return <DollarSign size={20} className="text-gray-600 dark:text-gray-400" />;
     }
   };
 
@@ -244,7 +244,7 @@ export default function AdminReports() {
           />
           <button
             onClick={exportReport}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 border border-gray-200"
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600"
           >
             <Download size={18} />
             Export
@@ -258,37 +258,37 @@ export default function AdminReports() {
               <span className="text-gray-500 dark:text-gray-400">Today's Revenue</span>
               {comparisonStats && comparisonStats.todayChange !== 0 && (
                 <span className={`flex items-center gap-1 text-sm font-medium ${
-                  comparisonStats.todayChange > 0 ? 'text-green-600' : 'text-red-600'
+                  comparisonStats.todayChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                 }`}>
                   {comparisonStats.todayChange > 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                   {Math.abs(comparisonStats.todayChange).toFixed(1)}%
                 </span>
               )}
             </div>
-            <p className="text-3xl font-bold text-gray-900">
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               ₱{(comparisonStats?.todayRevenue || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               vs yesterday: ₱{(comparisonStats?.yesterdayRevenue || 0).toFixed(2)}
             </p>
           </div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-500">This Week</span>
+              <span className="text-gray-500 dark:text-gray-400">This Week</span>
               {comparisonStats && comparisonStats.weekChange !== 0 && (
                 <span className={`flex items-center gap-1 text-sm font-medium ${
-                  comparisonStats.weekChange > 0 ? 'text-green-600' : 'text-red-600'
+                  comparisonStats.weekChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                 }`}>
                   {comparisonStats.weekChange > 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                   {Math.abs(comparisonStats.weekChange).toFixed(1)}%
                 </span>
               )}
             </div>
-            <p className="text-3xl font-bold text-gray-900">
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               ₱{(comparisonStats?.thisWeekRevenue || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               vs last week: ₱{(comparisonStats?.lastWeekRevenue || 0).toFixed(2)}
             </p>
           </div>
@@ -296,7 +296,7 @@ export default function AdminReports() {
 
         {/* Date Range Selector */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900">Revenue Trend</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">Revenue Trend</h3>
           <div className="flex gap-2">
             {(['week', 'month', '3months'] as const).map(range => (
               <button
@@ -305,7 +305,7 @@ export default function AdminReports() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
                   dateRange === range
                     ? 'bg-primary-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
                 }`}
               >
                 {range === 'week' ? '7 Days' : range === 'month' ? '30 Days' : '90 Days'}
@@ -352,27 +352,27 @@ export default function AdminReports() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">{revenueData?.orderCount || 0}</p>
-              <p className="text-sm text-gray-500">Total Orders</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{revenueData?.orderCount || 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total Orders</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 ₱{revenueData?.orderCount ? ((revenueData.total || 0) / revenueData.orderCount).toFixed(2) : '0.00'}
               </p>
-              <p className="text-sm text-gray-500">Avg Order Value</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Avg Order Value</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Payment Breakdown */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Payment Methods</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Payment Methods</h3>
             </div>
             <div className="p-4">
               {revenueData?.paymentBreakdown.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">No data available</p>
+                <p className="text-center text-gray-500 dark:text-gray-400 py-4">No data available</p>
               ) : (
                 <div className="space-y-4">
                   {revenueData?.paymentBreakdown.map((payment) => {
@@ -385,17 +385,17 @@ export default function AdminReports() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {getPaymentIcon(payment.method)}
-                            <span className="font-medium capitalize">{payment.method}</span>
+                            <span className="font-medium capitalize text-gray-900 dark:text-gray-100">{payment.method}</span>
                           </div>
-                          <span className="font-semibold">₱{payment.amount.toFixed(2)}</span>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">₱{payment.amount.toFixed(2)}</span>
                         </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-primary-500 rounded-full"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {payment.count} transactions • {percentage.toFixed(1)}%
                         </p>
                       </div>
@@ -407,30 +407,30 @@ export default function AdminReports() {
           </div>
 
           {/* Recent Transactions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Recent Transactions</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Recent Transactions</h3>
             </div>
-            <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-80 overflow-y-auto">
               {transactions?.map((tx) => (
                 <div key={tx.id} className="px-4 py-3 flex items-center gap-3">
                   <div className={`p-2 rounded-full ${
-                    tx.type === 'payment' ? 'bg-red-100' :
-                    tx.type === 'refund' ? 'bg-blue-100' :
-                    'bg-green-100'
+                    tx.type === 'payment' ? 'bg-red-100 dark:bg-red-900/30' :
+                    tx.type === 'refund' ? 'bg-blue-100 dark:bg-blue-900/30' :
+                    'bg-green-100 dark:bg-green-900/30'
                   }`}>
-                    {tx.type === 'payment' ? <ArrowDownRight size={16} className="text-red-600" /> :
-                     tx.type === 'refund' ? <TrendingDown size={16} className="text-blue-600" /> :
-                     <ArrowUpRight size={16} className="text-green-600" />}
+                    {tx.type === 'payment' ? <ArrowDownRight size={16} className="text-red-600 dark:text-red-400" /> :
+                     tx.type === 'refund' ? <TrendingDown size={16} className="text-blue-600 dark:text-blue-400" /> :
+                     <ArrowUpRight size={16} className="text-green-600 dark:text-green-400" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 capitalize">{tx.type}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{tx.type}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {tx.parent.first_name} {tx.parent.last_name} • {format(new Date(tx.created_at), 'MMM d, h:mm a')}
                     </p>
                   </div>
                   <p className={`font-semibold ${
-                    tx.type === 'payment' ? 'text-red-600' : 'text-green-600'
+                    tx.type === 'payment' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
                   }`}>
                     {tx.type === 'payment' ? '-' : '+'}₱{tx.amount.toFixed(2)}
                   </p>

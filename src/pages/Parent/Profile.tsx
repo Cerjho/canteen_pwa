@@ -249,8 +249,8 @@ export default function Profile() {
         <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
-                <User size={32} className="text-primary-600" />
+              <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                <User size={32} className="text-primary-600 dark:text-primary-400" />
               </div>
               <div>
                 {isEditingProfile ? (
@@ -333,15 +333,15 @@ export default function Profile() {
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
-                  <Wallet size={18} className="text-green-600" />
+                  <Wallet size={18} className="text-green-600 dark:text-green-400" />
                 </div>
                 <span className="text-gray-600 dark:text-gray-400">Account Balance</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-green-600">
+                <span className="text-xl font-bold text-green-600 dark:text-green-400">
                   ₱{profile?.balance?.toFixed(2) || '0.00'}
                 </span>
-                <ChevronRight size={20} className="text-gray-400" />
+                <ChevronRight size={20} className="text-gray-400 dark:text-gray-500" />
               </div>
             </Link>
 
@@ -350,17 +350,17 @@ export default function Profile() {
               className="w-full flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 -mx-2 px-2 py-2 rounded-lg transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-full">
-                  <Key size={18} className="text-blue-600" />
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                  <Key size={18} className="text-blue-600 dark:text-blue-400" />
                 </div>
                 <span className="text-gray-600 dark:text-gray-400">Change Password</span>
               </div>
-              <ChevronRight size={20} className="text-gray-400" />
+              <ChevronRight size={20} className="text-gray-400 dark:text-gray-500" />
             </button>
 
             <div className="flex items-center gap-3 px-2 py-2">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-full">
-                <Clock size={18} className="text-purple-600" />
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                <Clock size={18} className="text-purple-600 dark:text-purple-400" />
               </div>
               <div className="flex-1">
                 <span className="text-gray-600 dark:text-gray-400 text-sm">Member Since</span>
@@ -393,10 +393,10 @@ export default function Profile() {
           </div>
 
           {/* Info box about student IDs */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
             <div className="flex gap-2">
-              <AlertCircle size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-blue-800">
+              <AlertCircle size={18} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-800 dark:text-blue-300">
                 Students are registered by the school. Use the <strong>Student ID</strong> provided by the school to link your child to your account.
               </p>
             </div>
@@ -423,7 +423,7 @@ export default function Profile() {
                       {student.section && ` - Section ${student.section}`}
                     </p>
                     {student.dietary_restrictions && (
-                      <p className="text-xs text-amber-600 mt-1">
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                         ⚠️ {student.dietary_restrictions}
                       </p>
                     )}
@@ -443,7 +443,7 @@ export default function Profile() {
                       aria-label="Unlink student"
                       title="Unlink student"
                     >
-                      <Unlink size={18} className="text-amber-600" />
+                      <Unlink size={18} className="text-amber-600 dark:text-amber-400" />
                     </button>
                   </div>
                 </div>
@@ -501,7 +501,7 @@ export default function Profile() {
         {/* Logout Button */}
         <button
           onClick={() => setShowLogoutConfirm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg font-medium transition-colors bg-white dark:bg-gray-800 shadow"
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg font-medium transition-colors bg-white dark:bg-gray-800 shadow"
         >
           <LogOut size={20} />
           Sign Out
@@ -583,7 +583,7 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-gray-100">
-          <Link2 size={24} className="text-primary-600" />
+          <Link2 size={24} className="text-primary-600 dark:text-primary-400" />
           Link Your Student
         </h2>
 
@@ -607,8 +607,8 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
             />
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-            <p className="text-sm text-amber-800">
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <p className="text-sm text-amber-800 dark:text-amber-300">
               💡 <strong>Don't have a Student ID?</strong><br />
               Contact the school administration to get your child's Student ID.
             </p>

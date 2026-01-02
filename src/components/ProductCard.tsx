@@ -44,7 +44,7 @@ export function ProductCard({
         >
           <Heart
             size={20}
-            className={isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400'}
+            className={isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}
           />
         </button>
       )}
@@ -60,7 +60,7 @@ export function ProductCard({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 line-clamp-1">{name}</h3>
         <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{description}</p>
         <div className="flex items-center justify-between">
-          <span className="text-2xl font-bold text-primary-600">
+          <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
             ₱{price.toFixed(2)}
           </span>
           <button

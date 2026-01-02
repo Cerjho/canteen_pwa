@@ -208,7 +208,7 @@ export default function AdminProducts() {
             <button
               onClick={() => setCategoryFilter('all')}
               className={`px-4 py-2 rounded-lg font-medium ${
-                categoryFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700'
+                categoryFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
               }`}
             >
               All
@@ -271,11 +271,11 @@ export default function AdminProducts() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className={`font-medium ${product.stock_quantity < 10 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                        <span className={`font-medium ${product.stock_quantity < 10 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
                           {product.stock_quantity}
                         </span>
                         {product.stock_quantity < 10 && (
-                          <AlertTriangle size={16} className="text-red-500" />
+                          <AlertTriangle size={16} className="text-red-500 dark:text-red-400" />
                         )}
                       </div>
                     </td>
@@ -284,8 +284,8 @@ export default function AdminProducts() {
                         onClick={() => toggleAvailability.mutate({ id: product.id, available: !product.available })}
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           product.available
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                         }`}
                       >
                         {product.available ? 'Available' : 'Unavailable'}
@@ -301,7 +301,7 @@ export default function AdminProducts() {
                         </button>
                         <button
                           onClick={() => handleDelete(product.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -521,7 +521,7 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
                 
                 {/* Fallback URL input */}
                 <div className="mt-3">
-                  <p className="text-xs text-gray-500 mb-1">Or enter image URL:</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Or enter image URL:</p>
                   <input
                     type="url"
                     value={formData.image_url}

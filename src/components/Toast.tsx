@@ -64,11 +64,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const getIcon = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="text-green-500" size={20} />;
+        return <CheckCircle className="text-green-500 dark:text-green-400" size={20} />;
       case 'error':
-        return <XCircle className="text-red-500" size={20} />;
+        return <XCircle className="text-red-500 dark:text-red-400" size={20} />;
       default:
-        return <AlertCircle className="text-blue-500" size={20} />;
+        return <AlertCircle className="text-blue-500 dark:text-blue-400" size={20} />;
     }
   };
 

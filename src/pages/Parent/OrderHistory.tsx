@@ -26,37 +26,37 @@ export default function OrderHistory() {
         return { 
           icon: Clock, 
           label: 'Pending', 
-          color: 'text-gray-600 bg-gray-100' 
+          color: 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700' 
         };
       case 'preparing':
         return { 
           icon: ChefHat, 
           label: 'Preparing', 
-          color: 'text-yellow-700 bg-yellow-100' 
+          color: 'text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30' 
         };
       case 'ready':
         return { 
           icon: Package, 
           label: 'Ready for Pickup', 
-          color: 'text-green-700 bg-green-100' 
+          color: 'text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30' 
         };
       case 'completed':
         return { 
           icon: CheckCircle, 
           label: 'Completed', 
-          color: 'text-blue-700 bg-blue-100' 
+          color: 'text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30' 
         };
       case 'cancelled':
         return { 
           icon: XCircle, 
           label: 'Cancelled', 
-          color: 'text-red-700 bg-red-100' 
+          color: 'text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30' 
         };
       default:
         return { 
           icon: Clock, 
           label: status, 
-          color: 'text-gray-600 bg-gray-100' 
+          color: 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700' 
         };
     }
   };
@@ -151,7 +151,7 @@ export default function OrderHistory() {
                   <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
                     <div>
                       <span className="text-sm text-gray-500 dark:text-gray-400">Total</span>
-                      <p className="text-lg font-bold text-primary-600">
+                      <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
                         ₱{order.total_amount.toFixed(2)}
                       </p>
                     </div>

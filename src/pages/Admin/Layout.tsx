@@ -45,7 +45,7 @@ export default function AdminLayout() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-4">You don't have permission to access this area.</p>
-          <a href="/menu" className="text-primary-600 hover:underline">
+          <a href="/menu" className="text-primary-600 dark:text-primary-400 hover:underline">
             Return to Menu
           </a>
         </div>

@@ -383,13 +383,13 @@ export default function StaffDashboard() {
   const getStatusBadge = (status: string, paymentStatus?: string) => {
     // Show awaiting payment status differently
     if (status === 'awaiting_payment' || paymentStatus === 'awaiting_payment') {
-      return 'bg-orange-200 text-orange-800';
+      return 'bg-orange-200 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300';
     }
     const styles: Record<string, string> = {
-      pending: 'bg-gray-200 text-gray-700',
-      preparing: 'bg-yellow-200 text-yellow-800',
-      ready: 'bg-green-200 text-green-800',
-      completed: 'bg-blue-200 text-blue-800'
+      pending: 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+      preparing: 'bg-yellow-200 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300',
+      ready: 'bg-green-200 dark:bg-green-900/50 text-green-800 dark:text-green-300',
+      completed: 'bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
     };
     return styles[status] || styles.pending;
   };
@@ -421,9 +421,9 @@ export default function StaffDashboard() {
 
   const getWaitTimeColor = (category: 'normal' | 'warning' | 'critical') => {
     switch (category) {
-      case 'critical': return 'text-red-600 bg-red-50';
-      case 'warning': return 'text-amber-600 bg-amber-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'critical': return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30';
+      case 'warning': return 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30';
+      default: return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700';
     }
   };
 
@@ -451,7 +451,7 @@ export default function StaffDashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`p-2 rounded-full ${soundEnabled ? 'text-primary-600 bg-primary-50' : 'text-gray-400 bg-gray-100'}`}
+              className={`p-2 rounded-full ${soundEnabled ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' : 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700'}`}
               title={soundEnabled ? 'Mute notifications' : 'Enable notifications'}
             >
               {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
@@ -501,7 +501,7 @@ export default function StaffDashboard() {
             onClick={() => setStatusFilter('awaiting_payment')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500' : ''}`}
           >
-            <div className="text-xl font-bold text-orange-600">{awaitingPaymentCount}</div>
+            <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{awaitingPaymentCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Awaiting Pay</div>
           </button>
           <button 
@@ -515,7 +515,7 @@ export default function StaffDashboard() {
             onClick={() => setStatusFilter('preparing')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-primary-500' : ''}`}
           >
-            <div className="text-xl font-bold text-yellow-600">{preparingCount}</div>
+            <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{preparingCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Preparing</div>
           </button>
           <button 
@@ -546,8 +546,8 @@ export default function StaffDashboard() {
 
         {/* Batch Actions */}
         {selectedOrders.length > 0 && (
-          <div className="bg-primary-50 border border-primary-200 rounded-lg p-3 mb-4 flex items-center justify-between">
-            <span className="text-sm font-medium text-primary-700">
+          <div className="bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg p-3 mb-4 flex items-center justify-between">
+            <span className="text-sm font-medium text-primary-700 dark:text-primary-400">
               {selectedOrders.length} order(s) selected
             </span>
             <div className="flex gap-2">
@@ -632,7 +632,7 @@ export default function StaffDashboard() {
                         ₱{order.total_amount.toFixed(2)}
                       </span>
                       {isAwaitingPayment && paymentTimeRemaining && (
-                        <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${paymentTimeRemaining === 'Expired' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                        <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${paymentTimeRemaining === 'Expired' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'}`}>
                           <Timer size={12} />
                           {paymentTimeRemaining}
                         </div>
@@ -648,11 +648,11 @@ export default function StaffDashboard() {
 
                   {/* Awaiting Payment Banner */}
                   {isAwaitingPayment && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
+                    <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-3 mb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Banknote className="text-orange-600" size={20} />
-                          <span className="text-sm font-medium text-orange-800">
+                          <Banknote className="text-orange-600 dark:text-orange-400" size={20} />
+                          <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
                             Cash payment pending - ₱{order.total_amount.toFixed(2)}
                           </span>
                         </div>
@@ -671,16 +671,16 @@ export default function StaffDashboard() {
                     Parent: {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                     {order.parent?.phone_number && ` • ${order.parent.phone_number}`}
                     {order.payment_method && ` • `}
-                    {order.payment_method === 'cash' && <span className="text-orange-600 font-medium">CASH</span>}
-                    {order.payment_method === 'balance' && <span className="text-green-600 font-medium">BALANCE</span>}
-                    {order.payment_method === 'gcash' && <span className="text-blue-600 font-medium">GCASH</span>}
+                    {order.payment_method === 'cash' && <span className="text-orange-600 dark:text-orange-400 font-medium">CASH</span>}
+                    {order.payment_method === 'balance' && <span className="text-green-600 dark:text-green-400 font-medium">BALANCE</span>}
+                    {order.payment_method === 'gcash' && <span className="text-blue-600 dark:text-blue-400 font-medium">GCASH</span>}
                   </p>
 
                   {/* Scheduled Date (for future orders) */}
                   {dateFilter !== 'today' && order.scheduled_for && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3 flex items-center gap-2">
-                      <span className="text-blue-600">📅</span>
-                      <span className="text-sm font-medium text-blue-800">
+                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2 mb-3 flex items-center gap-2">
+                      <span className="text-blue-600 dark:text-blue-400">📅</span>
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
                         Scheduled for: {format(new Date(order.scheduled_for + 'T00:00:00'), 'EEEE, MMMM d, yyyy')}
                       </span>
                     </div>
@@ -688,8 +688,8 @@ export default function StaffDashboard() {
 
                   {/* Order Notes */}
                   {order.notes && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
-                      <p className="text-sm text-yellow-800">📝 {order.notes}</p>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-3">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-300">📝 {order.notes}</p>
                     </div>
                   )}
 

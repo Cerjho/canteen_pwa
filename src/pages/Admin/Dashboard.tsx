@@ -560,11 +560,11 @@ export default function AdminDashboard() {
   // ==================== HELPERS ====================
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      pending: 'bg-amber-100 text-amber-700 border-amber-200',
-      preparing: 'bg-blue-100 text-blue-700 border-blue-200',
-      ready: 'bg-green-100 text-green-700 border-green-200',
-      completed: 'bg-gray-100 text-gray-700 border-gray-200',
-      cancelled: 'bg-red-100 text-red-700 border-red-200'
+      pending: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+      preparing: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+      ready: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+      completed: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+      cancelled: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
     };
     return colors[status] || colors.pending;
   };
@@ -588,7 +588,7 @@ export default function AdminDashboard() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-500">Loading dashboard...</p>
+          <p className="mt-4 text-gray-500 dark:text-gray-400">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -644,10 +644,10 @@ export default function AdminDashboard() {
             {/* Connection Status */}
             <div className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border ${
               systemHealth.realtime === 'healthy' 
-                ? 'bg-green-50 border-green-200' 
+                ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800' 
                 : systemHealth.realtime === 'degraded'
-                  ? 'bg-amber-50 border-amber-200'
-                  : 'bg-red-50 border-red-200'
+                  ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'
+                  : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
             }`}>
               <div className={`w-2 h-2 rounded-full ${
                 systemHealth.realtime === 'healthy' 
@@ -658,10 +658,10 @@ export default function AdminDashboard() {
               }`} />
               <span className={`text-xs font-medium ${
                 systemHealth.realtime === 'healthy' 
-                  ? 'text-green-700' 
+                  ? 'text-green-700 dark:text-green-400' 
                   : systemHealth.realtime === 'degraded'
-                    ? 'text-amber-700'
-                    : 'text-red-700'
+                    ? 'text-amber-700 dark:text-amber-400'
+                    : 'text-red-700 dark:text-red-400'
               }`}>
                 {systemHealth.realtime === 'healthy' ? 'Live' : systemHealth.realtime === 'degraded' ? 'Connecting...' : 'Disconnected'}
               </span>
@@ -693,9 +693,9 @@ export default function AdminDashboard() {
               <div
                 key={alert.id}
                 className={`flex items-center justify-between p-3 rounded-lg border ${
-                  alert.severity === 'error' ? 'bg-red-50 border-red-200 text-red-800' 
-                    : alert.severity === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800'
-                    : 'bg-blue-50 border-blue-200 text-blue-800'
+                  alert.severity === 'error' ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300' 
+                    : alert.severity === 'warning' ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                    : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -838,7 +838,7 @@ export default function AdminDashboard() {
                 Orders by Hour (Today)
               </h3>
               {peakHour && (
-                <span className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full flex items-center gap-1">
+                <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full flex items-center gap-1">
                   <Zap size={12} />
                   Peak: {peakHour.hour > 12 ? peakHour.hour - 12 : peakHour.hour}:00 {peakHour.hour >= 12 ? 'PM' : 'AM'}
                 </span>
@@ -880,7 +880,7 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">{product.total_quantity} sold</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-green-600">P{product.total_revenue.toFixed(0)}</p>
+                      <p className="font-semibold text-green-600 dark:text-green-400">P{product.total_revenue.toFixed(0)}</p>
                     </div>
                   </div>
                 ))
@@ -942,7 +942,7 @@ export default function AdminDashboard() {
                 <Activity size={18} className="text-purple-500 dark:text-purple-400" />
                 Live Activity
               </h3>
-              <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex items-center gap-1">
+              <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                 Real-time
               </span>
@@ -959,10 +959,10 @@ export default function AdminDashboard() {
                   <div key={activity.id} className="px-4 py-3 animate-slide-in">
                     <div className="flex items-start gap-3">
                       <div className={`p-1.5 rounded-full flex-shrink-0 ${
-                        activity.severity === 'success' ? 'bg-green-100 text-green-600' :
-                        activity.severity === 'error' ? 'bg-red-100 text-red-600' :
-                        activity.severity === 'warning' ? 'bg-amber-100 text-amber-600' :
-                        'bg-blue-100 text-blue-600'
+                        activity.severity === 'success' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                        activity.severity === 'error' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
+                        activity.severity === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' :
+                        'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                       }`}>
                         {activity.type === 'order' ? <ShoppingBag size={14} /> : activity.type === 'user' ? <Users size={14} /> : <Activity size={14} />}
                       </div>
@@ -1089,12 +1089,12 @@ interface StatusDistributionChartProps {
 }
 
 function StatusDistributionChart({ distribution }: StatusDistributionChartProps) {
-  if (!distribution) return <div className="h-40 flex items-center justify-center text-gray-400">Loading...</div>;
+  if (!distribution) return <div className="h-40 flex items-center justify-center text-gray-400 dark:text-gray-500">Loading...</div>;
 
   const total = Object.values(distribution).reduce((a, b) => a + b, 0);
   if (total === 0) {
     return (
-      <div className="h-40 flex flex-col items-center justify-center text-gray-400">
+      <div className="h-40 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
         <PieChart size={32} className="mb-2 opacity-50" />
         <p className="text-sm">No orders today</p>
       </div>
@@ -1102,11 +1102,11 @@ function StatusDistributionChart({ distribution }: StatusDistributionChartProps)
   }
 
   const statuses = [
-    { key: 'pending', label: 'Pending', color: 'bg-amber-500', textColor: 'text-amber-600' },
-    { key: 'preparing', label: 'Preparing', color: 'bg-blue-500', textColor: 'text-blue-600' },
-    { key: 'ready', label: 'Ready', color: 'bg-green-500', textColor: 'text-green-600' },
-    { key: 'completed', label: 'Completed', color: 'bg-gray-500', textColor: 'text-gray-600' },
-    { key: 'cancelled', label: 'Cancelled', color: 'bg-red-500', textColor: 'text-red-600' }
+    { key: 'pending', label: 'Pending', color: 'bg-amber-500', textColor: 'text-amber-600 dark:text-amber-400' },
+    { key: 'preparing', label: 'Preparing', color: 'bg-blue-500', textColor: 'text-blue-600 dark:text-blue-400' },
+    { key: 'ready', label: 'Ready', color: 'bg-green-500', textColor: 'text-green-600 dark:text-green-400' },
+    { key: 'completed', label: 'Completed', color: 'bg-gray-500', textColor: 'text-gray-600 dark:text-gray-400' },
+    { key: 'cancelled', label: 'Cancelled', color: 'bg-red-500', textColor: 'text-red-600 dark:text-red-400' }
   ];
 
   return (
@@ -1128,7 +1128,7 @@ function StatusDistributionChart({ distribution }: StatusDistributionChartProps)
               <div className={`w-3 h-3 rounded-full ${status.color}`} />
               <span className="text-gray-600 dark:text-gray-400">{status.label}</span>
               <span className={`font-semibold ${status.textColor}`}>{value}</span>
-              <span className="text-gray-400 text-xs">({percentage}%)</span>
+              <span className="text-gray-400 dark:text-gray-500 text-xs">({percentage}%)</span>
             </div>
           );
         })}
@@ -1144,7 +1144,7 @@ interface HourlyChartProps {
 function HourlyChart({ data }: HourlyChartProps) {
   if (!data || data.length === 0) {
     return (
-      <div className="h-40 flex flex-col items-center justify-center text-gray-400">
+      <div className="h-40 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
         <BarChart3 size={32} className="mb-2 opacity-50" />
         <p className="text-sm">No data available</p>
       </div>
@@ -1162,14 +1162,14 @@ function HourlyChart({ data }: HourlyChartProps) {
           return (
             <div key={hour.hour} className="flex-1 flex flex-col items-center">
               <div className="w-full flex flex-col items-center">
-                {hour.orders > 0 && <span className="text-xs text-gray-500 mb-1">{hour.orders}</span>}
+                {hour.orders > 0 && <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">{hour.orders}</span>}
                 <div className={`w-full rounded-t transition-all ${isCurrentHour ? 'bg-primary-500' : 'bg-primary-200 hover:bg-primary-300'}`} style={{ height: `${Math.max(heightPercent, 4)}%`, minHeight: hour.orders > 0 ? '8px' : '4px' }} title={`${hour.hour > 12 ? hour.hour - 12 : hour.hour}:00 ${hour.hour >= 12 ? 'PM' : 'AM'}: ${hour.orders} orders`} />
               </div>
             </div>
           );
         })}
       </div>
-      <div className="flex justify-between text-xs text-gray-400">
+      <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
         <span>6 AM</span>
         <span>12 PM</span>
         <span>6 PM</span>

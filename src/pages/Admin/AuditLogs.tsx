@@ -28,9 +28,9 @@ interface AuditLog {
 }
 
 const ACTION_COLORS = {
-  CREATE: 'bg-green-100 text-green-700',
-  UPDATE: 'bg-blue-100 text-blue-700',
-  DELETE: 'bg-red-100 text-red-700'
+  CREATE: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  UPDATE: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  DELETE: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
 };
 
 const ENTITY_ICONS: Record<string, React.ReactNode> = {
@@ -155,7 +155,7 @@ export default function AdminAuditLogs() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
                 placeholder="Search logs..."
@@ -168,7 +168,7 @@ export default function AdminAuditLogs() {
               <select
                 value={entityFilter}
                 onChange={(e) => setEntityFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="all">All Entities</option>
                 {entityTypes.map(type => (
@@ -178,7 +178,7 @@ export default function AdminAuditLogs() {
               <select
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="all">All Actions</option>
                 <option value="CREATE">Created</option>
@@ -208,7 +208,7 @@ export default function AdminAuditLogs() {
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ACTION_COLORS[log.action]}`}>
                           {log.action}
                         </span>
-                        <span className="text-xs text-gray-500 capitalize">{log.entity_type}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">{log.entity_type}</span>
                       </div>
                       <p className="text-gray-900 dark:text-gray-100 font-medium truncate">
                         {formatChangeDescription(log)}
@@ -226,9 +226,9 @@ export default function AdminAuditLogs() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <History size={48} className="mx-auto text-gray-300 mb-4" />
+              <History size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No audit logs found</h3>
-              <p className="text-gray-500">
+              <p className="text-gray-500 dark:text-gray-400">
                 {logs?.length === 0 
                   ? 'Audit logging will track changes once the feature is enabled'
                   : 'Try adjusting your filters'}
@@ -246,7 +246,7 @@ export default function AdminAuditLogs() {
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold">Log Details</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Log Details</h2>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${ACTION_COLORS[selectedLog.action]}`}>
                     {selectedLog.action}
                   </span>
@@ -255,20 +255,20 @@ export default function AdminAuditLogs() {
                 <div className="space-y-4 mb-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm text-gray-500">Entity Type</label>
-                      <p className="font-medium capitalize">{selectedLog.entity_type}</p>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Entity Type</label>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{selectedLog.entity_type}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-500">Entity ID</label>
-                      <p className="font-mono text-sm">{selectedLog.entity_id?.slice(0, 8)}...</p>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Entity ID</label>
+                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{selectedLog.entity_id?.slice(0, 8)}...</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-500">Timestamp</label>
-                      <p className="font-medium">{format(new Date(selectedLog.created_at), 'PPpp')}</p>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Timestamp</label>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{format(new Date(selectedLog.created_at), 'PPpp')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-500">User ID</label>
-                      <p className="font-mono text-sm">{selectedLog.user_id?.slice(0, 8) || 'System'}...</p>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">User ID</label>
+                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{selectedLog.user_id?.slice(0, 8) || 'System'}...</p>
                     </div>
                   </div>
                 </div>
@@ -278,14 +278,14 @@ export default function AdminAuditLogs() {
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Changes</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm text-gray-500 block mb-2">Before</label>
-                        <pre className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs overflow-auto max-h-60">
+                        <label className="text-sm text-gray-500 dark:text-gray-400 block mb-2">Before</label>
+                        <pre className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-xs text-gray-800 dark:text-gray-200 overflow-auto max-h-60">
                           {JSON.stringify(selectedLog.old_data, null, 2)}
                         </pre>
                       </div>
                       <div>
-                        <label className="text-sm text-gray-500 block mb-2">After</label>
-                        <pre className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs overflow-auto max-h-60">
+                        <label className="text-sm text-gray-500 dark:text-gray-400 block mb-2">After</label>
+                        <pre className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs text-gray-800 dark:text-gray-200 overflow-auto max-h-60">
                           {JSON.stringify(selectedLog.new_data, null, 2)}
                         </pre>
                       </div>
@@ -296,7 +296,7 @@ export default function AdminAuditLogs() {
                 {selectedLog.action === 'CREATE' && selectedLog.new_data && (
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Created Data</h3>
-                    <pre className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs overflow-auto max-h-60">
+                    <pre className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs text-gray-800 dark:text-gray-200 overflow-auto max-h-60">
                       {JSON.stringify(selectedLog.new_data, null, 2)}
                     </pre>
                   </div>
@@ -305,7 +305,7 @@ export default function AdminAuditLogs() {
                 {selectedLog.action === 'DELETE' && selectedLog.old_data && (
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Deleted Data</h3>
-                    <pre className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs overflow-auto max-h-60">
+                    <pre className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 text-xs overflow-auto max-h-60 text-gray-900 dark:text-gray-100">
                       {JSON.stringify(selectedLog.old_data, null, 2)}
                     </pre>
                   </div>

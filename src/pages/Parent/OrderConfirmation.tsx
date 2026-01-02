@@ -29,7 +29,7 @@ export default function OrderConfirmation() {
       <div className="max-w-md w-full text-center">
         {/* Success Icon */}
         <div className="mb-6">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle className="w-12 h-12 text-green-500" />
           </div>
         </div>
@@ -49,8 +49,8 @@ export default function OrderConfirmation() {
         {/* Order Summary Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 text-left">
           <div className="flex items-center gap-3 pb-4 border-b mb-4">
-            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-              <User className="text-primary-600" size={20} />
+            <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+              <User className="text-primary-600 dark:text-primary-400" size={20} />
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-gray-100">Order for {state.childName}</p>
@@ -67,7 +67,7 @@ export default function OrderConfirmation() {
 
           <div className="flex justify-between items-center mb-4">
             <span className="text-gray-600 dark:text-gray-400">Status</span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full text-sm font-medium">
               <Clock size={14} />
               Pending
             </span>
@@ -75,7 +75,7 @@ export default function OrderConfirmation() {
 
           <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
             <span className="text-lg font-medium text-gray-900 dark:text-gray-100">Total</span>
-            <span className="text-2xl font-bold text-primary-600">
+            <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
               ₱{state.totalAmount.toFixed(2)}
             </span>
           </div>
@@ -83,8 +83,8 @@ export default function OrderConfirmation() {
 
         {/* Offline Notice */}
         {state.isOffline && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm text-amber-800">
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-amber-800 dark:text-amber-300">
               <strong>Offline Mode:</strong> Your order is saved locally and will be 
               automatically submitted when you reconnect to the internet.
             </p>
