@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { useAuth } from './hooks/useAuth';
+import { useSystemSettings } from './hooks/useSystemSettings';
 import type { UserRole } from './types';
 // Parent pages
 import ParentMenu from './pages/Parent/Menu';
@@ -20,6 +21,7 @@ import Register from './pages/Register';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { BottomNav } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { MaintenancePage } from './components/MaintenancePage';
 
 // Admin pages
 import AdminLayout from './pages/Admin/Layout';
@@ -72,6 +74,7 @@ function getDefaultRoute(role: UserRole): string {
 function App() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const { settings, isLoading: settingsLoading, refetch: refetchSettings } = useSystemSettings();
   
   // Get user role from metadata
   const userRole: UserRole = user?.user_metadata?.role || 'parent';
@@ -79,11 +82,21 @@ function App() {
   // Check if current path is admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
+    );
+  }
+
+  // Show maintenance page for non-admin users when maintenance mode is enabled
+  if (settings.maintenance_mode && userRole !== 'admin') {
+    return (
+      <MaintenancePage 
+        canteenName={settings.canteen_name} 
+        onRefresh={() => refetchSettings()} 
+      />
     );
   }
 

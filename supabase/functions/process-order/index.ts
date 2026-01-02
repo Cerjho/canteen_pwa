@@ -81,6 +81,103 @@ serve(async (req) => {
       );
     }
 
+    // ============================================
+    // SYSTEM SETTINGS ENFORCEMENT
+    // ============================================
+    
+    // Fetch system settings
+    const { data: settingsData } = await supabaseAdmin
+      .from('system_settings')
+      .select('key, value');
+    
+    const settings = new Map<string, unknown>();
+    settingsData?.forEach(s => settings.set(s.key, s.value));
+
+    // Check maintenance mode
+    const maintenanceMode = settings.get('maintenance_mode') === true;
+    if (maintenanceMode) {
+      return new Response(
+        JSON.stringify({ error: 'MAINTENANCE_MODE', message: 'The canteen is currently under maintenance. Please try again later.' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get current time in Philippines
+    const now = new Date();
+    const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const currentTimeStr = phTime.toISOString().substring(11, 16); // HH:MM
+    const todayStr = getTodayPhilippines();
+
+    // Check operating hours
+    const operatingHours = settings.get('operating_hours') as { open?: string; close?: string } | undefined;
+    if (operatingHours?.open && operatingHours?.close) {
+      const { open, close } = operatingHours;
+      if (currentTimeStr < open || currentTimeStr > close) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'OUTSIDE_HOURS', 
+            message: `Orders can only be placed between ${open} and ${close}. Current time: ${currentTimeStr}` 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // Determine effective order date
+    const orderDate = scheduled_for || todayStr;
+    const isToday = orderDate === todayStr;
+
+    // Check order cutoff time for same-day orders
+    const orderCutoffTime = settings.get('order_cutoff_time') as string | undefined;
+    if (isToday && orderCutoffTime && currentTimeStr > orderCutoffTime) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'PAST_CUTOFF', 
+          message: `Order cutoff time for today (${orderCutoffTime}) has passed. Current time: ${currentTimeStr}` 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check future orders settings
+    const allowFutureOrders = settings.get('allow_future_orders') !== false; // Default true
+    const maxFutureDays = (settings.get('max_future_days') as number) || 5;
+
+    if (!isToday) {
+      if (!allowFutureOrders) {
+        return new Response(
+          JSON.stringify({ error: 'FUTURE_ORDERS_DISABLED', message: 'Future orders are currently not allowed.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validate order date is not too far in the future
+      const orderDateObj = new Date(orderDate + 'T00:00:00');
+      const todayDateObj = new Date(todayStr + 'T00:00:00');
+      const daysDiff = Math.ceil((orderDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysDiff > maxFutureDays) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'ORDER_TOO_FAR', 
+            message: `Orders can only be placed up to ${maxFutureDays} days in advance.` 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (daysDiff < 0) {
+        return new Response(
+          JSON.stringify({ error: 'PAST_DATE', message: 'Cannot place orders for past dates.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ============================================
+    // END SETTINGS ENFORCEMENT
+    // ============================================
+
     // Verify parent_id matches authenticated user
     if (parent_id !== user.id) {
       return new Response(

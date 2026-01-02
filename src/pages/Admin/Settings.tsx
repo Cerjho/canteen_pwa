@@ -85,29 +85,26 @@ export default function AdminSettings() {
     }
   }, [savedSettings]);
 
-  // Save settings mutation
+  // Save settings mutation via Edge Function with validation
   const saveMutation = useMutation({
     mutationFn: async (newSettings: SettingsState) => {
-      const updates = Object.entries(newSettings).map(([key, value]) => ({
-        key,
-        value: JSON.stringify(value),
-        updated_at: new Date().toISOString()
-      }));
-
-      for (const update of updates) {
-        const { error } = await supabase
-          .from('system_settings')
-          .upsert(update, { onConflict: 'key' });
-        
-        if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('manage-settings', {
+        body: { action: 'update', settings: newSettings }
+      });
+      
+      if (error) throw error;
+      if (data?.error) {
+        const errorMsg = data.errors?.join(', ') || data.message;
+        throw new Error(errorMsg);
       }
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['system-settings'] });
       setHasChanges(false);
       showToast('Settings saved successfully', 'success');
     },
-    onError: () => showToast('Failed to save settings', 'error')
+    onError: (err: Error) => showToast(err.message || 'Failed to save settings', 'error')
   });
 
   const handleChange = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
