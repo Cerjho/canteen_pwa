@@ -53,8 +53,8 @@ export default function AdminOrders() {
         .from('orders')
         .select(`
           *,
-          child:children(first_name, last_name, grade_level, section),
-          parent:parents(first_name, last_name, phone_number, email),
+          child:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
+          parent:user_profiles(first_name, last_name, phone_number, email),
           items:order_items(
             id,
             quantity,
@@ -163,10 +163,10 @@ export default function AdminOrders() {
   const filteredOrders = orders?.filter(order => {
     const searchLower = searchQuery.toLowerCase();
     return (
-      order.child.first_name.toLowerCase().includes(searchLower) ||
-      order.child.last_name.toLowerCase().includes(searchLower) ||
-      order.parent.first_name.toLowerCase().includes(searchLower) ||
-      order.parent.last_name.toLowerCase().includes(searchLower) ||
+      (order.child?.first_name || '').toLowerCase().includes(searchLower) ||
+      (order.child?.last_name || '').toLowerCase().includes(searchLower) ||
+      (order.parent?.first_name || '').toLowerCase().includes(searchLower) ||
+      (order.parent?.last_name || '').toLowerCase().includes(searchLower) ||
       order.id.toLowerCase().includes(searchLower)
     );
   });
@@ -190,8 +190,8 @@ export default function AdminOrders() {
       ...filteredOrders.map(o => [
         o.id,
         format(new Date(o.created_at), 'yyyy-MM-dd HH:mm'),
-        `${o.child.first_name} ${o.child.last_name}`,
-        `${o.parent.first_name} ${o.parent.last_name}`,
+        `${o.child?.first_name || 'Unknown'} ${o.child?.last_name || 'Student'}`,
+        `${o.parent?.first_name || 'Unknown'} ${o.parent?.last_name || ''}`,
         o.status,
         o.total_amount,
         o.payment_method
@@ -312,17 +312,17 @@ export default function AdminOrders() {
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">
-                        {order.child.first_name} {order.child.last_name}
+                        {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {order.child.grade_level} {order.child.section && `- ${order.child.section}`}
+                        {order.child?.grade_level || '-'} {order.child?.section && `- ${order.child.section}`}
                       </p>
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-sm text-gray-900">
-                        {order.parent.first_name} {order.parent.last_name}
+                        {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                       </p>
-                      {order.parent.phone_number && (
+                      {order.parent?.phone_number && (
                         <p className="text-xs text-gray-500">{order.parent.phone_number}</p>
                       )}
                     </td>

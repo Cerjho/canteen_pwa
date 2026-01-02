@@ -22,6 +22,7 @@ interface OrderRequest {
   items: OrderItem[];
   payment_method: string;
   notes?: string;
+  scheduled_for?: string; // Date string YYYY-MM-DD for future orders
 }
 
 serve(async (req) => {
@@ -62,7 +63,7 @@ serve(async (req) => {
 
     // Parse request body
     const body: OrderRequest = await req.json();
-    const { parent_id, child_id, client_order_id, items, payment_method, notes } = body;
+    const { parent_id, child_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
 
     // Validate request
     if (!parent_id || !child_id || !client_order_id || !items || items.length === 0) {
@@ -80,16 +81,17 @@ serve(async (req) => {
       );
     }
 
-    // Verify parent owns the child
-    const { data: child, error: childError } = await supabaseAdmin
-      .from('children')
-      .select('id, parent_id')
-      .eq('id', child_id)
+    // Verify parent owns the student via parent_students link
+    const { data: studentLink, error: linkError } = await supabaseAdmin
+      .from('parent_students')
+      .select('student_id')
+      .eq('student_id', child_id)
+      .eq('parent_id', parent_id)
       .single();
 
-    if (childError || !child || child.parent_id !== parent_id) {
+    if (linkError || !studentLink) {
       return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Parent does not own this child' }),
+        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Parent is not linked to this student' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -200,12 +202,13 @@ serve(async (req) => {
       .from('orders')
       .insert({
         parent_id,
-        child_id,
+        student_id: child_id, // child_id from request maps to student_id column
         client_order_id,
         status: 'pending',
         total_amount: totalAmount,
         payment_method,
-        notes: notes || null
+        notes: notes || null,
+        scheduled_for: scheduled_for || new Date().toISOString().split('T')[0]
       })
       .select()
       .single();

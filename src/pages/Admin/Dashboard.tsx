@@ -329,7 +329,7 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const { data } = await supabase
         .from('orders')
-        .select(`id, status, total_amount, created_at, updated_at, child:children(first_name, last_name), parent:parents(first_name, last_name)`)
+        .select(`id, status, total_amount, created_at, updated_at, child:students!orders_student_id_fkey(first_name, last_name), parent:user_profiles(first_name, last_name)`)
         .order('created_at', { ascending: false })
         .limit(8);
       return data || [];
@@ -888,7 +888,7 @@ export default function AdminDashboard() {
             </div>
             <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
               {recentOrders?.map((order) => {
-                const childName = order.child?.[0] ? `${order.child[0].first_name} ${order.child[0].last_name}` : 'Unknown';
+                const childName = order.child ? `${order.child.first_name} ${order.child.last_name}` : 'Unknown Student';
                 return (
                   <div key={order.id} className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/admin/orders?id=${order.id}`)}>
                     <div className="flex items-center justify-between mb-1">

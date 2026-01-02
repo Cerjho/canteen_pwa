@@ -77,8 +77,8 @@ export default function StaffDashboard() {
         .from('orders')
         .select(`
           *,
-          child:children(first_name, last_name, grade_level, section),
-          parent:parents(first_name, last_name, phone_number),
+          child:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
+          parent:user_profiles(first_name, last_name, phone_number),
           items:order_items(
             *,
             product:products(name, image_url)
@@ -107,8 +107,8 @@ export default function StaffDashboard() {
     
     const query = searchQuery.toLowerCase();
     return orders.filter(order => 
-      `${order.child.first_name} ${order.child.last_name}`.toLowerCase().includes(query) ||
-      `${order.child.grade_level} ${order.child.section}`.toLowerCase().includes(query) ||
+      `${order.child?.first_name || ''} ${order.child?.last_name || ''}`.toLowerCase().includes(query) ||
+      `${order.child?.grade_level || ''} ${order.child?.section || ''}`.toLowerCase().includes(query) ||
       order.items.some(item => item.product.name.toLowerCase().includes(query))
     );
   }, [orders, searchQuery]);
@@ -245,8 +245,8 @@ export default function StaffDashboard() {
         </head>
         <body>
           <h1>Order #${order.id.slice(-6)}</h1>
-          <div class="info"><strong>Student:</strong> ${order.child.first_name} ${order.child.last_name}</div>
-          <div class="info"><strong>Class:</strong> ${order.child.grade_level} - ${order.child.section}</div>
+          <div class="info"><strong>Student:</strong> ${order.child?.first_name || 'Unknown'} ${order.child?.last_name || 'Student'}</div>
+          <div class="info"><strong>Class:</strong> ${order.child?.grade_level || '-'} - ${order.child?.section || '-'}</div>
           <div class="info"><strong>Time:</strong> ${format(new Date(order.created_at), 'h:mm a')}</div>
           ${order.notes ? `<div class="info"><strong>Notes:</strong> ${order.notes}</div>` : ''}
           <div class="items">
@@ -453,10 +453,10 @@ export default function StaffDashboard() {
                       </div>
                       <div>
                         <h3 className="font-bold text-lg">
-                          {order.child.first_name} {order.child.last_name}
+                          {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                         </h3>
                         <p className="text-sm text-gray-600">
-                          {order.child.grade_level} - {order.child.section}
+                          {order.child?.grade_level || '-'} - {order.child?.section || '-'}
                         </p>
                       </div>
                     </div>
@@ -473,8 +473,8 @@ export default function StaffDashboard() {
 
                   {/* Parent Info */}
                   <p className="text-xs text-gray-500 mb-3">
-                    Parent: {order.parent.first_name} {order.parent.last_name}
-                    {order.parent.phone_number && ` • ${order.parent.phone_number}`}
+                    Parent: {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
+                    {order.parent?.phone_number && ` • ${order.parent.phone_number}`}
                     {order.payment_method && ` • ${order.payment_method.toUpperCase()}`}
                   </p>
 

@@ -61,15 +61,23 @@ export default function AdminStudents() {
   const { data: students, isLoading } = useQuery<Student[]>({
     queryKey: ['admin-students'],
     queryFn: async () => {
+      // Query students with linked parents
       const { data, error } = await supabase
-        .from('children')
+        .from('students')
         .select(`
           *,
-          parent:parents(first_name, last_name, email)
+          parent_students(
+            parent:user_profiles(id, first_name, last_name, email)
+          )
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      
+      // Transform to expected format (flatten parent from join)
+      return data?.map(s => ({
+        ...s,
+        parent: s.parent_students?.[0]?.parent || null
+      })) || [];
     }
   });
 

@@ -104,7 +104,7 @@ export default function ParentDashboard() {
         .from('orders')
         .select(`
           *,
-          child:children(first_name, last_name),
+          child:students!orders_student_id_fkey(id, first_name, last_name),
           items:order_items(
             *,
             product:products(name, image_url)
@@ -130,7 +130,7 @@ export default function ParentDashboard() {
         .from('orders')
         .select(`
           *,
-          child:children(first_name, last_name),
+          child:students!orders_student_id_fkey(id, first_name, last_name),
           items:order_items(
             *,
             product:products(name, image_url)
@@ -367,7 +367,7 @@ export default function ParentDashboard() {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <h3 className="font-semibold text-lg">
-                            For {order.child.first_name} {order.child.last_name}
+                            For {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                           </h3>
                           <p className="text-sm text-gray-500">
                             {isFutureOrder 

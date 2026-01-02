@@ -37,7 +37,7 @@ export async function getOrderHistory(parentId: string) {
     .from('orders')
     .select(`
       *,
-      child:children(first_name, last_name),
+      child:students!orders_student_id_fkey(id, first_name, last_name),
       items:order_items(
         *,
         product:products(name, image_url)

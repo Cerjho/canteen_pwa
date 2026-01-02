@@ -129,7 +129,7 @@ export default function AdminReports() {
         .from('transactions')
         .select(`
           *,
-          parent:parents(first_name, last_name)
+          parent:user_profiles(first_name, last_name)
         `)
         .order('created_at', { ascending: false })
         .limit(20);

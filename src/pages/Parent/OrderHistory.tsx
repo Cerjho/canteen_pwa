@@ -98,7 +98,7 @@ export default function OrderHistory() {
                           {format(new Date(order.created_at), 'MMM d, yyyy • h:mm a')}
                         </p>
                         <h3 className="font-semibold text-gray-900">
-                          For {order.child.first_name} {order.child.last_name}
+                          For {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                         </h3>
                       </div>
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${status.color}`}>
