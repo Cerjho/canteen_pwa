@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "env": {
+    "VERCEL_TOOLBAR_DISABLED": "1"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
