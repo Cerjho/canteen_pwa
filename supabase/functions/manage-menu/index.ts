@@ -39,6 +39,36 @@ function getDayOfWeek(dateStr: string): number {
   return day === 0 ? 7 : day; // Convert Sunday=0 to 7
 }
 
+// Helper to check if a date is a holiday
+async function isHoliday(supabaseAdmin: ReturnType<typeof createClient>, dateStr: string): Promise<{ isHoliday: boolean; holidayName?: string }> {
+  const monthDay = dateStr.slice(5); // MM-DD for recurring check
+  
+  // Check for exact date match or recurring holiday
+  const { data: holidays } = await supabaseAdmin
+    .from('holidays')
+    .select('name, date, is_recurring');
+  
+  if (!holidays || holidays.length === 0) {
+    return { isHoliday: false };
+  }
+  
+  const holiday = holidays.find(h => {
+    const holidayDateStr = h.date.split('T')[0];
+    const holidayMonthDay = holidayDateStr.slice(5);
+    
+    if (h.is_recurring) {
+      return holidayMonthDay === monthDay;
+    }
+    return holidayDateStr === dateStr;
+  });
+  
+  if (holiday) {
+    return { isHoliday: true, holidayName: holiday.name };
+  }
+  
+  return { isHoliday: false };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -96,6 +126,15 @@ serve(async (req) => {
         if (!product_id || !scheduled_date) {
           return new Response(
             JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id and scheduled_date are required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Check if date is a holiday
+        const holidayCheck = await isHoliday(supabaseAdmin, scheduled_date);
+        if (holidayCheck.isHoliday) {
+          return new Response(
+            JSON.stringify({ error: 'HOLIDAY_DATE', message: `Cannot add menu items on a holiday (${holidayCheck.holidayName})` }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -163,6 +202,15 @@ serve(async (req) => {
         if (!product_ids || product_ids.length === 0 || !scheduled_date) {
           return new Response(
             JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_ids array and scheduled_date are required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Check if date is a holiday
+        const bulkHolidayCheck = await isHoliday(supabaseAdmin, scheduled_date);
+        if (bulkHolidayCheck.isHoliday) {
+          return new Response(
+            JSON.stringify({ error: 'HOLIDAY_DATE', message: `Cannot add menu items on a holiday (${bulkHolidayCheck.holidayName})` }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -292,6 +340,15 @@ serve(async (req) => {
           );
         }
 
+        // Check if target date is a holiday
+        const copyHolidayCheck = await isHoliday(supabaseAdmin, to_date);
+        if (copyHolidayCheck.isHoliday) {
+          return new Response(
+            JSON.stringify({ error: 'HOLIDAY_DATE', message: `Cannot copy menu to a holiday (${copyHolidayCheck.holidayName})` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Get source menu
         const { data: sourceMenu } = await supabaseAdmin
           .from('menu_schedules')
@@ -304,6 +361,14 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        // Check existing items on target date
+        const { data: existingTargetMenu } = await supabaseAdmin
+          .from('menu_schedules')
+          .select('id')
+          .eq('scheduled_date', to_date);
+
+        const replacedCount = existingTargetMenu?.length || 0;
 
         // Clear target date
         await supabaseAdmin
@@ -333,10 +398,10 @@ serve(async (req) => {
           );
         }
 
-        console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to ${to_date} (${sourceMenu.length} items)`);
+        console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to ${to_date} (${sourceMenu.length} items, replaced ${replacedCount})`);
 
         return new Response(
-          JSON.stringify({ success: true, copied: sourceMenu.length, from_date, to_date }),
+          JSON.stringify({ success: true, copied: sourceMenu.length, replaced: replacedCount, from_date, to_date }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

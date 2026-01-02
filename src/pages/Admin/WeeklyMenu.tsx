@@ -350,9 +350,15 @@ export default function AdminWeeklyMenu() {
         to_date: toDate
       });
     },
-    onSuccess: (_, { toDay }) => {
+    onSuccess: (data, { toDay }) => {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
-      showToast(`Menu copied to ${WEEKDAYS.find(d => d.value === toDay)?.label}`, 'success');
+      const dayLabel = WEEKDAYS.find(d => d.value === toDay)?.label;
+      const replaced = data?.replaced || 0;
+      if (replaced > 0) {
+        showToast(`Menu copied to ${dayLabel} (replaced ${replaced} existing items)`, 'success');
+      } else {
+        showToast(`Menu copied to ${dayLabel}`, 'success');
+      }
     },
     onError: (error: Error) => showToast(error.message || 'Failed to copy menu', 'error')
   });
@@ -818,28 +824,65 @@ export default function AdminWeeklyMenu() {
                     <>
                       {/* Copy dropdown */}
                       <div className="relative group">
-                        <button className="px-4 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
-                          <Copy size={18} />
-                          Copy
+                        <button 
+                          disabled={copyToDay.isPending || copyToAllDays.isPending}
+                          className={`px-4 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 transition-colors flex items-center gap-2 ${
+                            copyToDay.isPending || copyToAllDays.isPending
+                              ? 'opacity-70 cursor-wait'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          {copyToDay.isPending || copyToAllDays.isPending ? (
+                            <>
+                              <LoadingSpinner size="sm" />
+                              Copying...
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={18} />
+                              Copy
+                            </>
+                          )}
                         </button>
-                        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg py-2 hidden group-hover:block z-10 min-w-[160px]">
-                          {WEEKDAYS.filter(d => d.value !== selectedDay).map(day => (
+                        {!copyToDay.isPending && !copyToAllDays.isPending && (
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg py-2 hidden group-hover:block z-10 min-w-[160px]">
+                            {WEEKDAYS.filter(d => d.value !== selectedDay).map(day => {
+                              const targetDate = getDateForDay(day.value);
+                              const targetHoliday = isHoliday(targetDate);
+                              const targetStat = weekStats.find(s => s.day === day.value);
+                              const hasExistingItems = (targetStat?.total || 0) > 0;
+                              
+                              return (
+                                <button
+                                  key={day.value}
+                                  onClick={() => copyToDay.mutate({ fromDay: selectedDay, toDay: day.value })}
+                                  disabled={!!targetHoliday}
+                                  className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${
+                                    targetHoliday
+                                      ? 'text-gray-400 cursor-not-allowed bg-gray-50'
+                                      : 'hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <span>{day.label}</span>
+                                  {targetHoliday ? (
+                                    <CalendarOff size={14} className="text-red-400" />
+                                  ) : hasExistingItems ? (
+                                    <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                      {targetStat?.total} items
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                            <div className="border-t border-gray-100 my-1" />
                             <button
-                              key={day.value}
-                              onClick={() => copyToDay.mutate({ fromDay: selectedDay, toDay: day.value })}
-                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50"
+                              onClick={() => copyToAllDays.mutate(selectedDay)}
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-primary-600 font-medium"
                             >
-                              {day.label}
+                              All Weekdays
                             </button>
-                          ))}
-                          <div className="border-t border-gray-100 my-1" />
-                          <button
-                            onClick={() => copyToAllDays.mutate(selectedDay)}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-primary-600 font-medium"
-                          >
-                            All Weekdays
-                          </button>
-                        </div>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Clear button */}
