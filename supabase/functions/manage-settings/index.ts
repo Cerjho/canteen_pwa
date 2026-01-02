@@ -194,13 +194,15 @@ serve(async (req) => {
             .from('system_settings')
             .upsert({
               key,
-              value,
-              updated_at: new Date().toISOString()
+              value: value, // JSONB column - store the value directly
+              updated_at: new Date().toISOString(),
+              updated_by: user.id
             }, { onConflict: 'key' });
 
           if (error) {
+            console.error('Update error for', key, ':', error);
             return new Response(
-              JSON.stringify({ error: true, message: `Failed to update ${key}` }),
+              JSON.stringify({ error: true, message: `Failed to update ${key}: ${error.message}` }),
               { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
@@ -214,14 +216,19 @@ serve(async (req) => {
 
         // Log to audit_logs if there were changes
         if (updates.length > 0) {
-          await supabaseAdmin.from('audit_logs').insert({
-            user_id: user.id,
-            action: 'UPDATE',
-            entity_type: 'system_settings',
-            entity_id: 'system',
-            old_data: Object.fromEntries(updates.map(u => [u.key, u.old])),
-            new_data: Object.fromEntries(updates.map(u => [u.key, u.new])),
-          });
+          try {
+            await supabaseAdmin.from('audit_logs').insert({
+              user_id: user.id,
+              action: 'UPDATE',
+              entity_type: 'system_settings',
+              entity_id: null, // UUID column - use null for system settings
+              old_data: Object.fromEntries(updates.map(u => [u.key, u.old])),
+              new_data: Object.fromEntries(updates.map(u => [u.key, u.new])),
+            });
+          } catch (auditErr) {
+            console.error('Audit log error:', auditErr);
+            // Don't fail the request if audit logging fails
+          }
         }
 
         return new Response(
