@@ -381,7 +381,7 @@ export default function AdminProfile() {
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             <button
               onClick={() => navigate('/admin/users')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
