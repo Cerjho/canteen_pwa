@@ -52,17 +52,6 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
   // Ensure we have a valid session before making the request
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   
-  // Debug: Log session info for troubleshooting
-  console.log('[Orders] Session check:', {
-    hasSession: !!sessionData.session,
-    hasError: !!sessionError,
-    error: sessionError?.message,
-    userId: sessionData.session?.user?.id,
-    tokenLength: sessionData.session?.access_token?.length,
-    tokenPrefix: sessionData.session?.access_token?.substring(0, 50),
-    expiresAt: sessionData.session?.expires_at
-  });
-  
   if (sessionError || !sessionData.session) {
     throw new Error('Please sign in again to place an order');
   }
@@ -78,7 +67,6 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
     if (!refreshData.session) {
       throw new Error('Failed to refresh session. Please sign in again.');
     }
-    console.log('[Orders] Session refreshed, new token length:', refreshData.session.access_token.length);
   }
 
   // Process order via Edge Function with retry logic
@@ -86,15 +74,6 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
   
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      // Re-check session right before the call to ensure we have the latest token
-      const { data: currentSession } = await supabase.auth.getSession();
-      console.log('[Orders] About to invoke Edge Function:', {
-        attempt: attempt + 1,
-        hasSession: !!currentSession.session,
-        tokenPrefix: currentSession.session?.access_token?.substring(0, 50),
-        supabaseUrl: import.meta.env.VITE_SUPABASE_URL?.substring(0, 30)
-      });
-      
       // supabase.functions.invoke automatically includes the Authorization header
       const { data, error } = await supabase.functions.invoke('process-order', {
         body: orderData
