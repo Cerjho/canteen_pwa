@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus } from '../../services/products';
@@ -228,6 +228,10 @@ export default function Menu() {
                           ? isSelected
                             ? 'bg-red-600 text-white'
                             : 'bg-red-50 text-red-600 border-2 border-red-200'
+                          : dayInfo.isMakeupDay
+                          ? isSelected
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
                           : isSelected
                           ? 'bg-primary-600 text-white'
                           : isTodayDate
@@ -237,6 +241,7 @@ export default function Menu() {
                     >
                       <div className="flex items-center justify-center gap-1">
                         {dayInfo.isHoliday && <CalendarOff size={10} />}
+                        {dayInfo.isMakeupDay && <CalendarDays size={10} />}
                         {format(dayInfo.date, 'EEE')}
                       </div>
                       <div className={`text-[10px] ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
@@ -326,6 +331,10 @@ export default function Menu() {
                         ? isSelected
                           ? 'bg-red-600 text-white'
                           : 'bg-red-50 text-red-600 border-2 border-red-200'
+                        : dayInfo.isMakeupDay
+                        ? isSelected
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
                         : isSelected
                         ? 'bg-primary-600 text-white'
                         : isTodayDate
@@ -335,6 +344,7 @@ export default function Menu() {
                   >
                     <div className="flex items-center justify-center gap-1">
                       {dayInfo.isHoliday && <CalendarOff size={10} />}
+                      {dayInfo.isMakeupDay && <CalendarDays size={10} />}
                       {isTodayDate ? 'Today' : format(dayInfo.date, 'EEE')}
                     </div>
                     <div className={`text-[10px] ${isSelected ? 'opacity-70' : 'opacity-50'}`}>

@@ -57,6 +57,13 @@ interface Holiday {
   is_recurring?: boolean;
 }
 
+interface MakeupDay {
+  id: string;
+  name: string;
+  date: string;
+  reason?: string;
+}
+
 // Weekdays only (Monday = 1 through Friday = 5)
 const WEEKDAYS = [
   { value: 1, label: 'Monday', short: 'Mon' },
@@ -93,6 +100,7 @@ function isCurrentWeek(date: Date): boolean {
 
 type ViewMode = 'day' | 'week';
 type TabType = 'menu' | 'holidays';
+type HolidaySubTab = 'holidays' | 'makeup';
 
 export default function AdminWeeklyMenu() {
   const queryClient = useQueryClient();
@@ -101,6 +109,7 @@ export default function AdminWeeklyMenu() {
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [activeTab, setActiveTab] = useState<TabType>('menu');
+  const [holidaySubTab, setHolidaySubTab] = useState<HolidaySubTab>('holidays');
   const [selectedWeek, setSelectedWeek] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => {
     const today = new Date().getDay();
@@ -110,6 +119,7 @@ export default function AdminWeeklyMenu() {
   // Modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [showMakeupModal, setShowMakeupModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearTarget, setClearTarget] = useState<'day' | 'week'>('day');
   
@@ -166,6 +176,15 @@ export default function AdminWeeklyMenu() {
     });
   };
 
+  // Check if a specific Saturday is a make-up day
+  const isMakeupDay = (date: Date): MakeupDay | undefined => {
+    if (!makeupDays || makeupDays.length === 0) return undefined;
+    if (date.getDay() !== 6) return undefined; // Only Saturdays
+    
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return makeupDays.find(m => m.date.split('T')[0] === dateStr);
+  };
+
   // Fetch menu schedules for the selected week
   const { data: schedules, isLoading } = useQuery<MenuSchedule[]>({
     queryKey: ['menu-schedules', weekStartStr, weekEndStr],
@@ -187,6 +206,19 @@ export default function AdminWeeklyMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('holidays')
+        .select('*')
+        .order('date');
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch make-up days
+  const { data: makeupDays, isLoading: makeupDaysLoading } = useQuery<MakeupDay[]>({
+    queryKey: ['makeup-days'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('makeup_days')
         .select('*')
         .order('date');
       if (error) throw error;
@@ -401,13 +433,56 @@ export default function AdminWeeklyMenu() {
     onError: () => showToast('Failed to remove holiday', 'error')
   });
 
+  // Add make-up day
+  const addMakeupDay = useMutation({
+    mutationFn: async (makeupDay: { name: string; date: string; reason?: string }) => {
+      const { error } = await supabase.from('makeup_days').insert(makeupDay);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['makeup-days'] });
+      queryClient.invalidateQueries({ queryKey: ['weekdays-with-status'] });
+      setShowMakeupModal(false);
+      showToast('Make-up day added', 'success');
+    },
+    onError: (error: any) => {
+      if (error.code === '23505') {
+        showToast('Make-up day already exists for this date', 'error');
+      } else if (error.message?.includes('saturday')) {
+        showToast('Make-up days can only be on Saturdays', 'error');
+      } else {
+        showToast('Failed to add make-up day', 'error');
+      }
+    }
+  });
+
+  // Remove make-up day
+  const removeMakeupDay = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('makeup_days').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['makeup-days'] });
+      queryClient.invalidateQueries({ queryKey: ['weekdays-with-status'] });
+      showToast('Make-up day removed', 'success');
+    },
+    onError: () => showToast('Failed to remove make-up day', 'error')
+  });
+
   // Computed values - filter by specific date
-  const selectedDateStr = format(getDateForDay(selectedDay), 'yyyy-MM-dd');
+  const getSelectedDate = () => {
+    if (selectedDay === 6) {
+      return addDays(startOfWeek(selectedWeek, { weekStartsOn: 1 }), 5);
+    }
+    return getDateForDay(selectedDay);
+  };
+  const selectedDateStr = format(getSelectedDate(), 'yyyy-MM-dd');
   const daySchedules = schedules?.filter(s => s.scheduled_date === selectedDateStr) || [];
   const activeItemsCount = daySchedules.filter(s => s.is_active).length;
   
   // Check if selected day is a holiday
-  const selectedDayHoliday = isHoliday(getDateForDay(selectedDay));
+  const selectedDayHoliday = isHoliday(getSelectedDate());
   
   const availableProducts = products?.filter(
     p => !daySchedules.some(s => s.product_id === p.id)
@@ -439,12 +514,29 @@ export default function AdminWeeklyMenu() {
   }, {} as Record<string, MenuSchedule[]>);
 
   // Statistics - use date-based filtering
+  // Check if this week's Saturday is a make-up day
+  const saturdayDate = addDays(startOfWeek(selectedWeek, { weekStartsOn: 1 }), 5);
+  const saturdayMakeupDay = isMakeupDay(saturdayDate);
+  
+  // Build dynamic weekdays array (Mon-Fri + Saturday if make-up day)
+  const dynamicWeekdays = useMemo(() => {
+    const days = [...WEEKDAYS];
+    if (saturdayMakeupDay) {
+      days.push({ value: 6, label: 'Saturday', short: 'Sat' });
+    }
+    return days;
+  }, [saturdayMakeupDay]);
+  
   const weekStats = useMemo(() => {
-    const stats = WEEKDAYS.map(day => {
-      const dayDateStr = format(getDateForDay(day.value), 'yyyy-MM-dd');
+    const stats = dynamicWeekdays.map(day => {
+      const dayDate = day.value === 6 
+        ? saturdayDate 
+        : getDateForDay(day.value);
+      const dayDateStr = format(dayDate, 'yyyy-MM-dd');
       const dayItems = schedules?.filter(s => s.scheduled_date === dayDateStr) || [];
       const activeItems = dayItems.filter(s => s.is_active);
-      const dayHoliday = isHoliday(getDateForDay(day.value));
+      const dayHoliday = isHoliday(dayDate);
+      const dayMakeupDay = day.value === 6 ? saturdayMakeupDay : undefined;
       return {
         day: day.value,
         date: dayDateStr,
@@ -455,19 +547,21 @@ export default function AdminWeeklyMenu() {
         drinks: dayItems.filter(s => s.product?.category === 'drinks').length,
         isHoliday: !!dayHoliday,
         holidayName: dayHoliday?.name,
+        isMakeupDay: !!dayMakeupDay,
+        makeupDayName: dayMakeupDay?.name,
       };
     });
     return stats;
-  }, [schedules, selectedWeek, holidays]);
+  }, [schedules, selectedWeek, holidays, makeupDays, dynamicWeekdays]);
 
   const handlePrevDay = () => {
-    const idx = WEEKDAYS.findIndex(d => d.value === selectedDay);
-    setSelectedDay(WEEKDAYS[idx === 0 ? WEEKDAYS.length - 1 : idx - 1].value);
+    const idx = dynamicWeekdays.findIndex(d => d.value === selectedDay);
+    setSelectedDay(dynamicWeekdays[idx === 0 ? dynamicWeekdays.length - 1 : idx - 1].value);
   };
 
   const handleNextDay = () => {
-    const idx = WEEKDAYS.findIndex(d => d.value === selectedDay);
-    setSelectedDay(WEEKDAYS[idx === WEEKDAYS.length - 1 ? 0 : idx + 1].value);
+    const idx = dynamicWeekdays.findIndex(d => d.value === selectedDay);
+    setSelectedDay(dynamicWeekdays[idx === dynamicWeekdays.length - 1 ? 0 : idx + 1].value);
   };
 
   const handleAddAll = (category: ProductCategory | 'all') => {
@@ -598,10 +692,10 @@ export default function AdminWeeklyMenu() {
                     </button>
                     <div className="text-center">
                       <h2 className="text-xl font-bold text-gray-900">
-                        {WEEKDAYS.find(d => d.value === selectedDay)?.label}
+                        {dynamicWeekdays.find(d => d.value === selectedDay)?.label || WEEKDAYS.find(d => d.value === selectedDay)?.label}
                       </h2>
                       <p className="text-sm text-gray-500">
-                        {format(getDateForDay(selectedDay), 'MMM d')} • {activeItemsCount}/{daySchedules.length} active
+                        {format(selectedDay === 6 ? saturdayDate : getDateForDay(selectedDay), 'MMM d')} • {activeItemsCount}/{daySchedules.length} active
                       </p>
                     </div>
                     <button onClick={handleNextDay} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -611,11 +705,12 @@ export default function AdminWeeklyMenu() {
 
                   {/* Day Pills */}
                   <div className="flex gap-1 overflow-x-auto pb-2">
-                    {WEEKDAYS.map(day => {
+                    {dynamicWeekdays.map(day => {
                       const stat = weekStats.find(s => s.day === day.value);
-                      const dayDate = getDateForDay(day.value);
+                      const dayDate = day.value === 6 ? saturdayDate : getDateForDay(day.value);
                       const isTodayDate = isCurrentWeek(selectedWeek) && isToday(dayDate);
                       const dayIsHoliday = stat?.isHoliday;
+                      const dayIsMakeupDay = stat?.isMakeupDay;
                       
                       return (
                         <button
@@ -626,6 +721,10 @@ export default function AdminWeeklyMenu() {
                               ? selectedDay === day.value
                                 ? 'bg-red-600 text-white'
                                 : 'bg-red-50 text-red-600 border-2 border-red-200'
+                              : dayIsMakeupDay
+                              ? selectedDay === day.value
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
                               : selectedDay === day.value
                               ? 'bg-primary-600 text-white'
                               : isTodayDate
@@ -633,10 +732,15 @@ export default function AdminWeeklyMenu() {
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           }`}
                         >
-                          <span>{day.short}</span>
+                          <span className="flex items-center gap-0.5">
+                            {dayIsMakeupDay && <CalendarDays size={10} />}
+                            {day.short}
+                          </span>
                           <span className={`text-[10px] ${
                             dayIsHoliday
                               ? selectedDay === day.value ? 'text-red-200' : 'text-red-400'
+                              : dayIsMakeupDay
+                              ? selectedDay === day.value ? 'text-emerald-200' : 'text-emerald-500'
                               : selectedDay === day.value ? 'text-primary-200' : 'text-gray-400'
                           }`}>
                             {format(dayDate, 'd')}
@@ -645,7 +749,9 @@ export default function AdminWeeklyMenu() {
                             <CalendarOff size={10} className="absolute -top-1 -right-1" />
                           ) : (stat?.total || 0) > 0 && (
                             <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] flex items-center justify-center ${
-                              selectedDay === day.value ? 'bg-white text-primary-600' : 'bg-primary-100 text-primary-600'
+                              dayIsMakeupDay
+                                ? selectedDay === day.value ? 'bg-white text-emerald-600' : 'bg-emerald-100 text-emerald-600'
+                                : selectedDay === day.value ? 'bg-white text-primary-600' : 'bg-primary-100 text-primary-600'
                             }`}>
                               {stat?.active || 0}
                             </span>
@@ -655,6 +761,19 @@ export default function AdminWeeklyMenu() {
                     })}
                   </div>
                 </div>
+
+                {/* Make-up Day Info */}
+                {selectedDay === 6 && saturdayMakeupDay && !selectedDayHoliday && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                    <CalendarDays className="text-emerald-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <p className="font-medium text-emerald-800">{saturdayMakeupDay.name}</p>
+                      {saturdayMakeupDay.reason && (
+                        <p className="text-sm text-emerald-600">{saturdayMakeupDay.reason}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Holiday Warning */}
                 {selectedDayHoliday && (
@@ -907,28 +1026,54 @@ export default function AdminWeeklyMenu() {
 
         {activeTab === 'holidays' && (
           <>
-            <button
-              onClick={() => setShowHolidayModal(true)}
-              className="w-full flex items-center justify-center gap-2 bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors"
-            >
-              <Plus size={20} />
-              Add Holiday
-            </button>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <div className="flex gap-3">
-                <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-amber-800">
-                  <p className="font-medium mb-1">Holidays will close the canteen</p>
-                  <p>On holidays, the menu will not be available for ordering. Parents will see a "Canteen Closed" message.</p>
-                </div>
-              </div>
+            {/* Sub-tabs for Holidays vs Make-up Days */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setHolidaySubTab('holidays')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  holidaySubTab === 'holidays'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                🚫 Holidays {holidays && holidays.length > 0 && `(${holidays.length})`}
+              </button>
+              <button
+                onClick={() => setHolidaySubTab('makeup')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  holidaySubTab === 'makeup'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📚 Make-up Days {makeupDays && makeupDays.length > 0 && `(${makeupDays.length})`}
+              </button>
             </div>
 
-            {holidaysLoading ? (
-              <LoadingSpinner size="sm" />
-            ) : !holidays || holidays.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 text-center">
+            {holidaySubTab === 'holidays' && (
+              <>
+                <button
+                  onClick={() => setShowHolidayModal(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors"
+                >
+                  <Plus size={20} />
+                  Add Holiday
+                </button>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex gap-3">
+                    <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-800">
+                      <p className="font-medium mb-1">Holidays will close the canteen</p>
+                      <p>On holidays, the menu will not be available for ordering. Parents will see a "Canteen Closed" message.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {holidaysLoading ? (
+                  <LoadingSpinner size="sm" />
+                ) : !holidays || holidays.length === 0 ? (
+                  <div className="bg-white rounded-xl p-8 text-center">
                 <CalendarOff size={48} className="mx-auto text-gray-300 mb-3" />
                 <p className="text-gray-500 mb-4">No upcoming holidays</p>
                 <button onClick={() => setShowHolidayModal(true)} className="text-primary-600 hover:underline">
@@ -972,6 +1117,71 @@ export default function AdminWeeklyMenu() {
                   </div>
                 ))}
               </div>
+            )}
+              </>
+            )}
+
+            {holidaySubTab === 'makeup' && (
+              <>
+                <button
+                  onClick={() => setShowMakeupModal(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+                >
+                  <Plus size={20} />
+                  Add Make-up Day
+                </button>
+
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                  <div className="flex gap-3">
+                    <CalendarDays size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-emerald-800">
+                      <p className="font-medium mb-1">Make-up days open the canteen on Saturdays</p>
+                      <p>When a Saturday is marked as a make-up day, parents can order food for that day. Remember to set the menu!</p>
+                    </div>
+                  </div>
+                </div>
+
+                {makeupDaysLoading ? (
+                  <LoadingSpinner size="sm" />
+                ) : !makeupDays || makeupDays.length === 0 ? (
+                  <div className="bg-white rounded-xl p-8 text-center">
+                    <CalendarDays size={48} className="mx-auto text-gray-300 mb-3" />
+                    <p className="text-gray-500 mb-4">No make-up days scheduled</p>
+                    <button onClick={() => setShowMakeupModal(true)} className="text-emerald-600 hover:underline">
+                      Add first make-up day
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {makeupDays.map(makeupDay => (
+                      <div key={makeupDay.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3">
+                            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                              <CalendarDays size={24} className="text-emerald-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-gray-900">{makeupDay.name}</h3>
+                              <p className="text-sm text-gray-500">
+                                {format(new Date(makeupDay.date), 'EEEE, MMMM d, yyyy')}
+                              </p>
+                              {makeupDay.reason && (
+                                <p className="text-sm text-gray-400 mt-1">{makeupDay.reason}</p>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => removeMakeupDay.mutate(makeupDay.id)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -1086,6 +1296,15 @@ export default function AdminWeeklyMenu() {
           onClose={() => setShowHolidayModal(false)}
           onSubmit={(data) => addHoliday.mutate(data)}
           isLoading={addHoliday.isPending}
+        />
+      )}
+
+      {/* Make-up Day Modal */}
+      {showMakeupModal && (
+        <MakeupDayModal
+          onClose={() => setShowMakeupModal(false)}
+          onSubmit={(data) => addMakeupDay.mutate(data)}
+          isLoading={addMakeupDay.isPending}
         />
       )}
 
@@ -1267,6 +1486,156 @@ function HolidayModal({
                 className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50"
               >
                 {isLoading ? 'Adding...' : 'Add Holiday'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Make-up Day Modal Component
+function MakeupDayModal({ 
+  onClose, 
+  onSubmit, 
+  isLoading 
+}: { 
+  onClose: () => void; 
+  onSubmit: (data: { name: string; date: string; reason?: string }) => void;
+  isLoading: boolean;
+}) {
+  const [name, setName] = useState('Make-up Class');
+  const [date, setDate] = useState('');
+  const [reason, setReason] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !date) return;
+    onSubmit({ 
+      name: name.trim(), 
+      date, 
+      reason: reason.trim() || undefined
+    });
+  };
+
+  // Helper to format date in local timezone
+  const formatDateLocal = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Get next 8 Saturdays for quick selection
+  const getNextSaturdays = () => {
+    const saturdays: Date[] = [];
+    const today = new Date();
+    let checkDate = new Date(today);
+    
+    while (saturdays.length < 8) {
+      if (checkDate.getDay() === 6 && checkDate >= today) {
+        saturdays.push(new Date(checkDate));
+      }
+      checkDate.setDate(checkDate.getDate() + 1);
+    }
+    return saturdays;
+  };
+
+  const nextSaturdays = getNextSaturdays();
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-lg font-bold">Add Make-up Day</h2>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            {/* Quick Saturday Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quick Select Saturday
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {nextSaturdays.map((sat) => (
+                  <button
+                    key={sat.toISOString()}
+                    type="button"
+                    onClick={() => setDate(formatDateLocal(sat))}
+                    className={`px-2 py-2 text-xs rounded-lg border transition-colors ${
+                      date === formatDateLocal(sat)
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-emerald-50 hover:border-emerald-200'
+                    }`}
+                  >
+                    <div className="font-medium">{format(sat, 'MMM d')}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Name *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Make-up Class"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date (Saturday only) *
+              </label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                min={formatDateLocal(new Date())}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">Only Saturdays can be selected as make-up days</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason (optional)
+              </label>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g., Due to Typhoon Kristine class cancellation"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || !name.trim() || !date}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {isLoading ? 'Adding...' : 'Add Make-up Day'}
               </button>
             </div>
           </form>
