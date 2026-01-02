@@ -174,6 +174,40 @@ serve(async (req) => {
       totalAmount += item.price_at_order * item.quantity;
     }
 
+    // If payment method is 'balance', validate sufficient funds
+    let currentBalance = 0;
+    if (payment_method === 'balance') {
+      const { data: wallet, error: walletError } = await supabaseAdmin
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', parent_id)
+        .single();
+
+      if (walletError || !wallet) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'NO_WALLET', 
+            message: 'No wallet found. Please top up your balance first.' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      currentBalance = wallet.balance;
+
+      if (currentBalance < totalAmount) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'INSUFFICIENT_BALANCE', 
+            message: `Insufficient balance. Required: ₱${totalAmount.toFixed(2)}, Available: ₱${currentBalance.toFixed(2)}`,
+            required: totalAmount,
+            available: currentBalance
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Process order in transaction using RPC
     // First, deduct stock for all items
     for (const item of items) {
@@ -241,6 +275,24 @@ serve(async (req) => {
         JSON.stringify({ error: 'ORDER_ITEMS_FAILED', message: 'Failed to create order items' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Deduct balance if payment method is 'balance'
+    if (payment_method === 'balance') {
+      const newBalance = currentBalance - totalAmount;
+      const { error: balanceError } = await supabaseAdmin
+        .from('wallets')
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq('user_id', parent_id);
+
+      if (balanceError) {
+        console.error('Balance deduction error:', balanceError);
+        // In production, rollback order and stock updates
+        return new Response(
+          JSON.stringify({ error: 'BALANCE_DEDUCTION_FAILED', message: 'Failed to deduct balance' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Insert transaction record

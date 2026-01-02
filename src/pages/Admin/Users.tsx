@@ -130,7 +130,7 @@ export default function AdminUsers() {
       const enrichedParents = await Promise.all(
         (profiles || []).map(async (profile) => {
           const { count: childrenCount } = await supabase
-            .from('children')
+            .from('parent_students')
             .select('*', { count: 'exact', head: true })
             .eq('parent_id', profile.id);
 
