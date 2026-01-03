@@ -80,12 +80,43 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
       });
 
       if (error) {
-        // Try to extract the actual error message from the response
-        // FunctionsHttpError may have context with the response body
+        // Extract the actual error message from the FunctionsHttpError
+        // The error may contain a response body with the real message
         let errorMessage = error.message;
         
+        // For FunctionsHttpError, try to get the response body
+        // The Supabase client wraps errors, so we need to dig into them
+        if (error.message === 'Edge Function returned a non-2xx status code') {
+          // The data object may contain the actual error response
+          if (data?.message) {
+            errorMessage = data.message;
+          } else if (data?.error) {
+            errorMessage = data.error;
+          } else {
+            // Try to parse the error context if available
+            try {
+              // FunctionsHttpError has a 'context' property with response details
+              const errAny = error as { context?: { json?: () => Promise<unknown> } };
+              if (errAny.context?.json) {
+                const body = await errAny.context.json();
+                if (body && typeof body === 'object') {
+                  const bodyObj = body as { message?: string; error?: string };
+                  errorMessage = bodyObj.message || bodyObj.error || errorMessage;
+                }
+              }
+            } catch {
+              // If we can't parse, fall back to checking network issues
+              if (!navigator.onLine) {
+                errorMessage = 'No internet connection. Please check your network and try again.';
+              } else {
+                errorMessage = 'Unable to connect to server. Please try again in a moment.';
+              }
+            }
+          }
+        }
+        
         // Check if the error has additional context (response body)
-        if ('context' in error && error.context) {
+        if ('context' in error && error.context && errorMessage === error.message) {
           try {
             const context = error.context as { message?: string; error?: string };
             errorMessage = context.message || context.error || error.message;
@@ -95,9 +126,9 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
         }
         
         // Check if data contains error info (for non-2xx responses, data may still have body)
-        if (data?.message) {
+        if (data?.message && errorMessage === error.message) {
           errorMessage = data.message;
-        } else if (data?.error) {
+        } else if (data?.error && errorMessage === error.message) {
           errorMessage = data.error;
         }
         
