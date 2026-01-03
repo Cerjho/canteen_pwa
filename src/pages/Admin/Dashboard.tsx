@@ -299,21 +299,10 @@ export default function AdminDashboard() {
         return new Date(timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       };
 
-      // Orders PLACED today (by created_at)
+      // Orders PLACED today (by created_at) - for avgOrderValue and activeParents
       const ordersPlacedToday = allOrders.filter(o => 
         getDateFromTimestamp(o.created_at) === todayStr
       );
-      const ordersPlacedYesterday = allOrders.filter(o => 
-        getDateFromTimestamp(o.created_at) === yesterdayStr
-      );
-      const ordersPlacedThisWeek = allOrders.filter(o => {
-        const createdDate = getDateFromTimestamp(o.created_at);
-        return createdDate >= weekStartStr && createdDate <= todayStr;
-      });
-      const ordersPlacedThisMonth = allOrders.filter(o => {
-        const createdDate = getDateFromTimestamp(o.created_at);
-        return createdDate >= monthStartStr && createdDate <= todayStr;
-      });
 
       // Revenue EARNED today (completed_at date for completed orders)
       const ordersCompletedToday = allOrders.filter(o => 
@@ -339,6 +328,21 @@ export default function AdminDashboard() {
 
       // Today's WORKLOAD (scheduled_for = today) - for operational status
       const todaysWorkload = allOrders.filter(o => getOrderDate(o) === todayStr);
+      
+      // Week/Month workload (by scheduled_for)
+      const weeksWorkload = allOrders.filter(o => {
+        const orderDate = getOrderDate(o);
+        return orderDate >= weekStartStr && orderDate <= todayStr && o.status !== 'cancelled';
+      });
+      const monthsWorkload = allOrders.filter(o => {
+        const orderDate = getOrderDate(o);
+        return orderDate >= monthStartStr && orderDate <= todayStr && o.status !== 'cancelled';
+      });
+      
+      // Yesterday's workload
+      const yesterdaysWorkload = allOrders.filter(o => 
+        getOrderDate(o) === yesterdayStr && o.status !== 'cancelled'
+      );
       
       // Future scheduled orders
       const futureOrders = allOrders.filter(o => {
@@ -378,11 +382,11 @@ export default function AdminDashboard() {
       ).length;
 
       return {
-        // Orders placed (by created_at)
-        totalOrdersToday: ordersPlacedToday.length,
-        totalOrdersWeek: ordersPlacedThisWeek.length,
-        totalOrdersMonth: ordersPlacedThisMonth.length,
-        ordersYesterday: ordersPlacedYesterday.length,
+        // Orders scheduled for today/week/month (by scheduled_for - operational workload)
+        totalOrdersToday: todaysWorkload.filter(o => o.status !== 'cancelled').length,
+        totalOrdersWeek: weeksWorkload.length,
+        totalOrdersMonth: monthsWorkload.length,
+        ordersYesterday: yesterdaysWorkload.length,
         
         // Revenue earned (by completed_at)
         revenueToday,
