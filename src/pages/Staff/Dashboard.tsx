@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, TouchEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers } from 'lucide-react';
-import { format, differenceInMinutes } from 'date-fns';
+import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame } from 'lucide-react';
+import { format, differenceInMinutes, isToday } from 'date-fns';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
@@ -39,7 +39,9 @@ interface StaffOrder {
   created_at: string;
   scheduled_for: string;
   notes?: string;
+  staff_notes?: string;
   payment_method: string;
+  completed_at?: string;
   child: {
     first_name: string;
     last_name: string;
@@ -53,6 +55,14 @@ interface StaffOrder {
   };
   items: OrderItem[];
 }
+
+// Peak hour detection thresholds
+const PEAK_HOUR_THRESHOLD = 10; // Orders per hour to consider "peak"
+const RUSH_THRESHOLD = 15; // Orders per hour to consider "rush"
+
+// Swipe detection configuration
+const SWIPE_THRESHOLD = 100; // Minimum swipe distance in pixels
+const SWIPE_VELOCITY_THRESHOLD = 0.5; // Minimum velocity for swipe
 
 // Calculate wait time category
 function getWaitTimeCategory(createdAt: string): { minutes: number; category: 'normal' | 'warning' | 'critical' } {
@@ -138,7 +148,15 @@ function groupOrdersByGrade(orders: StaffOrder[]): GradeGroup[] {
 }
 
 type DateFilter = 'today' | 'future' | 'all';
-type ViewMode = 'flat' | 'grouped';
+type ViewMode = 'flat' | 'grouped' | 'kitchen';
+
+// Touch tracking for swipe gestures
+interface TouchState {
+  startX: number;
+  startY: number;
+  startTime: number;
+  orderId: string;
+}
 
 export default function StaffDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -150,6 +168,15 @@ export default function StaffDashboard() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const [collapsedGrades, setCollapsedGrades] = useState<Set<string>>(new Set());
+  
+  // New feature states
+  const [isKitchenFullscreen, setIsKitchenFullscreen] = useState(false);
+  const [staffNoteInput, setStaffNoteInput] = useState<{ orderId: string; note: string } | null>(null);
+  const [localStaffNotes, setLocalStaffNotes] = useState<Record<string, string[]>>({});
+  const [showStatsPanel, setShowStatsPanel] = useState(false);
+  const [swipingOrder, setSwipingOrder] = useState<string | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const touchState = useRef<TouchState | null>(null);
   const [, setTimerTick] = useState(0); // Force re-render for countdown timers
   const previousOrderCount = useRef<number>(0);
   const { showToast } = useToast();
@@ -336,6 +363,158 @@ export default function StaffDashboard() {
     
     return Array.from(itemMap.values()).sort((a, b) => b.quantity - a.quantity);
   }, [orders]);
+
+  // Peak hour detection - calculate orders per hour
+  const peakHourStatus = useMemo(() => {
+    if (!orders) return { isPeak: false, isRush: false, ordersPerHour: 0, trend: 'stable' as const };
+    
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    
+    // Count orders in last hour
+    const recentOrders = orders.filter(o => new Date(o.created_at) >= oneHourAgo);
+    const previousHourOrders = orders.filter(o => {
+      const orderTime = new Date(o.created_at);
+      return orderTime >= twoHoursAgo && orderTime < oneHourAgo;
+    });
+    
+    const ordersPerHour = recentOrders.length;
+    const previousOrdersPerHour = previousHourOrders.length;
+    
+    // Determine trend
+    let trend: 'increasing' | 'decreasing' | 'stable' = 'stable';
+    if (ordersPerHour > previousOrdersPerHour * 1.2) trend = 'increasing';
+    else if (ordersPerHour < previousOrdersPerHour * 0.8) trend = 'decreasing';
+    
+    return {
+      isPeak: ordersPerHour >= PEAK_HOUR_THRESHOLD,
+      isRush: ordersPerHour >= RUSH_THRESHOLD,
+      ordersPerHour,
+      trend,
+    };
+  }, [orders]);
+
+  // Order completion stats
+  const orderStats = useMemo(() => {
+    if (!orders) return null;
+    
+    const todayOrders = orders.filter(o => isToday(new Date(o.created_at)));
+    const completedToday = todayOrders.filter(o => o.status === 'completed');
+    
+    // Average preparation time (from pending to completed)
+    const prepTimes: number[] = [];
+    completedToday.forEach(order => {
+      if (order.completed_at) {
+        const prepTime = differenceInMinutes(new Date(order.completed_at), new Date(order.created_at));
+        if (prepTime > 0 && prepTime < 120) { // Filter outliers
+          prepTimes.push(prepTime);
+        }
+      }
+    });
+    
+    const avgPrepTime = prepTimes.length > 0 
+      ? Math.round(prepTimes.reduce((a, b) => a + b, 0) / prepTimes.length)
+      : 0;
+    
+    // Revenue
+    const totalRevenue = completedToday.reduce((sum, o) => sum + o.total_amount, 0);
+    
+    // Orders by status
+    const pendingTooLong = todayOrders.filter(o => 
+      o.status === 'pending' && differenceInMinutes(new Date(), new Date(o.created_at)) > 15
+    ).length;
+    
+    return {
+      totalOrders: todayOrders.length,
+      completedOrders: completedToday.length,
+      avgPrepTime,
+      totalRevenue,
+      pendingTooLong,
+      completionRate: todayOrders.length > 0 
+        ? Math.round((completedToday.length / todayOrders.length) * 100)
+        : 0,
+    };
+  }, [orders]);
+
+  // Swipe gesture handlers
+  const handleTouchStart = useCallback((e: TouchEvent<HTMLDivElement>, orderId: string, status: string) => {
+    // Only allow swipe for pending/preparing orders
+    if (status === 'awaiting_payment' || status === 'completed') return;
+    
+    const touch = e.touches[0];
+    touchState.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startTime: Date.now(),
+      orderId,
+    };
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent<HTMLDivElement>) => {
+    if (!touchState.current) return;
+    
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchState.current.startX;
+    const deltaY = touch.clientY - touchState.current.startY;
+    
+    // Only horizontal swipe
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+      e.preventDefault();
+      setSwipingOrder(touchState.current.orderId);
+      setSwipeOffset(Math.max(-100, Math.min(100, deltaX)));
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((order: StaffOrder) => {
+    if (!touchState.current || !swipingOrder) {
+      touchState.current = null;
+      return;
+    }
+    
+    const deltaX = swipeOffset;
+    const elapsed = Date.now() - touchState.current.startTime;
+    const velocity = Math.abs(deltaX) / elapsed;
+    
+    // Check if swipe meets threshold
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD) {
+      if (deltaX > 0) {
+        // Swipe right - advance status
+        if (order.status === 'pending') {
+          updateOrderStatus(order.id, 'preparing');
+          showToast('📋 Order marked as preparing', 'success');
+        } else if (order.status === 'preparing') {
+          updateOrderStatus(order.id, 'ready');
+          showToast('✅ Order marked as ready', 'success');
+        } else if (order.status === 'ready') {
+          updateOrderStatus(order.id, 'completed');
+          showToast('🎉 Order completed!', 'success');
+        }
+      } else {
+        // Swipe left - show cancel dialog
+        if (order.status === 'pending') {
+          setShowCancelDialog(order.id);
+        }
+      }
+    }
+    
+    touchState.current = null;
+    setSwipingOrder(null);
+    setSwipeOffset(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swipingOrder, swipeOffset, showToast]);
+
+  // Staff note handler
+  const addStaffNote = useCallback((orderId: string, note: string) => {
+    if (!note.trim()) return;
+    
+    setLocalStaffNotes(prev => ({
+      ...prev,
+      [orderId]: [...(prev[orderId] || []), `${format(new Date(), 'h:mm a')}: ${note}`]
+    }));
+    setStaffNoteInput(null);
+    showToast('📝 Note added', 'success');
+  }, [showToast]);
 
   // Track last refresh time for indicator
   const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
@@ -594,35 +773,86 @@ export default function StaffDashboard() {
     );
   };
 
-  const printOrder = (order: StaffOrder) => {
+  // Enhanced thermal printer support (ESC/POS compatible styling)
+  const printOrder = (order: StaffOrder, thermal: boolean = false) => {
+    const staffNotes = localStaffNotes[order.id] || [];
+    
+    // Thermal printer optimized CSS (80mm width ~48 chars)
+    const thermalStyle = `
+      @page { size: 80mm auto; margin: 0; }
+      @media print { body { width: 80mm; margin: 0; padding: 5mm; } }
+      * { margin: 0; padding: 0; font-family: 'Courier New', monospace; }
+      body { width: 80mm; padding: 5mm; font-size: 12px; line-height: 1.4; }
+      .header { text-align: center; margin-bottom: 8px; border-bottom: 2px dashed #000; padding-bottom: 8px; }
+      .order-num { font-size: 24px; font-weight: bold; letter-spacing: 2px; }
+      .student { font-size: 16px; font-weight: bold; margin: 8px 0; text-align: center; }
+      .class { text-align: center; font-size: 14px; margin-bottom: 8px; }
+      .divider { border-top: 1px dashed #000; margin: 8px 0; }
+      .item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+      .item-qty { font-weight: bold; min-width: 30px; }
+      .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 8px; border-top: 2px dashed #000; padding-top: 8px; }
+      .notes { background: #f0f0f0; padding: 8px; margin: 8px 0; font-size: 11px; }
+      .staff-notes { border-left: 3px solid #000; padding-left: 8px; margin: 8px 0; font-size: 10px; }
+      .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #666; }
+      .time { font-size: 11px; text-align: center; }
+    `;
+    
+    const standardStyle = `
+      body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
+      .header { text-align: center; margin-bottom: 15px; }
+      .order-num { font-size: 28px; font-weight: bold; background: #000; color: #fff; padding: 10px 20px; display: inline-block; }
+      .student { font-size: 20px; font-weight: bold; margin: 15px 0 5px; text-align: center; }
+      .class { text-align: center; color: #666; margin-bottom: 15px; }
+      .divider { border-top: 2px dashed #ccc; margin: 15px 0; }
+      .item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+      .item-name { flex: 1; }
+      .item-qty { font-weight: bold; background: #f0f0f0; padding: 2px 8px; border-radius: 4px; }
+      .total { font-size: 22px; font-weight: bold; text-align: right; margin-top: 15px; padding-top: 15px; border-top: 2px solid #000; }
+      .notes { background: #fff3cd; padding: 12px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #ffc107; }
+      .staff-notes { background: #e7f3ff; padding: 12px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #0066cc; }
+      .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #999; }
+      .time { font-size: 12px; color: #666; text-align: center; }
+    `;
+    
     const printContent = `
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Order #${order.id.slice(-6)}</title>
-          <style>
-            body { font-family: sans-serif; padding: 20px; }
-            h1 { font-size: 18px; margin-bottom: 10px; }
-            .info { margin-bottom: 8px; }
-            .items { border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 10px; }
-            .item { display: flex; justify-content: space-between; padding: 4px 0; }
-          </style>
+          <title>Order #${order.id.slice(-4).toUpperCase()}</title>
+          <style>${thermal ? thermalStyle : standardStyle}</style>
         </head>
         <body>
-          <h1>Order #${order.id.slice(-6)}</h1>
-          <div class="info"><strong>Student:</strong> ${order.child?.first_name || 'Unknown'} ${order.child?.last_name || 'Student'}</div>
-          <div class="info"><strong>Class:</strong> ${order.child?.grade_level || '-'} - ${order.child?.section || '-'}</div>
-          <div class="info"><strong>Time:</strong> ${format(new Date(order.created_at), 'h:mm a')}</div>
-          ${order.notes ? `<div class="info"><strong>Notes:</strong> ${order.notes}</div>` : ''}
-          <div class="items">
-            ${order.items.map(item => `
-              <div class="item">
-                <span>${item.product.name}</span>
-                <span>x${item.quantity}</span>
-              </div>
-            `).join('')}
+          <div class="header">
+            <div class="order-num">#${order.id.slice(-4).toUpperCase()}</div>
           </div>
-          <div style="margin-top: 10px; border-top: 1px solid #000; padding-top: 10px;">
-            <strong>Total: ₱${order.total_amount.toFixed(2)}</strong>
+          
+          <div class="student">${order.child?.first_name || 'Unknown'} ${order.child?.last_name || 'Student'}</div>
+          <div class="class">${order.child?.grade_level || '-'} - ${order.child?.section || '-'}</div>
+          <div class="time">Ordered: ${format(new Date(order.created_at), 'h:mm a')} | ${format(new Date(order.created_at), 'MMM d')}</div>
+          
+          <div class="divider"></div>
+          
+          ${order.items.map(item => `
+            <div class="item">
+              <span class="item-name">${item.product.name}</span>
+              <span class="item-qty">×${item.quantity}</span>
+            </div>
+          `).join('')}
+          
+          <div class="total">TOTAL: ₱${order.total_amount.toFixed(2)}</div>
+          
+          ${order.notes ? `<div class="notes">📝 Customer: ${order.notes}</div>` : ''}
+          
+          ${staffNotes.length > 0 ? `
+            <div class="staff-notes">
+              <strong>Staff Notes:</strong><br/>
+              ${staffNotes.join('<br/>')}
+            </div>
+          ` : ''}
+          
+          <div class="footer">
+            Payment: ${order.payment_method?.toUpperCase() || 'N/A'}<br/>
+            ${thermal ? '--- CANTEEN ORDER ---' : 'Thank you!'}
           </div>
         </body>
       </html>
@@ -765,6 +995,120 @@ export default function StaffDashboard() {
     }
   };
 
+  // Kitchen Display Mode - Fullscreen view
+  if (viewMode === 'kitchen' && isKitchenFullscreen) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 text-white z-50 overflow-auto">
+        <div className="p-4">
+          {/* Kitchen Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-bold">🍳 Kitchen Display</h1>
+              {peakHourStatus.isRush && (
+                <span className="animate-pulse flex items-center gap-2 px-4 py-2 bg-red-600 rounded-lg text-lg font-bold">
+                  <Flame size={24} /> RUSH HOUR!
+                </span>
+              )}
+              {peakHourStatus.isPeak && !peakHourStatus.isRush && (
+                <span className="flex items-center gap-2 px-4 py-2 bg-orange-600 rounded-lg text-lg font-bold">
+                  <AlertTriangle size={24} /> Peak Time
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-2xl">{format(new Date(), 'h:mm a')}</span>
+              <button
+                onClick={() => setIsKitchenFullscreen(false)}
+                className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg"
+              >
+                <Minimize2 size={24} />
+              </button>
+            </div>
+          </div>
+
+          {/* Status Summary */}
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="bg-orange-600/30 border-2 border-orange-500 rounded-xl p-4 text-center">
+              <div className="text-5xl font-bold">{statusCounts.awaitingPayment}</div>
+              <div className="text-lg mt-1">Awaiting Pay</div>
+            </div>
+            <div className="bg-gray-600/30 border-2 border-gray-500 rounded-xl p-4 text-center">
+              <div className="text-5xl font-bold">{statusCounts.pending}</div>
+              <div className="text-lg mt-1">Pending</div>
+            </div>
+            <div className="bg-yellow-600/30 border-2 border-yellow-500 rounded-xl p-4 text-center">
+              <div className="text-5xl font-bold">{statusCounts.preparing}</div>
+              <div className="text-lg mt-1">Preparing</div>
+            </div>
+            <div className="bg-green-600/30 border-2 border-green-500 rounded-xl p-4 text-center">
+              <div className="text-5xl font-bold">{statusCounts.ready}</div>
+              <div className="text-lg mt-1">Ready</div>
+            </div>
+          </div>
+
+          {/* Items to Prep - Large Cards */}
+          <div className="mb-6">
+            <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+              <ChefHat size={24} /> Items to Prepare
+            </h2>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+              {itemsToPrep.map((item) => (
+                <div 
+                  key={item.name}
+                  className="bg-gray-800 rounded-xl p-4 text-center border-2 border-gray-700"
+                >
+                  <div className="text-4xl font-bold text-yellow-400">{item.quantity}×</div>
+                  <div className="text-sm mt-2 line-clamp-2">{item.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Active Orders Grid - Large Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredOrders.filter(o => o.status !== 'completed').slice(0, 20).map((order) => {
+              const waitTime = getWaitTimeCategory(order.created_at);
+              return (
+                <div 
+                  key={order.id}
+                  className={`rounded-xl p-4 border-4 ${
+                    order.status === 'ready' 
+                      ? 'bg-green-900/50 border-green-500' 
+                      : order.status === 'preparing'
+                      ? 'bg-yellow-900/50 border-yellow-500'
+                      : order.status === 'awaiting_payment'
+                      ? 'bg-orange-900/50 border-orange-500'
+                      : waitTime.category === 'critical'
+                      ? 'bg-red-900/50 border-red-500 animate-pulse'
+                      : 'bg-gray-800 border-gray-600'
+                  }`}
+                >
+                  <div className="text-3xl font-mono font-bold text-center mb-2">
+                    #{order.id.slice(-4).toUpperCase()}
+                  </div>
+                  <div className="text-xl font-bold text-center mb-1">
+                    {order.child?.first_name || 'Unknown'}
+                  </div>
+                  <div className="text-sm text-center text-gray-400">
+                    {order.child?.grade_level} - {order.child?.section}
+                  </div>
+                  <div className="mt-3 text-sm text-center font-medium">
+                    {order.items.map(i => `${i.quantity}× ${i.product.name}`).join(', ')}
+                  </div>
+                  {waitTime.category !== 'normal' && order.status === 'pending' && (
+                    <div className="mt-2 text-center text-red-400 font-bold">
+                      ⏱ {waitTime.minutes}m waiting
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
@@ -774,6 +1118,27 @@ export default function StaffDashboard() {
             subtitle={getSubtitle()}
           />
           <div className="flex items-center gap-2">
+            {/* Peak Hour Indicator */}
+            {peakHourStatus.isRush && (
+              <span className="animate-pulse flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold">
+                <Flame size={16} /> RUSH!
+              </span>
+            )}
+            {peakHourStatus.isPeak && !peakHourStatus.isRush && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">
+                <AlertTriangle size={14} /> Peak
+              </span>
+            )}
+            
+            {/* Stats Button */}
+            <button
+              onClick={() => setShowStatsPanel(!showStatsPanel)}
+              className={`p-2 rounded-full ${showStatsPanel ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-gray-100 dark:bg-gray-700'}`}
+              title="View stats"
+            >
+              <BarChart3 size={20} />
+            </button>
+            
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
               className={`p-2 rounded-full ${soundEnabled ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' : 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700'}`}
@@ -789,6 +1154,59 @@ export default function StaffDashboard() {
             </button>
           </div>
         </div>
+
+        {/* Stats Panel - Collapsible */}
+        {showStatsPanel && orderStats && (
+          <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                <TrendingUp size={18} /> Today's Performance
+              </h3>
+              <button onClick={() => setShowStatsPanel(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{orderStats.totalOrders}</div>
+                <div className="text-xs text-gray-500">Total Orders</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-green-600">{orderStats.completedOrders}</div>
+                <div className="text-xs text-gray-500">Completed</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-blue-600">{orderStats.completionRate}%</div>
+                <div className="text-xs text-gray-500">Completion Rate</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-purple-600">{orderStats.avgPrepTime}m</div>
+                <div className="text-xs text-gray-500">Avg Prep Time</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+                <div className={`text-2xl font-bold ${orderStats.pendingTooLong > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                  {orderStats.pendingTooLong}
+                </div>
+                <div className="text-xs text-gray-500">Delayed ({'>'}15m)</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-primary-600">₱{orderStats.totalRevenue.toFixed(0)}</div>
+                <div className="text-xs text-gray-500">Revenue</div>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+              <span>Order rate: {peakHourStatus.ordersPerHour}/hr</span>
+              <span>•</span>
+              <span className={`flex items-center gap-1 ${
+                peakHourStatus.trend === 'increasing' ? 'text-green-600' : 
+                peakHourStatus.trend === 'decreasing' ? 'text-red-600' : 'text-gray-500'
+              }`}>
+                {peakHourStatus.trend === 'increasing' ? '↑' : peakHourStatus.trend === 'decreasing' ? '↓' : '→'}
+                {peakHourStatus.trend}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="mb-4">
@@ -944,7 +1362,7 @@ export default function StaffDashboard() {
               title="Show all orders in a flat list"
             >
               <Users size={16} />
-              <span className="hidden sm:inline">Flat View</span>
+              <span className="hidden sm:inline">Flat</span>
             </button>
             <button
               onClick={() => setViewMode('grouped')}
@@ -956,13 +1374,30 @@ export default function StaffDashboard() {
               title="Group orders by grade level"
             >
               <Layers size={16} />
-              <span className="hidden sm:inline">By Grade</span>
+              <span className="hidden sm:inline">Grade</span>
             </button>
+            <button
+              onClick={() => { setViewMode('kitchen'); setIsKitchenFullscreen(true); }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'kitchen'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+              }`}
+              title="Kitchen display mode - fullscreen view for kitchen monitors"
+            >
+              <Maximize2 size={16} />
+              <span className="hidden sm:inline">Kitchen</span>
+            </button>
+          </div>
+          
+          {/* Swipe hint for mobile */}
+          <div className="flex items-center gap-2 text-xs text-gray-400 sm:hidden">
+            <span>👆 Swipe right: next status</span>
           </div>
           
           {/* Expand/Collapse All (only in grouped view) */}
           {viewMode === 'grouped' && groupedOrders.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
               <button
                 onClick={expandAllGrades}
                 className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -1109,6 +1544,8 @@ export default function StaffDashboard() {
                         const isAwaitingPayment = order.status === 'awaiting_payment';
                         const paymentTimeRemaining = getPaymentTimeRemaining(order.payment_due_at);
                         const isExpired = isPaymentExpired(order.payment_due_at, order.payment_status);
+                        const isSwipingThis = swipingOrder === order.id;
+                        const orderStaffNotes = localStaffNotes[order.id] || [];
                         
                         const getBorderClass = () => {
                           if (isAwaitingPayment && isExpired) return 'border-l-4 border-l-red-500';
@@ -1123,8 +1560,27 @@ export default function StaffDashboard() {
                             key={order.id} 
                             className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border-2 transition-all ${getBorderClass()} ${
                               isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
-                            }`}
+                            } ${isSwipingThis ? 'relative overflow-hidden' : ''}`}
+                            style={{ 
+                              transform: isSwipingThis ? `translateX(${swipeOffset}px)` : 'none',
+                              transition: isSwipingThis ? 'none' : 'transform 0.3s ease-out'
+                            }}
+                            onTouchStart={(e) => handleTouchStart(e, order.id, order.status)}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={() => handleTouchEnd(order)}
                           >
+                            {/* Swipe background indicators */}
+                            {isSwipingThis && swipeOffset > 30 && (
+                              <div className="absolute inset-y-0 left-0 w-20 bg-green-500 flex items-center justify-center text-white">
+                                <CheckCircle size={24} />
+                              </div>
+                            )}
+                            {isSwipingThis && swipeOffset < -30 && order.status === 'pending' && (
+                              <div className="absolute inset-y-0 right-0 w-20 bg-red-500 flex items-center justify-center text-white">
+                                <X size={24} />
+                              </div>
+                            )}
+                            
                             {/* Order Number Badge - Prominent for calling students */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -1268,6 +1724,41 @@ export default function StaffDashboard() {
                               </div>
                             )}
 
+                            {/* Staff Notes Section */}
+                            {(orderStaffNotes.length > 0 || staffNoteInput?.orderId === order.id) && (
+                              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <MessageSquare size={14} className="text-blue-600 dark:text-blue-400" />
+                                  <span className="text-xs font-medium text-blue-800 dark:text-blue-300">Staff Notes</span>
+                                </div>
+                                {orderStaffNotes.map((note, idx) => (
+                                  <p key={idx} className="text-xs text-blue-700 dark:text-blue-400 mb-1">{note}</p>
+                                ))}
+                                {staffNoteInput?.orderId === order.id && (
+                                  <div className="flex gap-2 mt-2">
+                                    <input
+                                      type="text"
+                                      value={staffNoteInput.note}
+                                      onChange={(e) => setStaffNoteInput({ orderId: order.id, note: e.target.value })}
+                                      placeholder="Add a note..."
+                                      className="flex-1 px-2 py-1 text-xs border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') addStaffNote(order.id, staffNoteInput.note);
+                                        if (e.key === 'Escape') setStaffNoteInput(null);
+                                      }}
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => addStaffNote(order.id, staffNoteInput.note)}
+                                      className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                    >
+                                      <Send size={14} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             {/* Order Items */}
                             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 mb-4">
                               {order.items.map((item) => (
@@ -1325,12 +1816,28 @@ export default function StaffDashboard() {
                                   Complete Order
                                 </button>
                               )}
+                              {/* Add Note Button */}
                               <button
-                                onClick={() => printOrder(order)}
+                                onClick={() => setStaffNoteInput({ orderId: order.id, note: '' })}
+                                className="p-3 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg"
+                                title="Add staff note"
+                              >
+                                <MessageSquare size={18} />
+                              </button>
+                              {/* Print buttons */}
+                              <button
+                                onClick={() => printOrder(order, false)}
                                 className="p-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                                title="Print order"
+                                title="Print order (standard)"
                               >
                                 <Printer size={18} />
+                              </button>
+                              <button
+                                onClick={() => printOrder(order, true)}
+                                className="p-3 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-xs"
+                                title="Print for thermal printer (80mm)"
+                              >
+                                80mm
                               </button>
                             </div>
                           </div>
@@ -1360,14 +1867,36 @@ export default function StaffDashboard() {
                 if (isSelected) return 'border-primary-500';
                 return 'border-gray-100 dark:border-gray-700';
               };
+
+              const isSwipingThis = swipingOrder === order.id;
+              const orderStaffNotes = localStaffNotes[order.id] || [];
               
               return (
                 <div 
-                  key={order.id} 
+                  key={order.id}
                   className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 border-2 transition-all ${getBorderClass()} ${
                     isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
-                  }`}
+                  } ${isSwipingThis ? 'relative overflow-hidden' : ''}`}
+                  style={{ 
+                    transform: isSwipingThis ? `translateX(${swipeOffset}px)` : 'none',
+                    transition: isSwipingThis ? 'none' : 'transform 0.3s ease-out'
+                  }}
+                  onTouchStart={(e) => handleTouchStart(e, order.id, order.status)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={() => handleTouchEnd(order)}
                 >
+                  {/* Swipe background indicators */}
+                  {isSwipingThis && swipeOffset > 30 && (
+                    <div className="absolute inset-y-0 left-0 w-20 bg-green-500 flex items-center justify-center text-white">
+                      <CheckCircle size={24} />
+                    </div>
+                  )}
+                  {isSwipingThis && swipeOffset < -30 && order.status === 'pending' && (
+                    <div className="absolute inset-y-0 right-0 w-20 bg-red-500 flex items-center justify-center text-white">
+                      <X size={24} />
+                    </div>
+                  )}
+                  
                   {/* Order Number Badge - Prominent for calling students */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -1510,6 +2039,41 @@ export default function StaffDashboard() {
                     </div>
                   )}
 
+                  {/* Staff Notes Section */}
+                  {(orderStaffNotes.length > 0 || staffNoteInput?.orderId === order.id) && (
+                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MessageSquare size={14} className="text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-medium text-blue-800 dark:text-blue-300">Staff Notes</span>
+                      </div>
+                      {orderStaffNotes.map((note, idx) => (
+                        <p key={idx} className="text-xs text-blue-700 dark:text-blue-400 mb-1">{note}</p>
+                      ))}
+                      {staffNoteInput?.orderId === order.id && (
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={staffNoteInput.note}
+                            onChange={(e) => setStaffNoteInput({ orderId: order.id, note: e.target.value })}
+                            placeholder="Add a note..."
+                            className="flex-1 px-2 py-1 text-xs border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') addStaffNote(order.id, staffNoteInput.note);
+                              if (e.key === 'Escape') setStaffNoteInput(null);
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => addStaffNote(order.id, staffNoteInput.note)}
+                            className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            <Send size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Order Items */}
                   <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
                     {order.items.map((item) => (
@@ -1567,12 +2131,28 @@ export default function StaffDashboard() {
                         Complete Order
                       </button>
                     )}
+                    {/* Add Note Button */}
                     <button
-                      onClick={() => printOrder(order)}
+                      onClick={() => setStaffNoteInput({ orderId: order.id, note: '' })}
+                      className="p-3 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg"
+                      title="Add staff note"
+                    >
+                      <MessageSquare size={18} />
+                    </button>
+                    {/* Print buttons */}
+                    <button
+                      onClick={() => printOrder(order, false)}
                       className="p-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                      title="Print order"
+                      title="Print order (standard)"
                     >
                       <Printer size={18} />
+                    </button>
+                    <button
+                      onClick={() => printOrder(order, true)}
+                      className="p-3 text-gray-500 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-xs"
+                      title="Print for thermal printer (80mm)"
+                    >
+                      80mm
                     </button>
                   </div>
                 </div>
