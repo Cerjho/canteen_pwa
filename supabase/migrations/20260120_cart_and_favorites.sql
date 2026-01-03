@@ -1,4 +1,4 @@
--- Migration: Add cart_items and favorites tables for backend persistence
+-- Migration: Add cart_items, cart_state, and favorites tables for backend persistence
 -- This ensures cart and favorites persist across page refreshes
 
 -- ============================================
@@ -18,12 +18,18 @@ CREATE TABLE IF NOT EXISTS cart_items (
 CREATE INDEX IF NOT EXISTS idx_cart_items_user_id ON cart_items(user_id);
 
 -- Trigger for updated_at
+DROP TRIGGER IF EXISTS update_cart_items_updated_at ON cart_items;
 CREATE TRIGGER update_cart_items_updated_at
   BEFORE UPDATE ON cart_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- RLS for cart_items
 ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own cart items" ON cart_items;
+DROP POLICY IF EXISTS "Users can insert own cart items" ON cart_items;
+DROP POLICY IF EXISTS "Users can update own cart items" ON cart_items;
+DROP POLICY IF EXISTS "Users can delete own cart items" ON cart_items;
 
 -- Users can only see their own cart items
 CREATE POLICY "Users can view own cart items"
@@ -47,6 +53,37 @@ CREATE POLICY "Users can delete own cart items"
 
 
 -- ============================================
+-- CART STATE TABLE (stores student_id, notes, payment_method)
+-- ============================================
+CREATE TABLE IF NOT EXISTS cart_state (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES students(id) ON DELETE SET NULL,
+  notes TEXT DEFAULT '',
+  payment_method TEXT DEFAULT 'cash' CHECK (payment_method IN ('cash', 'gcash', 'balance')),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for cart_state
+ALTER TABLE cart_state ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own cart state" ON cart_state;
+DROP POLICY IF EXISTS "Users can insert own cart state" ON cart_state;
+DROP POLICY IF EXISTS "Users can update own cart state" ON cart_state;
+
+CREATE POLICY "Users can view own cart state"
+  ON cart_state FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own cart state"
+  ON cart_state FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own cart state"
+  ON cart_state FOR UPDATE
+  USING (auth.uid() = user_id);
+
+
+-- ============================================
 -- FAVORITES TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS favorites (
@@ -63,6 +100,10 @@ CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON favorites(product_id);
 
 -- RLS for favorites
 ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own favorites" ON favorites;
+DROP POLICY IF EXISTS "Users can insert own favorites" ON favorites;
+DROP POLICY IF EXISTS "Users can delete own favorites" ON favorites;
 
 -- Users can only see their own favorites
 CREATE POLICY "Users can view own favorites"

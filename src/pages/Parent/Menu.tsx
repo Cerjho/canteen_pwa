@@ -38,11 +38,15 @@ export default function Menu() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [cartOpen, setCartOpen] = useState(false);
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all' | 'favorites'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { showToast } = useToast();
+
+  // Cart hook now manages selectedStudentId
+  const { items, addItem, updateQuantity, checkout, total, selectedStudentId, setSelectedStudentId } = useCart();
+  const { isFavorite, toggleFavorite, favorites } = useFavorites();
+  const { data: students } = useStudents();
 
   // Fetch parent wallet balance
   const { data: walletData } = useQuery({
@@ -108,10 +112,6 @@ export default function Menu() {
     enabled: !!selectedDate && isCanteenOpen
   });
 
-  const { data: students } = useStudents();
-  const { items, addItem, updateQuantity, checkout, total } = useCart();
-  const { isFavorite, toggleFavorite, favorites } = useFavorites();
-
   // Filter products by category and search
   const filteredProducts = useMemo(() => {
     let result = products || [];
@@ -137,7 +137,7 @@ export default function Menu() {
 
   // Memoize handlers to prevent unnecessary re-renders
   const handleAddToCart = useCallback((productId: string) => {
-    if (!selectedChildId) {
+    if (!selectedStudentId) {
       showToast('Please select a child first', 'error');
       return;
     }
@@ -153,20 +153,20 @@ export default function Menu() {
       });
       showToast(`${product.name} added to cart`, 'success');
     }
-  }, [selectedChildId, products, addItem, showToast]);
+  }, [selectedStudentId, products, addItem, showToast]);
 
   const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string) => {
-    if (!selectedChildId) {
+    if (!selectedStudentId) {
       showToast('Please select a child', 'error');
       return;
     }
 
-    const selectedStudent = students?.find(c => c.id === selectedChildId);
+    const selectedStudent = students?.find(c => c.id === selectedStudentId);
     const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
     const isFutureOrder = !isToday(effectiveDate);
 
     try {
-      const result = await checkout(selectedChildId, paymentMethod, notes, scheduledFor);
+      const result = await checkout(selectedStudentId, paymentMethod, notes, scheduledFor);
       setCartOpen(false);
       
       // Invalidate wallet balance if paid with balance
@@ -192,7 +192,7 @@ export default function Menu() {
       console.error('Checkout error:', error);
       showToast('Failed to place order. Please try again.', 'error');
     }
-  }, [selectedChildId, students, effectiveDate, checkout, queryClient, navigate, total, items.length, showToast]);
+  }, [selectedStudentId, students, effectiveDate, checkout, queryClient, navigate, total, items.length, showToast]);
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
@@ -392,8 +392,8 @@ export default function Menu() {
 
         <StudentSelector
           students={students || []}
-          selectedChildId={selectedChildId}
-          onSelect={setSelectedChildId}
+          selectedChildId={selectedStudentId}
+          onSelect={setSelectedStudentId}
         />
 
         {/* Category Filter Tabs */}
