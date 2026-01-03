@@ -164,8 +164,13 @@ export default function Menu() {
       return;
     }
 
-    const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
-    const isFutureOrder = !isToday(effectiveDate);
+    // Ensure we have a valid date - use selectedDate directly if available
+    const orderDate = selectedDate || effectiveDate;
+    const scheduledFor = format(orderDate, 'yyyy-MM-dd');
+    const isFutureOrder = !isToday(orderDate);
+    
+    // Log for debugging
+    console.log('[Checkout] Order date:', scheduledFor, 'isFutureOrder:', isFutureOrder, 'selectedDate:', selectedDate?.toISOString());
 
     try {
       const result = await checkout(paymentMethod, notes, scheduledFor);
@@ -198,7 +203,7 @@ export default function Menu() {
       console.error('Checkout error:', error);
       showToast('Failed to place order. Please try again.', 'error');
     }
-  }, [items, effectiveDate, checkout, queryClient, navigate, total, showToast]);
+  }, [items, selectedDate, effectiveDate, checkout, queryClient, navigate, total, showToast]);
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
