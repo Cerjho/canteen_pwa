@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar } from 'lucide-react';
+import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar, CalendarDays } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
 interface OrderConfirmationState {
   orderId: string;
@@ -9,7 +10,9 @@ interface OrderConfirmationState {
   itemCount: number;
   isOffline?: boolean;
   paymentMethod?: 'cash' | 'balance';
-  scheduledFor?: string;
+  scheduledFor?: string; // Legacy single date
+  scheduledDates?: string[]; // Multi-day support
+  orderCount?: number; // Number of orders created
   isFutureOrder?: boolean;
 }
 
@@ -25,6 +28,32 @@ export default function OrderConfirmation() {
     }
   }, [state, navigate]);
 
+  // Format scheduled dates for display
+  const formattedDates = useMemo(() => {
+    if (!state) return [];
+    
+    // Support both legacy single date and new multi-date format
+    const dates = state.scheduledDates || (state.scheduledFor ? [state.scheduledFor] : []);
+    
+    return dates
+      .map(dateStr => {
+        try {
+          const date = parseISO(dateStr);
+          return {
+            dateStr,
+            formatted: format(date, 'EEE, MMM d'), // e.g., "Mon, Jan 27"
+            dayName: format(date, 'EEEE'), // Full day name
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean) as { dateStr: string; formatted: string; dayName: string }[];
+  }, [state]);
+
+  const isMultiDay = formattedDates.length > 1;
+  const orderCount = state?.orderCount || 1;
+
   if (!state) return null;
 
   return (
@@ -39,13 +68,15 @@ export default function OrderConfirmation() {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          {state.isOffline ? 'Order Saved!' : 'Order Placed!'}
+          {state.isOffline 
+            ? (isMultiDay ? 'Orders Saved!' : 'Order Saved!') 
+            : (isMultiDay ? 'Orders Placed!' : 'Order Placed!')}
         </h1>
         
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           {state.isOffline 
-            ? 'Your order has been saved and will be submitted when you\'re back online.'
-            : 'Your order has been received and is being processed.'
+            ? `Your ${isMultiDay ? `${orderCount} orders have` : 'order has'} been saved and will be submitted when you're back online.`
+            : `Your ${isMultiDay ? `${orderCount} orders have` : 'order has'} been received and ${isMultiDay ? 'are' : 'is'} being processed.`
           }
         </p>
 
@@ -62,9 +93,12 @@ export default function OrderConfirmation() {
           </div>
 
           <div className="flex justify-between items-center mb-4">
-            <span className="text-gray-600 dark:text-gray-400">Order ID</span>
+            <span className="text-gray-600 dark:text-gray-400">
+              {isMultiDay ? 'Order IDs' : 'Order ID'}
+            </span>
             <span className="font-mono text-sm text-gray-900 dark:text-gray-100">
               #{state.orderId.slice(0, 8).toUpperCase()}
+              {isMultiDay && <span className="text-gray-500 dark:text-gray-400 ml-1">+{orderCount - 1}</span>}
             </span>
           </div>
 
@@ -101,14 +135,36 @@ export default function OrderConfirmation() {
             </span>
           </div>
 
-          {/* Scheduled Date (if future order) */}
-          {state.isFutureOrder && state.scheduledFor && (
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-gray-600 dark:text-gray-400">Pickup Date</span>
-              <span className="inline-flex items-center gap-1 text-gray-900 dark:text-gray-100 text-sm font-medium">
-                <Calendar size={14} />
-                {state.scheduledFor}
-              </span>
+          {/* Scheduled Date(s) - Multi-day support */}
+          {formattedDates.length > 0 && (
+            <div className="mb-4">
+              <div className="flex justify-between items-start">
+                <span className="text-gray-600 dark:text-gray-400">
+                  {isMultiDay ? (
+                    <span className="flex items-center gap-1">
+                      <CalendarDays size={14} />
+                      Pickup Dates
+                    </span>
+                  ) : 'Pickup Date'}
+                </span>
+                {isMultiDay ? (
+                  <div className="flex flex-wrap gap-1 justify-end max-w-[60%]">
+                    {formattedDates.map(({ dateStr, formatted }) => (
+                      <span 
+                        key={dateStr}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded text-xs font-medium"
+                      >
+                        {formatted}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-gray-900 dark:text-gray-100 text-sm font-medium">
+                    <Calendar size={14} />
+                    {formattedDates[0]?.formatted}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -125,7 +181,9 @@ export default function OrderConfirmation() {
           <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-6 text-left">
             <p className="text-sm text-orange-800 dark:text-orange-300">
               <strong>⏰ Payment Required:</strong> Please pay at the canteen counter before the deadline. 
-              Your order will be automatically cancelled if not paid in time.
+              {isMultiDay 
+                ? ' Your orders will be automatically cancelled if not paid in time.'
+                : ' Your order will be automatically cancelled if not paid in time.'}
             </p>
           </div>
         )}
@@ -134,7 +192,7 @@ export default function OrderConfirmation() {
         {state.isOffline && (
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6 text-left">
             <p className="text-sm text-amber-800 dark:text-amber-300">
-              <strong>Offline Mode:</strong> Your order is saved locally and will be 
+              <strong>Offline Mode:</strong> {isMultiDay ? 'Your orders are' : 'Your order is'} saved locally and will be 
               automatically submitted when you reconnect to the internet.
             </p>
           </div>
