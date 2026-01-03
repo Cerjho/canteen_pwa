@@ -304,6 +304,49 @@ export default function StaffDashboard() {
     total: orders?.length || 0,
   }), [orders]);
 
+  // Aggregate items to prepare (for kitchen view) - only pending and preparing orders
+  const itemsToPrep = useMemo(() => {
+    if (!orders) return [];
+    
+    const itemMap = new Map<string, { name: string; quantity: number; image_url: string; pendingQty: number; preparingQty: number }>();
+    
+    orders
+      .filter(o => o.status === 'pending' || o.status === 'preparing')
+      .forEach(order => {
+        order.items.forEach(item => {
+          const existing = itemMap.get(item.product.name);
+          if (existing) {
+            existing.quantity += item.quantity;
+            if (order.status === 'pending') {
+              existing.pendingQty += item.quantity;
+            } else {
+              existing.preparingQty += item.quantity;
+            }
+          } else {
+            itemMap.set(item.product.name, {
+              name: item.product.name,
+              quantity: item.quantity,
+              image_url: item.product.image_url,
+              pendingQty: order.status === 'pending' ? item.quantity : 0,
+              preparingQty: order.status === 'preparing' ? item.quantity : 0,
+            });
+          }
+        });
+      });
+    
+    return Array.from(itemMap.values()).sort((a, b) => b.quantity - a.quantity);
+  }, [orders]);
+
+  // Track last refresh time for indicator
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
+  
+  // Update last refresh time when orders change
+  useEffect(() => {
+    if (orders) {
+      setLastRefreshTime(new Date());
+    }
+  }, [orders]);
+
   // Realtime subscription for new orders
   useEffect(() => {
     const channel = supabase
@@ -461,7 +504,7 @@ export default function StaffDashboard() {
     }
   };
 
-  const handleBatchStatusUpdate = async (status: string) => {
+  const handleBatchStatusUpdate = useCallback(async (status: string) => {
     if (selectedOrders.length === 0) return;
     
     try {
@@ -501,7 +544,7 @@ export default function StaffDashboard() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to update orders', 'error');
     }
-  };
+  }, [selectedOrders, refetch, showToast]);
 
   const handleCancelOrder = async (orderId: string) => {
     try {
@@ -592,6 +635,72 @@ export default function StaffDashboard() {
       printWindow.print();
     }
   };
+
+  // Keyboard shortcuts for power users
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Only handle if not typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      // Handle shortcuts for selected orders
+      if (selectedOrders.length > 0) {
+        switch (e.key.toLowerCase()) {
+          case 'p':
+            e.preventDefault();
+            handleBatchStatusUpdate('preparing');
+            break;
+          case 'r':
+            e.preventDefault();
+            handleBatchStatusUpdate('ready');
+            break;
+          case 'escape':
+            e.preventDefault();
+            setSelectedOrders([]);
+            break;
+        }
+      }
+      
+      // Global shortcuts
+      switch (e.key.toLowerCase()) {
+        case 'f':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            // Focus search input
+            document.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+          }
+          break;
+        case '1':
+          if (e.altKey) {
+            e.preventDefault();
+            setStatusFilter('all');
+          }
+          break;
+        case '2':
+          if (e.altKey) {
+            e.preventDefault();
+            setStatusFilter('pending');
+          }
+          break;
+        case '3':
+          if (e.altKey) {
+            e.preventDefault();
+            setStatusFilter('preparing');
+          }
+          break;
+        case '4':
+          if (e.altKey) {
+            e.preventDefault();
+            setStatusFilter('ready');
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [selectedOrders, handleBatchStatusUpdate]);
 
   const getStatusBadge = (status: string, paymentStatus?: string) => {
     // Show awaiting payment status differently
@@ -748,6 +857,78 @@ export default function StaffDashboard() {
             <div className="text-xl font-bold text-green-600">{statusCounts.ready}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Ready</div>
           </button>
+        </div>
+
+        {/* Kitchen Prep Summary - Collapsible */}
+        {itemsToPrep.length > 0 && (
+          <details className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg border border-amber-200 dark:border-amber-800 overflow-hidden">
+            <summary className="px-4 py-3 cursor-pointer hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ChefHat size={20} className="text-amber-600 dark:text-amber-400" />
+                <span className="font-semibold text-amber-800 dark:text-amber-300">
+                  Kitchen Prep Summary
+                </span>
+                <span className="text-xs bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full">
+                  {itemsToPrep.reduce((sum, i) => sum + i.quantity, 0)} items
+                </span>
+              </div>
+              <span className="text-xs text-amber-600 dark:text-amber-400">Click to expand</span>
+            </summary>
+            <div className="px-4 pb-4 pt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {itemsToPrep.map((item) => (
+                <div 
+                  key={item.name}
+                  className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm flex flex-col items-center text-center"
+                >
+                  {item.image_url && (
+                    <img 
+                      src={item.image_url} 
+                      alt={item.name}
+                      className="w-12 h-12 rounded-lg object-cover mb-2"
+                    />
+                  )}
+                  <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {item.quantity}×
+                  </span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                    {item.name}
+                  </span>
+                  <div className="flex gap-1 mt-1">
+                    {item.pendingQty > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                        {item.pendingQty} pending
+                      </span>
+                    )}
+                    {item.preparingQty > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400 rounded">
+                        {item.preparingQty} prep
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {/* Quick Stats Bar - Last Refresh & Keyboard Hints */}
+        <div className="flex items-center justify-between mb-4 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1">
+              <RefreshCw size={12} />
+              Last updated: {format(lastRefreshTime, 'h:mm:ss a')}
+            </span>
+            <span className="hidden sm:inline text-gray-400">•</span>
+            <span className="hidden sm:inline">Auto-refresh: 10s</span>
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">P</span>
+            <span>Prepare</span>
+            <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">R</span>
+            <span>Ready</span>
+            <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Esc</span>
+            <span>Clear</span>
+          </div>
         </div>
 
         {/* View Mode Toggle & Grade Controls */}
@@ -944,6 +1125,34 @@ export default function StaffDashboard() {
                               isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
                             }`}
                           >
+                            {/* Order Number Badge - Prominent for calling students */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-3 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-mono font-bold text-lg tracking-wider">
+                                  #{order.id.slice(-4).toUpperCase()}
+                                </span>
+                                {order.status === 'ready' && (
+                                  <button
+                                    onClick={() => {
+                                      // Announce order ready
+                                      const msg = new SpeechSynthesisUtterance(
+                                        `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
+                                      );
+                                      window.speechSynthesis.speak(msg);
+                                      showToast(`📢 Announced: Order #${order.id.slice(-4).toUpperCase()}`, 'success');
+                                    }}
+                                    className="p-1.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                                    title="Announce order ready"
+                                  >
+                                    <Bell size={16} />
+                                  </button>
+                                )}
+                              </div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {format(new Date(order.created_at), 'h:mm a')}
+                              </span>
+                            </div>
+                            
                             {/* Order Header */}
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex items-center gap-3">
@@ -1159,6 +1368,33 @@ export default function StaffDashboard() {
                     isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
                   }`}
                 >
+                  {/* Order Number Badge - Prominent for calling students */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-mono font-bold text-lg tracking-wider">
+                        #{order.id.slice(-4).toUpperCase()}
+                      </span>
+                      {order.status === 'ready' && (
+                        <button
+                          onClick={() => {
+                            const msg = new SpeechSynthesisUtterance(
+                              `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
+                            );
+                            window.speechSynthesis.speak(msg);
+                            showToast(`📢 Announced: Order #${order.id.slice(-4).toUpperCase()}`, 'success');
+                          }}
+                          className="p-1.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                          title="Announce order ready"
+                        >
+                          <Bell size={16} />
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {format(new Date(order.created_at), 'h:mm a')}
+                    </span>
+                  </div>
+                  
                   {/* Order Header */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
