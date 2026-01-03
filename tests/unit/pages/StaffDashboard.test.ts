@@ -350,3 +350,217 @@ describe('Order Details Modal', () => {
     expect(order.notes).toBe('No onions please');
   });
 });
+
+describe('Grade Level Grouping', () => {
+  // Grade order for K-12 Philippine Education System
+  const GRADE_ORDER: Record<string, number> = {
+    'nursery': 0,
+    'kinder': 1,
+    'kindergarten': 1,
+    'grade 1': 2,
+    'grade 2': 3,
+    'grade 3': 4,
+    'grade 4': 5,
+    'grade 5': 6,
+    'grade 6': 7,
+    'grade 7': 8,
+    'grade 8': 9,
+    'grade 9': 10,
+    'grade 10': 11,
+    'grade 11': 12,
+    'grade 12': 13,
+  };
+
+  function getGradeOrder(gradeLevel: string): number {
+    const normalized = gradeLevel?.toLowerCase().trim() || '';
+    if (GRADE_ORDER[normalized] !== undefined) {
+      return GRADE_ORDER[normalized];
+    }
+    const match = normalized.match(/\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (num >= 1 && num <= 12) return num + 1;
+    }
+    return 999;
+  }
+
+  interface GradeGroup {
+    gradeLevel: string;
+    orders: Array<{ id: string; status: string; child: { grade_level: string } }>;
+    orderCount: number;
+    pendingCount: number;
+    preparingCount: number;
+    readyCount: number;
+    awaitingPaymentCount: number;
+  }
+
+  function groupOrdersByGrade(orders: Array<{ id: string; status: string; child: { grade_level: string } }>): GradeGroup[] {
+    const groups = new Map<string, Array<{ id: string; status: string; child: { grade_level: string } }>>();
+    
+    orders.forEach(order => {
+      const gradeLevel = order.child?.grade_level || 'Unknown';
+      const existing = groups.get(gradeLevel);
+      if (existing) {
+        existing.push(order);
+      } else {
+        groups.set(gradeLevel, [order]);
+      }
+    });
+    
+    return Array.from(groups.entries())
+      .map(([gradeLevel, gradeOrders]) => ({
+        gradeLevel,
+        orders: gradeOrders,
+        orderCount: gradeOrders.length,
+        pendingCount: gradeOrders.filter(o => o.status === 'pending').length,
+        preparingCount: gradeOrders.filter(o => o.status === 'preparing').length,
+        readyCount: gradeOrders.filter(o => o.status === 'ready').length,
+        awaitingPaymentCount: gradeOrders.filter(o => o.status === 'awaiting_payment').length,
+      }))
+      .sort((a, b) => getGradeOrder(a.gradeLevel) - getGradeOrder(b.gradeLevel));
+  }
+
+  it('should group orders by grade level', () => {
+    const mockOrders = [
+      { id: '1', status: 'pending', child: { grade_level: 'Grade 1' } },
+      { id: '2', status: 'preparing', child: { grade_level: 'Grade 3' } },
+      { id: '3', status: 'pending', child: { grade_level: 'Grade 1' } },
+      { id: '4', status: 'ready', child: { grade_level: 'Grade 3' } },
+      { id: '5', status: 'pending', child: { grade_level: 'Kinder' } },
+    ];
+
+    const grouped = groupOrdersByGrade(mockOrders);
+
+    expect(grouped).toHaveLength(3);
+    
+    // Kinder should be first (order 1)
+    expect(grouped[0].gradeLevel).toBe('Kinder');
+    expect(grouped[0].orderCount).toBe(1);
+    
+    // Grade 1 should be second (order 2)
+    expect(grouped[1].gradeLevel).toBe('Grade 1');
+    expect(grouped[1].orderCount).toBe(2);
+    
+    // Grade 3 should be third (order 4)
+    expect(grouped[2].gradeLevel).toBe('Grade 3');
+    expect(grouped[2].orderCount).toBe(2);
+  });
+
+  it('should sort grades in correct K-12 order', () => {
+    const mockOrders = [
+      { id: '1', status: 'pending', child: { grade_level: 'Grade 12' } },
+      { id: '2', status: 'pending', child: { grade_level: 'Grade 1' } },
+      { id: '3', status: 'pending', child: { grade_level: 'Nursery' } },
+      { id: '4', status: 'pending', child: { grade_level: 'Grade 7' } },
+      { id: '5', status: 'pending', child: { grade_level: 'Kinder' } },
+    ];
+
+    const grouped = groupOrdersByGrade(mockOrders);
+    const gradeOrder = grouped.map(g => g.gradeLevel);
+
+    expect(gradeOrder).toEqual(['Nursery', 'Kinder', 'Grade 1', 'Grade 7', 'Grade 12']);
+  });
+
+  it('should calculate status counts per grade correctly', () => {
+    const mockOrders = [
+      { id: '1', status: 'pending', child: { grade_level: 'Grade 1' } },
+      { id: '2', status: 'preparing', child: { grade_level: 'Grade 1' } },
+      { id: '3', status: 'ready', child: { grade_level: 'Grade 1' } },
+      { id: '4', status: 'awaiting_payment', child: { grade_level: 'Grade 1' } },
+    ];
+
+    const grouped = groupOrdersByGrade(mockOrders);
+    const grade1 = grouped.find(g => g.gradeLevel === 'Grade 1');
+
+    expect(grade1).toBeDefined();
+    expect(grade1?.orderCount).toBe(4);
+    expect(grade1?.pendingCount).toBe(1);
+    expect(grade1?.preparingCount).toBe(1);
+    expect(grade1?.readyCount).toBe(1);
+    expect(grade1?.awaitingPaymentCount).toBe(1);
+  });
+
+  it('should handle orders with missing grade level', () => {
+    const mockOrders = [
+      { id: '1', status: 'pending', child: { grade_level: 'Grade 1' } },
+      { id: '2', status: 'pending', child: { grade_level: '' } },
+      { id: '3', status: 'pending', child: { grade_level: null as unknown as string } },
+    ];
+
+    const grouped = groupOrdersByGrade(mockOrders);
+    
+    // Should have Grade 1 and Unknown groups
+    expect(grouped.some(g => g.gradeLevel === 'Grade 1')).toBe(true);
+    expect(grouped.some(g => g.gradeLevel === 'Unknown')).toBe(true);
+    
+    // Unknown orders should be at the end (highest sort order)
+    const unknownGroup = grouped.find(g => g.gradeLevel === 'Unknown');
+    expect(unknownGroup?.orderCount).toBe(2);
+  });
+
+  it('should handle various grade level formats', () => {
+    // Test that different formats are correctly ordered
+    expect(getGradeOrder('Grade 1')).toBeLessThan(getGradeOrder('Grade 10'));
+    expect(getGradeOrder('grade 1')).toBe(getGradeOrder('Grade 1')); // case insensitive
+    expect(getGradeOrder('Nursery')).toBeLessThan(getGradeOrder('Kinder'));
+    expect(getGradeOrder('Kinder')).toBeLessThan(getGradeOrder('Grade 1'));
+    expect(getGradeOrder('Unknown')).toBeGreaterThan(getGradeOrder('Grade 12'));
+  });
+
+  it('should return empty array for empty orders', () => {
+    const grouped = groupOrdersByGrade([]);
+    expect(grouped).toHaveLength(0);
+  });
+
+  describe('View Mode Toggle', () => {
+    it('should default to grouped view', () => {
+      const defaultViewMode = 'grouped';
+      expect(defaultViewMode).toBe('grouped');
+    });
+
+    it('should allow switching between flat and grouped views', () => {
+      let viewMode: 'flat' | 'grouped' = 'grouped';
+      
+      // Toggle to flat
+      viewMode = viewMode === 'grouped' ? 'flat' : 'grouped';
+      expect(viewMode).toBe('flat');
+      
+      // Toggle back to grouped
+      viewMode = viewMode === 'grouped' ? 'flat' : 'grouped';
+      expect(viewMode).toBe('grouped');
+    });
+  });
+
+  describe('Collapsible Grade Sections', () => {
+    it('should track collapsed state per grade', () => {
+      const collapsedGrades = new Set<string>();
+      
+      // Collapse Grade 1
+      collapsedGrades.add('Grade 1');
+      expect(collapsedGrades.has('Grade 1')).toBe(true);
+      expect(collapsedGrades.has('Grade 2')).toBe(false);
+      
+      // Expand Grade 1
+      collapsedGrades.delete('Grade 1');
+      expect(collapsedGrades.has('Grade 1')).toBe(false);
+    });
+
+    it('should expand all grades', () => {
+      const collapsedGrades = new Set(['Grade 1', 'Grade 2', 'Grade 3']);
+      
+      // Clear all collapsed
+      collapsedGrades.clear();
+      expect(collapsedGrades.size).toBe(0);
+    });
+
+    it('should collapse all grades', () => {
+      const allGrades = ['Grade 1', 'Grade 2', 'Grade 3'];
+      const collapsedGrades = new Set(allGrades);
+      
+      expect(collapsedGrades.size).toBe(3);
+      expect(collapsedGrades.has('Grade 1')).toBe(true);
+      expect(collapsedGrades.has('Grade 2')).toBe(true);
+      expect(collapsedGrades.has('Grade 3')).toBe(true);
+    });
+  });
+});

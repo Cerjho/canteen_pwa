@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers } from 'lucide-react';
 import { format, differenceInMinutes } from 'date-fns';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
@@ -62,7 +62,83 @@ function getWaitTimeCategory(createdAt: string): { minutes: number; category: 'n
   return { minutes, category: 'normal' };
 }
 
+// Grade level sorting order (K-12 Philippine Education System)
+const GRADE_ORDER: Record<string, number> = {
+  'nursery': 0,
+  'kinder': 1,
+  'kindergarten': 1,
+  'grade 1': 2,
+  'grade 2': 3,
+  'grade 3': 4,
+  'grade 4': 5,
+  'grade 5': 6,
+  'grade 6': 7,
+  'grade 7': 8,
+  'grade 8': 9,
+  'grade 9': 10,
+  'grade 10': 11,
+  'grade 11': 12,
+  'grade 12': 13,
+};
+
+// Get normalized grade level for sorting
+function getGradeOrder(gradeLevel: string): number {
+  const normalized = gradeLevel?.toLowerCase().trim() || '';
+  // Check exact match first
+  if (GRADE_ORDER[normalized] !== undefined) {
+    return GRADE_ORDER[normalized];
+  }
+  // Extract number if present (e.g., "G1", "Gr. 1", "1st Grade")
+  const match = normalized.match(/\d+/);
+  if (match) {
+    const num = parseInt(match[0], 10);
+    if (num >= 1 && num <= 12) return num + 1; // +1 to account for nursery/kinder
+  }
+  return 999; // Unknown grades go last
+}
+
+// Group orders by grade level
+interface GradeGroup {
+  gradeLevel: string;
+  orders: StaffOrder[];
+  orderCount: number;
+  pendingCount: number;
+  preparingCount: number;
+  readyCount: number;
+  awaitingPaymentCount: number;
+}
+
+function groupOrdersByGrade(orders: StaffOrder[]): GradeGroup[] {
+  const groups = new Map<string, StaffOrder[]>();
+  
+  orders.forEach(order => {
+    const gradeLevel = order.child?.grade_level || 'Unknown';
+    const existing = groups.get(gradeLevel);
+    if (existing) {
+      existing.push(order);
+    } else {
+      groups.set(gradeLevel, [order]);
+    }
+  });
+  
+  // Convert to array and sort by grade order
+  const result: GradeGroup[] = Array.from(groups.entries())
+    .map(([gradeLevel, gradeOrders]) => ({
+      gradeLevel,
+      orders: gradeOrders,
+      orderCount: gradeOrders.length,
+      pendingCount: gradeOrders.filter(o => o.status === 'pending').length,
+      preparingCount: gradeOrders.filter(o => o.status === 'preparing').length,
+      readyCount: gradeOrders.filter(o => o.status === 'ready').length,
+      awaitingPaymentCount: gradeOrders.filter(o => o.status === 'awaiting_payment').length,
+    }))
+    .sort((a, b) => getGradeOrder(a.gradeLevel) - getGradeOrder(b.gradeLevel));
+  
+  return result;
+}
+
 type DateFilter = 'today' | 'future' | 'all';
+type ViewMode = 'flat' | 'grouped';
 
 export default function StaffDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -72,6 +148,8 @@ export default function StaffDashboard() {
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  const [collapsedGrades, setCollapsedGrades] = useState<Set<string>>(new Set());
   const [, setTimerTick] = useState(0); // Force re-render for countdown timers
   const previousOrderCount = useRef<number>(0);
   const { showToast } = useToast();
@@ -132,15 +210,99 @@ export default function StaffDashboard() {
       );
     }
     
+    // Sort by urgency: critical wait time first, then by created_at
+    result = [...result].sort((a, b) => {
+      const aWait = differenceInMinutes(new Date(), new Date(a.created_at));
+      const bWait = differenceInMinutes(new Date(), new Date(b.created_at));
+      const aUrgent = aWait >= 10 && a.status === 'pending';
+      const bUrgent = bWait >= 10 && b.status === 'pending';
+      
+      // Urgent orders first
+      if (aUrgent && !bUrgent) return -1;
+      if (!aUrgent && bUrgent) return 1;
+      
+      // Then awaiting payment (time-sensitive)
+      if (a.status === 'awaiting_payment' && b.status !== 'awaiting_payment') return -1;
+      if (b.status === 'awaiting_payment' && a.status !== 'awaiting_payment') return 1;
+      
+      // Then by wait time (longest first)
+      return bWait - aWait;
+    });
+    
     return result;
   }, [orders, statusFilter, searchQuery]);
 
-  // Calculate counts from ALL orders (not filtered by status)
-  const awaitingPaymentCount = orders?.filter(o => o.status === 'awaiting_payment').length || 0;
-  const pendingCount = orders?.filter(o => o.status === 'pending').length || 0;
-  const preparingCount = orders?.filter(o => o.status === 'preparing').length || 0;
-  const readyCount = orders?.filter(o => o.status === 'ready').length || 0;
-  const totalCount = orders?.length || 0;
+  // Group filtered orders by grade level
+  const groupedOrders = useMemo(() => {
+    return groupOrdersByGrade(filteredOrders);
+  }, [filteredOrders]);
+
+  // Toggle grade group collapse/expand
+  const toggleGradeCollapse = useCallback((gradeLevel: string) => {
+    setCollapsedGrades(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(gradeLevel)) {
+        newSet.delete(gradeLevel);
+      } else {
+        newSet.add(gradeLevel);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Expand/collapse all grades
+  const expandAllGrades = useCallback(() => {
+    setCollapsedGrades(new Set());
+  }, []);
+
+  const collapseAllGrades = useCallback(() => {
+    const allGrades = new Set(groupedOrders.map(g => g.gradeLevel));
+    setCollapsedGrades(allGrades);
+  }, [groupedOrders]);
+
+  // Select all orders in a grade (excluding awaiting_payment)
+  const toggleSelectAllInGrade = useCallback((gradeLevel: string) => {
+    const gradeGroup = groupedOrders.find(g => g.gradeLevel === gradeLevel);
+    if (!gradeGroup) return;
+    
+    // Get selectable orders (not awaiting_payment)
+    const selectableOrderIds = gradeGroup.orders
+      .filter(o => o.status !== 'awaiting_payment')
+      .map(o => o.id);
+    
+    // Check if all are already selected
+    const allSelected = selectableOrderIds.every(id => selectedOrders.includes(id));
+    
+    if (allSelected) {
+      // Deselect all in this grade
+      setSelectedOrders(prev => prev.filter(id => !selectableOrderIds.includes(id)));
+    } else {
+      // Select all in this grade
+      setSelectedOrders(prev => [...new Set([...prev, ...selectableOrderIds])]);
+    }
+  }, [groupedOrders, selectedOrders]);
+
+  // Check if all orders in a grade are selected
+  const isGradeFullySelected = useCallback((gradeLevel: string) => {
+    const gradeGroup = groupedOrders.find(g => g.gradeLevel === gradeLevel);
+    if (!gradeGroup) return false;
+    
+    const selectableOrderIds = gradeGroup.orders
+      .filter(o => o.status !== 'awaiting_payment')
+      .map(o => o.id);
+    
+    if (selectableOrderIds.length === 0) return false;
+    return selectableOrderIds.every(id => selectedOrders.includes(id));
+  }, [groupedOrders, selectedOrders]);
+
+  // Calculate counts from ALL orders (not filtered by status) - memoized
+  const statusCounts = useMemo(() => ({
+    awaitingPayment: orders?.filter(o => o.status === 'awaiting_payment').length || 0,
+    pending: orders?.filter(o => o.status === 'pending').length || 0,
+    preparing: orders?.filter(o => o.status === 'preparing').length || 0,
+    ready: orders?.filter(o => o.status === 'ready').length || 0,
+    total: orders?.length || 0,
+  }), [orders]);
 
   // Realtime subscription for new orders
   useEffect(() => {
@@ -555,37 +717,85 @@ export default function StaffDashboard() {
             onClick={() => setStatusFilter('all')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary-500' : ''}`}
           >
-            <div className="text-xl font-bold text-primary-600 dark:text-primary-400">{totalCount}</div>
+            <div className="text-xl font-bold text-primary-600 dark:text-primary-400">{statusCounts.total}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">All</div>
           </button>
           <button 
             onClick={() => setStatusFilter('awaiting_payment')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500' : ''}`}
           >
-            <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{awaitingPaymentCount}</div>
+            <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{statusCounts.awaitingPayment}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Awaiting</div>
           </button>
           <button 
             onClick={() => setStatusFilter('pending')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-gray-500' : ''}`}
           >
-            <div className="text-xl font-bold text-gray-700 dark:text-gray-300">{pendingCount}</div>
+            <div className="text-xl font-bold text-gray-700 dark:text-gray-300">{statusCounts.pending}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
           </button>
           <button 
             onClick={() => setStatusFilter('preparing')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-yellow-500' : ''}`}
           >
-            <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{preparingCount}</div>
+            <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{statusCounts.preparing}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Preparing</div>
           </button>
           <button 
             onClick={() => setStatusFilter('ready')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-green-500' : ''}`}
           >
-            <div className="text-xl font-bold text-green-600">{readyCount}</div>
+            <div className="text-xl font-bold text-green-600">{statusCounts.ready}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Ready</div>
           </button>
+        </div>
+
+        {/* View Mode Toggle & Grade Controls */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('flat')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'flat'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+              }`}
+              title="Show all orders in a flat list"
+            >
+              <Users size={16} />
+              <span className="hidden sm:inline">Flat View</span>
+            </button>
+            <button
+              onClick={() => setViewMode('grouped')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'grouped'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+              }`}
+              title="Group orders by grade level"
+            >
+              <Layers size={16} />
+              <span className="hidden sm:inline">By Grade</span>
+            </button>
+          </div>
+          
+          {/* Expand/Collapse All (only in grouped view) */}
+          {viewMode === 'grouped' && groupedOrders.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={expandAllGrades}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Expand All
+              </button>
+              <button
+                onClick={collapseAllGrades}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Collapse All
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Batch Actions */}
@@ -634,7 +844,297 @@ export default function StaffDashboard() {
               </button>
             )}
           </div>
+        ) : viewMode === 'grouped' ? (
+          /* Grouped View - Orders by Grade Level */
+          <div className="space-y-4">
+            {groupedOrders.map((group) => {
+              const isCollapsed = collapsedGrades.has(group.gradeLevel);
+              const hasSelectableOrders = group.orders.some(o => o.status !== 'awaiting_payment');
+              const isFullySelected = isGradeFullySelected(group.gradeLevel);
+              
+              return (
+                <div key={group.gradeLevel} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+                  {/* Grade Level Header */}
+                  <div className="flex items-center gap-2 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    {/* Select All Checkbox for Grade */}
+                    {hasSelectableOrders && (
+                      <input
+                        type="checkbox"
+                        checked={isFullySelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectAllInGrade(group.gradeLevel);
+                        }}
+                        className="w-5 h-5 min-w-[20px] rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                        title={`Select all orders in ${group.gradeLevel}`}
+                      />
+                    )}
+                    {!hasSelectableOrders && <div className="w-5 min-w-[20px]" />}
+                    
+                    <button
+                      onClick={() => toggleGradeCollapse(group.gradeLevel)}
+                      className="flex-1 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${isCollapsed ? 'bg-gray-100 dark:bg-gray-700' : 'bg-primary-100 dark:bg-primary-900/30'}`}>
+                          {isCollapsed ? (
+                            <ChevronRight size={20} className="text-gray-600 dark:text-gray-400" />
+                          ) : (
+                            <ChevronDown size={20} className="text-primary-600 dark:text-primary-400" />
+                          )}
+                        </div>
+                        <div className="text-left">
+                          <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
+                            {group.gradeLevel}
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {group.orderCount} order{group.orderCount !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Grade Status Summary Badges */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {group.awaitingPaymentCount > 0 && (
+                          <span className="px-2.5 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full text-xs font-medium">
+                            {group.awaitingPaymentCount} awaiting
+                          </span>
+                        )}
+                        {group.pendingCount > 0 && (
+                          <span className="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-xs font-medium">
+                            {group.pendingCount} pending
+                          </span>
+                        )}
+                        {group.preparingCount > 0 && (
+                          <span className="px-2.5 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full text-xs font-medium">
+                            {group.preparingCount} preparing
+                          </span>
+                        )}
+                        {group.readyCount > 0 && (
+                          <span className="px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs font-medium">
+                            {group.readyCount} ready
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                  
+                  {/* Orders in this grade */}
+                  {!isCollapsed && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-4">
+                      {group.orders.map((order) => {
+                        const waitTime = getWaitTimeCategory(order.created_at);
+                        const isSelected = selectedOrders.includes(order.id);
+                        const isAwaitingPayment = order.status === 'awaiting_payment';
+                        const paymentTimeRemaining = getPaymentTimeRemaining(order.payment_due_at);
+                        const isExpired = isPaymentExpired(order.payment_due_at, order.payment_status);
+                        
+                        const getBorderClass = () => {
+                          if (isAwaitingPayment && isExpired) return 'border-l-4 border-l-red-500';
+                          if (isAwaitingPayment) return 'border-l-4 border-l-orange-500';
+                          if (waitTime.category === 'critical' && order.status === 'pending') return 'border-l-4 border-l-red-500';
+                          if (isSelected) return 'border-primary-500';
+                          return 'border-gray-200 dark:border-gray-600';
+                        };
+                        
+                        return (
+                          <div 
+                            key={order.id} 
+                            className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border-2 transition-all ${getBorderClass()} ${
+                              isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
+                            }`}
+                          >
+                            {/* Order Header */}
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleOrderSelection(order.id)}
+                                  className="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                                  disabled={isAwaitingPayment}
+                                />
+                                <div className={`p-2 rounded-full ${getStatusBadge(order.status, order.payment_status)}`}>
+                                  {getStatusIcon(order.status, order.payment_status)}
+                                </div>
+                                <div>
+                                  <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
+                                    {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                                  </h3>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Section: {order.child?.section || '-'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xl font-bold text-primary-600">
+                                  ₱{order.total_amount.toFixed(2)}
+                                </span>
+                                {isAwaitingPayment && paymentTimeRemaining && (
+                                  <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${paymentTimeRemaining === 'Expired' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'}`}>
+                                    <Timer size={12} />
+                                    {paymentTimeRemaining}
+                                  </div>
+                                )}
+                                {!isAwaitingPayment && (
+                                  <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${getWaitTimeColor(waitTime.category)}`}>
+                                    <Timer size={12} />
+                                    {waitTime.minutes}m ago
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Awaiting Payment Banner */}
+                            {isAwaitingPayment && (
+                              <div className={`border rounded-lg p-3 mb-3 ${
+                                isPaymentExpired(order.payment_due_at, order.payment_status)
+                                  ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+                                  : 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800'
+                              }`}>
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Banknote className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'} size={20} />
+                                    <span className={`text-sm font-medium ${
+                                      isPaymentExpired(order.payment_due_at, order.payment_status)
+                                        ? 'text-red-800 dark:text-red-300'
+                                        : 'text-orange-800 dark:text-orange-300'
+                                    }`}>
+                                      {isPaymentExpired(order.payment_due_at, order.payment_status)
+                                        ? 'Payment expired - Order will be cancelled'
+                                        : `Cash payment pending - ₱${order.total_amount.toFixed(2)}`
+                                      }
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {isPaymentExpired(order.payment_due_at, order.payment_status) ? (
+                                      <span className="px-3 py-1.5 bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium cursor-not-allowed">
+                                        Expired
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => setShowCancelDialog(order.id)}
+                                          className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-500"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => setShowPaymentDialog(order.id)}
+                                          className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
+                                        >
+                                          Confirm Payment
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Parent Info */}
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                              Parent: {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
+                              {order.parent?.phone_number && ` • ${order.parent.phone_number}`}
+                              {order.payment_method && ` • `}
+                              {order.payment_method === 'cash' && <span className="text-orange-600 dark:text-orange-400 font-medium">CASH</span>}
+                              {order.payment_method === 'balance' && <span className="text-green-600 dark:text-green-400 font-medium">BALANCE</span>}
+                              {order.payment_method === 'gcash' && <span className="text-blue-600 dark:text-blue-400 font-medium">GCASH</span>}
+                            </p>
+
+                            {/* Scheduled Date (for future orders) */}
+                            {dateFilter !== 'today' && order.scheduled_for && (
+                              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2 mb-3 flex items-center gap-2">
+                                <span className="text-blue-600 dark:text-blue-400">📅</span>
+                                <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                                  Scheduled for: {format(new Date(order.scheduled_for + 'T00:00:00'), 'EEEE, MMMM d, yyyy')}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Order Notes */}
+                            {order.notes && (
+                              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-3">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-300">📝 {order.notes}</p>
+                              </div>
+                            )}
+
+                            {/* Order Items */}
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 mb-4">
+                              {order.items.map((item) => (
+                                <div key={item.id} className="flex justify-between py-1">
+                                  <div className="flex items-center gap-2">
+                                    {item.product.image_url && (
+                                      <img 
+                                        src={item.product.image_url} 
+                                        alt="" 
+                                        className="w-8 h-8 rounded object-cover"
+                                      />
+                                    )}
+                                    <span className="text-sm text-gray-900 dark:text-gray-100">{item.product.name}</span>
+                                  </div>
+                                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">x{item.quantity}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                              {order.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => updateOrderStatus(order.id, 'preparing')}
+                                    className="flex-1 bg-yellow-500 text-white py-3 rounded-lg hover:bg-yellow-600 font-medium flex items-center justify-center gap-2"
+                                  >
+                                    <ChefHat size={18} />
+                                    Start Preparing
+                                  </button>
+                                  <button
+                                    onClick={() => setShowCancelDialog(order.id)}
+                                    className="p-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg"
+                                    title="Cancel order"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </>
+                              )}
+                              {order.status === 'preparing' && (
+                                <button
+                                  onClick={() => updateOrderStatus(order.id, 'ready')}
+                                  className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                                >
+                                  <Bell size={18} />
+                                  Mark Ready
+                                </button>
+                              )}
+                              {order.status === 'ready' && (
+                                <button
+                                  onClick={() => updateOrderStatus(order.id, 'completed')}
+                                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 font-medium flex items-center justify-center gap-2"
+                                >
+                                  <CheckCircle size={18} />
+                                  Complete Order
+                                </button>
+                              )}
+                              <button
+                                onClick={() => printOrder(order)}
+                                className="p-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                title="Print order"
+                              >
+                                <Printer size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         ) : (
+          /* Flat View - All Orders */
           <div className="grid gap-4">
             {filteredOrders?.map((order) => {
               const waitTime = getWaitTimeCategory(order.created_at);
