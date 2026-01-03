@@ -144,6 +144,8 @@ export default function Menu() {
     
     const product = products?.find(p => p.id === productId);
     const selectedStudent = students?.find(s => s.id === selectedStudentId);
+    const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
+    
     if (product && selectedStudent) {
       addItem({
         product_id: product.id,
@@ -152,11 +154,12 @@ export default function Menu() {
         name: product.name,
         price: product.price,
         image_url: product.image_url,
-        quantity: 1
+        quantity: 1,
+        scheduled_for: scheduledFor
       });
       showToast(`${product.name} added for ${selectedStudent.first_name}`, 'success');
     }
-  }, [selectedStudentId, students, products, addItem, showToast]);
+  }, [selectedStudentId, students, products, addItem, showToast, effectiveDate]);
 
   const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string) => {
     if (items.length === 0) {
@@ -164,16 +167,13 @@ export default function Menu() {
       return;
     }
 
-    // Ensure we have a valid date - use selectedDate directly if available
-    const orderDate = selectedDate || effectiveDate;
-    const scheduledFor = format(orderDate, 'yyyy-MM-dd');
-    const isFutureOrder = !isToday(orderDate);
-    
-    // Log for debugging
-    console.log('[Checkout] Order date:', scheduledFor, 'isFutureOrder:', isFutureOrder, 'selectedDate:', selectedDate?.toISOString());
+    // Get unique scheduled dates from cart items
+    const scheduledDates = [...new Set(items.map(i => i.scheduled_for))];
+    const hasFutureOrders = scheduledDates.some(d => d !== format(new Date(), 'yyyy-MM-dd'));
 
     try {
-      const result = await checkout(paymentMethod, notes, scheduledFor);
+      // Each item has its own scheduled_for date, checkout groups by student+date
+      const result = await checkout(paymentMethod, notes);
       setCartOpen(false);
       
       // Invalidate wallet balance if paid with balance
@@ -195,15 +195,15 @@ export default function Menu() {
           itemCount: items.length,
           isOffline: false,
           paymentMethod,
-          scheduledFor: isFutureOrder ? scheduledFor : undefined,
-          isFutureOrder
+          scheduledDates: scheduledDates,
+          isFutureOrder: hasFutureOrders
         }
       });
     } catch (error) {
       console.error('Checkout error:', error);
       showToast('Failed to place order. Please try again.', 'error');
     }
-  }, [items, selectedDate, effectiveDate, checkout, queryClient, navigate, total, showToast]);
+  }, [items, checkout, queryClient, navigate, total, showToast]);
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {

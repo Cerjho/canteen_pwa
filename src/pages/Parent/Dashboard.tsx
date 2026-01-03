@@ -241,7 +241,7 @@ export default function ParentDashboard() {
     }
   });
 
-  // Reorder functionality
+  // Reorder functionality - uses same scheduled date from original order
   const handleReorder = (order: Order) => {
     const studentName = `${order.child.first_name} ${order.child.last_name}`;
     order.items.forEach(item => {
@@ -252,7 +252,8 @@ export default function ParentDashboard() {
         image_url: item.product.image_url,
         quantity: item.quantity,
         student_id: order.child.id,
-        student_name: studentName
+        student_name: studentName,
+        scheduled_for: order.scheduled_for
       });
     });
     showToast('Items added to cart!', 'success');

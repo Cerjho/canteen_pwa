@@ -4,14 +4,6 @@ import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
 import type { PaymentMethod } from '../types';
 
-// Helper to format date as YYYY-MM-DD in LOCAL timezone
-function formatDateLocal(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 export interface CartItem {
   id: string;
   product_id: string;
@@ -21,6 +13,7 @@ export interface CartItem {
   price: number;
   quantity: number;
   image_url: string;
+  scheduled_for: string; // YYYY-MM-DD format
 }
 
 interface CartItemDB {
@@ -29,6 +22,7 @@ interface CartItemDB {
   student_id: string;
   product_id: string;
   quantity: number;
+  scheduled_for: string;
   products: {
     id: string;
     name: string;
@@ -86,6 +80,7 @@ export function useCart() {
               student_id,
               product_id,
               quantity,
+              scheduled_for,
               products (
                 id,
                 name,
@@ -120,7 +115,8 @@ export function useCart() {
               name: item.products.name,
               price: item.products.price,
               quantity: item.quantity,
-              image_url: item.products.image_url || ''
+              image_url: item.products.image_url || '',
+              scheduled_for: item.scheduled_for
             }));
           setItems(cartItems);
         }
@@ -160,19 +156,23 @@ export function useCart() {
   }, [user]);
 
   const addItem = useCallback(async (item: Omit<CartItem, 'id'>) => {
-    if (!user || !item.student_id) return;
+    if (!user || !item.student_id || !item.scheduled_for) return;
 
     setError(null);
     
-    // Optimistic update
+    // Optimistic update - match by product, student AND scheduled_for date
     setItems((prevItems) => {
       const existingItem = prevItems.find(
-        (i) => i.product_id === item.product_id && i.student_id === item.student_id
+        (i) => i.product_id === item.product_id && 
+               i.student_id === item.student_id && 
+               i.scheduled_for === item.scheduled_for
       );
       
       if (existingItem) {
         return prevItems.map((i) =>
-          i.product_id === item.product_id && i.student_id === item.student_id
+          i.product_id === item.product_id && 
+          i.student_id === item.student_id && 
+          i.scheduled_for === item.scheduled_for
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
@@ -181,7 +181,7 @@ export function useCart() {
       return [...prevItems, { ...item, id: crypto.randomUUID() }];
     });
 
-    // Persist to database
+    // Persist to database - match by product, student AND scheduled_for
     try {
       const { data: existing } = await supabase
         .from('cart_items')
@@ -189,6 +189,7 @@ export function useCart() {
         .eq('user_id', user.id)
         .eq('student_id', item.student_id)
         .eq('product_id', item.product_id)
+        .eq('scheduled_for', item.scheduled_for)
         .single();
 
       if (existing) {
@@ -203,7 +204,8 @@ export function useCart() {
             user_id: user.id,
             student_id: item.student_id,
             product_id: item.product_id,
-            quantity: item.quantity
+            quantity: item.quantity,
+            scheduled_for: item.scheduled_for
           });
       }
     } catch (err) {
@@ -211,14 +213,14 @@ export function useCart() {
     }
   }, [user]);
 
-  const updateQuantity = useCallback(async (productId: string, studentId: string, quantity: number) => {
+  const updateQuantity = useCallback(async (productId: string, studentId: string, scheduledFor: string, quantity: number) => {
     if (!user) return;
 
     setError(null);
 
     if (quantity <= 0) {
       setItems((prevItems) => prevItems.filter(
-        (i) => !(i.product_id === productId && i.student_id === studentId)
+        (i) => !(i.product_id === productId && i.student_id === studentId && i.scheduled_for === scheduledFor)
       ));
       
       try {
@@ -227,14 +229,15 @@ export function useCart() {
           .delete()
           .eq('user_id', user.id)
           .eq('student_id', studentId)
-          .eq('product_id', productId);
+          .eq('product_id', productId)
+          .eq('scheduled_for', scheduledFor);
       } catch (err) {
         console.error('Failed to delete cart item:', err);
       }
     } else {
       setItems((prevItems) =>
         prevItems.map((i) =>
-          i.product_id === productId && i.student_id === studentId 
+          i.product_id === productId && i.student_id === studentId && i.scheduled_for === scheduledFor
             ? { ...i, quantity } 
             : i
         )
@@ -246,7 +249,8 @@ export function useCart() {
           .update({ quantity })
           .eq('user_id', user.id)
           .eq('student_id', studentId)
-          .eq('product_id', productId);
+          .eq('product_id', productId)
+          .eq('scheduled_for', scheduledFor);
       } catch (err) {
         console.error('Failed to update cart item:', err);
       }
@@ -286,11 +290,10 @@ export function useCart() {
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  // Checkout all students' orders with single payment
+  // Checkout all students' orders - creates separate order per student+date combination
   const checkout = useCallback(async (
     method?: PaymentMethod, 
-    orderNotes?: string, 
-    scheduledFor?: string
+    orderNotes?: string
   ) => {
     if (!user) throw new Error('User not authenticated');
     
@@ -304,38 +307,40 @@ export function useCart() {
 
       if (currentItems.length === 0) throw new Error('Cart is empty');
 
-      // Group items by student
-      const itemsByStudentId = currentItems.reduce((acc, item) => {
-        if (!acc[item.student_id]) {
-          acc[item.student_id] = [];
+      // Group items by student AND scheduled_for date
+      const itemsByStudentAndDate = currentItems.reduce((acc, item) => {
+        const key = `${item.student_id}_${item.scheduled_for}`;
+        if (!acc[key]) {
+          acc[key] = {
+            student_id: item.student_id,
+            scheduled_for: item.scheduled_for,
+            items: []
+          };
         }
-        acc[item.student_id].push(item);
+        acc[key].items.push(item);
         return acc;
-      }, {} as Record<string, CartItem[]>);
+      }, {} as Record<string, { student_id: string; scheduled_for: string; items: CartItem[] }>);
 
-      const studentIds = Object.keys(itemsByStudentId);
-      const results: Array<{ order_id?: string; student_id: string }> = [];
+      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string }> = [];
 
-      // Create order for each student
-      for (const studentId of studentIds) {
-        const studentItems = itemsByStudentId[studentId];
-        
+      // Create order for each student+date combination
+      for (const group of Object.values(itemsByStudentAndDate)) {
         const orderData = {
           parent_id: user.id,
-          student_id: studentId,
+          student_id: group.student_id,
           client_order_id: crypto.randomUUID(),
-          items: studentItems.map((item) => ({
+          items: group.items.map((item) => ({
             product_id: item.product_id,
             quantity: item.quantity,
             price_at_order: item.price
           })),
           payment_method: method || currentPaymentMethod,
           notes: orderNotes || currentNotes,
-          scheduled_for: scheduledFor || formatDateLocal(new Date())
+          scheduled_for: group.scheduled_for
         };
 
         const result = await createOrder(orderData);
-        results.push({ order_id: result?.order_id, student_id: studentId });
+        results.push({ order_id: result?.order_id, student_id: group.student_id, scheduled_for: group.scheduled_for });
       }
 
       await clearCart();
