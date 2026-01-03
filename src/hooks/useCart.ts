@@ -12,9 +12,11 @@ function formatDateLocal(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-interface CartItem {
+export interface CartItem {
   id: string;
   product_id: string;
+  student_id: string;
+  student_name: string;
   name: string;
   price: number;
   quantity: number;
@@ -32,6 +34,11 @@ interface CartItemDB {
     name: string;
     price: number;
     image_url: string | null;
+  };
+  students: {
+    id: string;
+    first_name: string;
+    last_name: string;
   };
 }
 
@@ -57,71 +64,59 @@ export function useCart() {
   paymentMethodRef.current = paymentMethod;
   selectedStudentIdRef.current = selectedStudentId;
 
-  // Load selected student from cart_state on mount
+  // Load all cart items for all students on mount
   useEffect(() => {
-    async function loadCartState() {
+    async function loadCart() {
       if (!user) {
+        setItems([]);
         setSelectedStudentIdState(null);
         setIsLoadingCart(false);
         return;
       }
 
+      setIsLoadingCart(true);
       try {
-        const { data } = await supabase
-          .from('cart_state')
-          .select('student_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (data?.student_id) {
-          setSelectedStudentIdState(data.student_id);
-        }
-      } catch (err) {
-        console.error('Failed to load cart state:', err);
-      } finally {
-        setIsLoadingCart(false);
-      }
-    }
-
-    loadCartState();
-  }, [user]);
-
-  // Load cart items when selectedStudentId changes
-  useEffect(() => {
-    async function loadCartItems() {
-      if (!user || !selectedStudentId) {
-        setItems([]);
-        return;
-      }
-
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('cart_items')
-          .select(`
-            id,
-            user_id,
-            student_id,
-            product_id,
-            quantity,
-            products (
+        // Load cart items and state in parallel
+        const [itemsResult, stateResult] = await Promise.all([
+          supabase
+            .from('cart_items')
+            .select(`
               id,
-              name,
-              price,
-              image_url
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('student_id', selectedStudentId);
+              user_id,
+              student_id,
+              product_id,
+              quantity,
+              products (
+                id,
+                name,
+                price,
+                image_url
+              ),
+              students (
+                id,
+                first_name,
+                last_name
+              )
+            `)
+            .eq('user_id', user.id),
+          supabase
+            .from('cart_state')
+            .select('student_id')
+            .eq('user_id', user.id)
+            .maybeSingle()
+        ]);
 
-        if (fetchError) {
-          console.error('Failed to load cart items:', fetchError);
+        if (itemsResult.error) {
+          console.error('Failed to load cart items:', itemsResult.error);
           setItems([]);
-        } else if (data) {
-          const cartItems: CartItem[] = (data as unknown as CartItemDB[])
-            .filter(item => item.products)
+        } else if (itemsResult.data) {
+          const cartItems: CartItem[] = (itemsResult.data as unknown as CartItemDB[])
+            .filter(item => item.products && item.students)
             .map(item => ({
               id: item.id,
               product_id: item.product_id,
+              student_id: item.student_id,
+              student_name: `${item.students.first_name} ${item.students.last_name}`,
               name: item.products.name,
               price: item.products.price,
               quantity: item.quantity,
@@ -129,14 +124,21 @@ export function useCart() {
             }));
           setItems(cartItems);
         }
+
+        // Load selected student
+        if (stateResult.data?.student_id) {
+          setSelectedStudentIdState(stateResult.data.student_id);
+        }
       } catch (err) {
-        console.error('Failed to load cart items:', err);
+        console.error('Failed to load cart:', err);
         setItems([]);
+      } finally {
+        setIsLoadingCart(false);
       }
     }
 
-    loadCartItems();
-  }, [user, selectedStudentId]);
+    loadCart();
+  }, [user]);
 
   // Save selected student to database
   const setSelectedStudentId = useCallback(async (studentId: string | null) => {
@@ -158,18 +160,19 @@ export function useCart() {
   }, [user]);
 
   const addItem = useCallback(async (item: Omit<CartItem, 'id'>) => {
-    if (!user || !selectedStudentIdRef.current) return;
+    if (!user || !item.student_id) return;
 
-    const studentId = selectedStudentIdRef.current;
     setError(null);
     
     // Optimistic update
     setItems((prevItems) => {
-      const existingItem = prevItems.find((i) => i.product_id === item.product_id);
+      const existingItem = prevItems.find(
+        (i) => i.product_id === item.product_id && i.student_id === item.student_id
+      );
       
       if (existingItem) {
         return prevItems.map((i) =>
-          i.product_id === item.product_id
+          i.product_id === item.product_id && i.student_id === item.student_id
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
@@ -184,7 +187,7 @@ export function useCart() {
         .from('cart_items')
         .select('id, quantity')
         .eq('user_id', user.id)
-        .eq('student_id', studentId)
+        .eq('student_id', item.student_id)
         .eq('product_id', item.product_id)
         .single();
 
@@ -198,7 +201,7 @@ export function useCart() {
           .from('cart_items')
           .insert({
             user_id: user.id,
-            student_id: studentId,
+            student_id: item.student_id,
             product_id: item.product_id,
             quantity: item.quantity
           });
@@ -208,14 +211,15 @@ export function useCart() {
     }
   }, [user]);
 
-  const updateQuantity = useCallback(async (productId: string, quantity: number) => {
-    if (!user || !selectedStudentIdRef.current) return;
+  const updateQuantity = useCallback(async (productId: string, studentId: string, quantity: number) => {
+    if (!user) return;
 
-    const studentId = selectedStudentIdRef.current;
     setError(null);
 
     if (quantity <= 0) {
-      setItems((prevItems) => prevItems.filter((i) => i.product_id !== productId));
+      setItems((prevItems) => prevItems.filter(
+        (i) => !(i.product_id === productId && i.student_id === studentId)
+      ));
       
       try {
         await supabase
@@ -230,7 +234,9 @@ export function useCart() {
     } else {
       setItems((prevItems) =>
         prevItems.map((i) =>
-          i.product_id === productId ? { ...i, quantity } : i
+          i.product_id === productId && i.student_id === studentId 
+            ? { ...i, quantity } 
+            : i
         )
       );
 
@@ -247,30 +253,41 @@ export function useCart() {
     }
   }, [user]);
 
-  // Clear cart for current student only
+  // Clear entire cart (all students)
   const clearCart = useCallback(async () => {
     setItems([]);
     setNotes('');
     setPaymentMethod('cash');
     setError(null);
 
-    if (user && selectedStudentIdRef.current) {
+    if (user) {
       try {
         await supabase
           .from('cart_items')
           .delete()
-          .eq('user_id', user.id)
-          .eq('student_id', selectedStudentIdRef.current);
+          .eq('user_id', user.id);
       } catch (err) {
         console.error('Failed to clear cart:', err);
       }
     }
   }, [user]);
 
+  // Get items grouped by student
+  const itemsByStudent = items.reduce((acc, item) => {
+    if (!acc[item.student_id]) {
+      acc[item.student_id] = {
+        student_name: item.student_name,
+        items: []
+      };
+    }
+    acc[item.student_id].items.push(item);
+    return acc;
+  }, {} as Record<string, { student_name: string; items: CartItem[] }>);
+
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+  // Checkout all students' orders with single payment
   const checkout = useCallback(async (
-    studentId: string, 
     method?: PaymentMethod, 
     orderNotes?: string, 
     scheduledFor?: string
@@ -287,23 +304,42 @@ export function useCart() {
 
       if (currentItems.length === 0) throw new Error('Cart is empty');
 
-      const orderData = {
-        parent_id: user.id,
-        student_id: studentId,
-        client_order_id: crypto.randomUUID(),
-        items: currentItems.map((item) => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price_at_order: item.price
-        })),
-        payment_method: method || currentPaymentMethod,
-        notes: orderNotes || currentNotes,
-        scheduled_for: scheduledFor || formatDateLocal(new Date())
-      };
+      // Group items by student
+      const itemsByStudentId = currentItems.reduce((acc, item) => {
+        if (!acc[item.student_id]) {
+          acc[item.student_id] = [];
+        }
+        acc[item.student_id].push(item);
+        return acc;
+      }, {} as Record<string, CartItem[]>);
 
-      const result = await createOrder(orderData);
+      const studentIds = Object.keys(itemsByStudentId);
+      const results: Array<{ order_id?: string; student_id: string }> = [];
+
+      // Create order for each student
+      for (const studentId of studentIds) {
+        const studentItems = itemsByStudentId[studentId];
+        
+        const orderData = {
+          parent_id: user.id,
+          student_id: studentId,
+          client_order_id: crypto.randomUUID(),
+          items: studentItems.map((item) => ({
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price_at_order: item.price
+          })),
+          payment_method: method || currentPaymentMethod,
+          notes: orderNotes || currentNotes,
+          scheduled_for: scheduledFor || formatDateLocal(new Date())
+        };
+
+        const result = await createOrder(orderData);
+        results.push({ order_id: result?.order_id, student_id: studentId });
+      }
+
       await clearCart();
-      return result;
+      return { orders: results, total: currentItems.reduce((sum, item) => sum + item.price * item.quantity, 0) };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Checkout failed';
       setError(errorMessage);
@@ -315,6 +351,7 @@ export function useCart() {
 
   return {
     items,
+    itemsByStudent,
     addItem,
     updateQuantity,
     clearCart,

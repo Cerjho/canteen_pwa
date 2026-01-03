@@ -44,7 +44,7 @@ export default function Menu() {
   const { showToast } = useToast();
 
   // Cart hook now manages selectedStudentId
-  const { items, addItem, updateQuantity, checkout, total, selectedStudentId, setSelectedStudentId } = useCart();
+  const { items, itemsByStudent, addItem, updateQuantity, checkout, total, selectedStudentId, setSelectedStudentId } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { data: students } = useStudents();
 
@@ -143,30 +143,32 @@ export default function Menu() {
     }
     
     const product = products?.find(p => p.id === productId);
-    if (product) {
+    const selectedStudent = students?.find(s => s.id === selectedStudentId);
+    if (product && selectedStudent) {
       addItem({
         product_id: product.id,
+        student_id: selectedStudentId,
+        student_name: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
         name: product.name,
         price: product.price,
         image_url: product.image_url,
         quantity: 1
       });
-      showToast(`${product.name} added to cart`, 'success');
+      showToast(`${product.name} added for ${selectedStudent.first_name}`, 'success');
     }
-  }, [selectedStudentId, products, addItem, showToast]);
+  }, [selectedStudentId, students, products, addItem, showToast]);
 
   const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string) => {
-    if (!selectedStudentId) {
-      showToast('Please select a child', 'error');
+    if (items.length === 0) {
+      showToast('Cart is empty', 'error');
       return;
     }
 
-    const selectedStudent = students?.find(c => c.id === selectedStudentId);
     const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
     const isFutureOrder = !isToday(effectiveDate);
 
     try {
-      const result = await checkout(selectedStudentId, paymentMethod, notes, scheduledFor);
+      const result = await checkout(paymentMethod, notes, scheduledFor);
       setCartOpen(false);
       
       // Invalidate wallet balance if paid with balance
@@ -175,14 +177,18 @@ export default function Menu() {
         queryClient.invalidateQueries({ queryKey: ['parent-balance'] });
       }
       
+      // Get student names for confirmation
+      const studentNames = [...new Set(items.map(i => i.student_name))].join(', ');
+      
       // Navigate to confirmation page
       navigate('/order-confirmation', {
         state: {
-          orderId: result?.order_id || crypto.randomUUID(),
+          orderId: result?.orders?.[0]?.order_id || crypto.randomUUID(),
+          orderCount: result?.orders?.length || 1,
           totalAmount: total,
-          childName: selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : 'Your child',
+          childName: studentNames || 'Your children',
           itemCount: items.length,
-          isOffline: result?.queued || false,
+          isOffline: false,
           paymentMethod,
           scheduledFor: isFutureOrder ? scheduledFor : undefined,
           isFutureOrder
@@ -192,7 +198,7 @@ export default function Menu() {
       console.error('Checkout error:', error);
       showToast('Failed to place order. Please try again.', 'error');
     }
-  }, [selectedStudentId, students, effectiveDate, checkout, queryClient, navigate, total, items.length, showToast]);
+  }, [items, effectiveDate, checkout, queryClient, navigate, total, showToast]);
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
@@ -481,6 +487,7 @@ export default function Menu() {
         isOpen={cartOpen}
         onClose={() => setCartOpen(false)}
         items={items}
+        itemsByStudent={itemsByStudent}
         onUpdateQuantity={updateQuantity}
         onCheckout={handleCheckout}
         parentBalance={parentBalance}
