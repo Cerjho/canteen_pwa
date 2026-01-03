@@ -198,6 +198,8 @@ serve(async (req) => {
 
     // If paid with balance, refund to wallet
     let refundApplied = false;
+    let refundMessage = 'Order cancelled successfully.';
+    
     if (order.payment_method === 'balance' && order.total_amount > 0) {
       // Get current wallet balance
       const { data: wallet } = await supabaseAdmin
@@ -218,6 +220,7 @@ serve(async (req) => {
 
         if (!refundError) {
           refundApplied = true;
+          refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been refunded to your wallet.`;
 
           // Record the refund transaction
           await supabaseAdmin
@@ -233,19 +236,24 @@ serve(async (req) => {
             });
         }
       }
+    } else if (order.payment_method === 'cash') {
+      // Cash payment - no payment collected yet
+      refundMessage = 'Order cancelled. No payment was collected as this was a cash payment.';
+    } else if (order.payment_method === 'gcash') {
+      // GCash payment - manual refund needed
+      refundMessage = 'Order cancelled. GCash payments require manual refund. Please contact the canteen staff.';
     }
 
-    console.log(`[AUDIT] Parent ${user.email} cancelled order ${order_id}. Refund: ${refundApplied ? '₱' + order.total_amount : 'N/A'}`);
+    console.log(`[AUDIT] Parent ${user.email} cancelled order ${order_id}. Payment: ${order.payment_method}. Refund: ${refundApplied ? '₱' + order.total_amount : 'N/A'}`);
 
     return jsonResponse(
       {
         success: true,
         order_id,
+        payment_method: order.payment_method,
         refund_applied: refundApplied,
         refund_amount: refundApplied ? order.total_amount : 0,
-        message: refundApplied 
-          ? `Order cancelled. ₱${order.total_amount.toFixed(2)} has been refunded to your wallet.`
-          : 'Order cancelled successfully.'
+        message: refundMessage
       },
       200,
       origin

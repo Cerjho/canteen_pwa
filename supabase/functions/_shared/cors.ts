@@ -12,8 +12,15 @@
 // Format: "https://example.com,https://app.example.com"
 const ALLOWED_ORIGINS: string[] = (() => {
   const origins = Deno.env.get('ALLOWED_ORIGINS');
-  if (!origins) return ['*']; // Default to wildcard for development
-  return origins.split(',').map(o => o.trim()).filter(Boolean);
+  if (origins) {
+    return origins.split(',').map(o => o.trim()).filter(Boolean);
+  }
+  // Default allowed origins (production + development)
+  return [
+    'https://canteen-pwa.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ];
 })();
 
 /**

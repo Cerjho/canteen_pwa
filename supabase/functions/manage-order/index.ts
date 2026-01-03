@@ -352,16 +352,39 @@ serve(async (req) => {
           .select('product_id, quantity')
           .eq('order_id', order_id);
 
+        let stockRestoreErrors: string[] = [];
         if (orderItems) {
           for (const item of orderItems) {
-            await supabaseAdmin.rpc('increment_stock', { 
+            // Try RPC first
+            const { error: rpcError } = await supabaseAdmin.rpc('increment_stock', { 
               p_product_id: item.product_id, 
               p_quantity: item.quantity 
-            }).catch(() => {
-              // If RPC doesn't exist, do direct update
-              console.log('increment_stock RPC not available, skipping stock restore');
             });
+            
+            if (rpcError) {
+              // Fallback to direct update
+              const { data: product } = await supabaseAdmin
+                .from('products')
+                .select('stock_quantity')
+                .eq('id', item.product_id)
+                .single();
+              
+              if (product && product.stock_quantity !== null) {
+                const { error: updateError } = await supabaseAdmin
+                  .from('products')
+                  .update({ stock_quantity: product.stock_quantity + item.quantity })
+                  .eq('id', item.product_id);
+                
+                if (updateError) {
+                  stockRestoreErrors.push(`Failed to restore stock for product ${item.product_id}: ${updateError.message}`);
+                }
+              }
+            }
           }
+        }
+        
+        if (stockRestoreErrors.length > 0) {
+          console.error('Stock restoration errors:', stockRestoreErrors);
         }
 
         // If paid with balance, refund is handled separately via refund-order function
