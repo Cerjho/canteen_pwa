@@ -105,7 +105,17 @@ const mockStudents = [
 ];
 
 const mockCartItems = [
-  { id: 'cart-1', product_id: 'product-1', name: 'Chicken Adobo', price: 65, quantity: 2, image_url: '' }
+  { 
+    id: 'cart-1', 
+    product_id: 'product-1', 
+    student_id: 'child-1',
+    student_name: 'Maria Santos',
+    name: 'Chicken Adobo', 
+    price: 65, 
+    quantity: 2, 
+    image_url: '',
+    scheduled_for: new Date().toISOString().split('T')[0]
+  }
 ];
 
 const createTestQueryClient = () => new QueryClient({
@@ -149,7 +159,8 @@ describe('Menu Page', () => {
       isFavorite: (id: string) => id === 'product-1',
       toggleFavorite: mockToggleFavorite,
       addFavorite: vi.fn(),
-      removeFavorite: vi.fn()
+      removeFavorite: vi.fn(),
+      isLoadingFavorites: false
     });
 
     vi.mocked(useCart).mockReturnValue({
@@ -157,6 +168,8 @@ describe('Menu Page', () => {
       addItem: mockAddItem,
       updateQuantity: vi.fn(),
       clearCart: vi.fn(),
+      clearDate: vi.fn(),
+      copyDateItems: vi.fn(),
       checkout: mockCheckout,
       total: 0,
       notes: '',
@@ -164,8 +177,27 @@ describe('Menu Page', () => {
       paymentMethod: 'cash',
       setPaymentMethod: vi.fn(),
       isLoading: false,
+      isLoadingCart: false,
       error: null,
-      clearError: vi.fn()
+      clearError: vi.fn(),
+      summary: {
+        totalAmount: 0,
+        totalItems: 0,
+        dateCount: 0,
+        studentCount: 0,
+        orderCount: 0
+      },
+      itemsByStudent: {},
+      itemsByDateAndStudent: [],
+      getItemsForDate: vi.fn().mockReturnValue([]),
+      getItemsForStudent: vi.fn().mockReturnValue([]),
+      getItemsForStudentOnDate: vi.fn().mockReturnValue([]),
+      clearStudentOnDate: vi.fn(),
+      copyStudentItems: vi.fn(),
+      loadCart: vi.fn(),
+      checkoutDate: vi.fn(),
+      selectedStudentId: null,
+      setSelectedStudentId: vi.fn()
     });
 
     // Mock useAuth
@@ -375,6 +407,8 @@ describe('Menu Page', () => {
         addItem: mockAddItem,
         updateQuantity: vi.fn(),
         clearCart: vi.fn(),
+        clearDate: vi.fn(),
+        copyDateItems: vi.fn(),
         checkout: mockCheckout,
         total: 130,
         notes: '',
@@ -382,8 +416,27 @@ describe('Menu Page', () => {
         paymentMethod: 'cash',
         setPaymentMethod: vi.fn(),
         isLoading: false,
+        isLoadingCart: false,
         error: null,
-        clearError: vi.fn()
+        clearError: vi.fn(),
+        summary: {
+          totalAmount: 130,
+          totalItems: 1,
+          dateCount: 1,
+          studentCount: 1,
+          orderCount: 1
+        },
+        itemsByStudent: {},
+        itemsByDateAndStudent: [],
+        getItemsForDate: vi.fn().mockReturnValue([]),
+        getItemsForStudent: vi.fn().mockReturnValue([]),
+        getItemsForStudentOnDate: vi.fn().mockReturnValue([]),
+        clearStudentOnDate: vi.fn(),
+        copyStudentItems: vi.fn(),
+        loadCart: vi.fn(),
+        checkoutDate: vi.fn(),
+        selectedStudentId: null,
+        setSelectedStudentId: vi.fn()
       });
       
       renderMenu();
@@ -455,7 +508,8 @@ describe('Menu Page - Canteen Closed', () => {
       isFavorite: () => false,
       toggleFavorite: vi.fn(),
       addFavorite: vi.fn(),
-      removeFavorite: vi.fn()
+      removeFavorite: vi.fn(),
+      isLoadingFavorites: false
     });
 
     vi.mocked(useCart).mockReturnValue({
@@ -463,6 +517,8 @@ describe('Menu Page - Canteen Closed', () => {
       addItem: vi.fn(),
       updateQuantity: vi.fn(),
       clearCart: vi.fn(),
+      clearDate: vi.fn(),
+      copyDateItems: vi.fn(),
       checkout: vi.fn(),
       total: 0,
       notes: '',
@@ -470,8 +526,27 @@ describe('Menu Page - Canteen Closed', () => {
       paymentMethod: 'cash',
       setPaymentMethod: vi.fn(),
       isLoading: false,
+      isLoadingCart: false,
       error: null,
-      clearError: vi.fn()
+      clearError: vi.fn(),
+      summary: {
+        totalAmount: 0,
+        totalItems: 0,
+        dateCount: 0,
+        studentCount: 0,
+        orderCount: 0
+      },
+      itemsByStudent: {},
+      itemsByDateAndStudent: [],
+      getItemsForDate: vi.fn().mockReturnValue([]),
+      getItemsForStudent: vi.fn().mockReturnValue([]),
+      getItemsForStudentOnDate: vi.fn().mockReturnValue([]),
+      clearStudentOnDate: vi.fn(),
+      copyStudentItems: vi.fn(),
+      loadCart: vi.fn(),
+      checkoutDate: vi.fn(),
+      selectedStudentId: null,
+      setSelectedStudentId: vi.fn()
     });
 
     // Create dates with holiday info - ALL dates are holidays so it can't auto-select an open day
@@ -539,7 +614,8 @@ describe('Menu Page - Empty States', () => {
       isFavorite: () => false,
       toggleFavorite: vi.fn(),
       addFavorite: vi.fn(),
-      removeFavorite: vi.fn()
+      removeFavorite: vi.fn(),
+      isLoadingFavorites: false
     });
 
     vi.mocked(useCart).mockReturnValue({
@@ -547,6 +623,8 @@ describe('Menu Page - Empty States', () => {
       addItem: vi.fn(),
       updateQuantity: vi.fn(),
       clearCart: vi.fn(),
+      clearDate: vi.fn(),
+      copyDateItems: vi.fn(),
       checkout: vi.fn(),
       total: 0,
       notes: '',
@@ -554,8 +632,27 @@ describe('Menu Page - Empty States', () => {
       paymentMethod: 'cash',
       setPaymentMethod: vi.fn(),
       isLoading: false,
+      isLoadingCart: false,
       error: null,
-      clearError: vi.fn()
+      clearError: vi.fn(),
+      summary: {
+        totalAmount: 0,
+        totalItems: 0,
+        dateCount: 0,
+        studentCount: 0,
+        orderCount: 0
+      },
+      itemsByStudent: {},
+      itemsByDateAndStudent: [],
+      getItemsForDate: vi.fn().mockReturnValue([]),
+      getItemsForStudent: vi.fn().mockReturnValue([]),
+      getItemsForStudentOnDate: vi.fn().mockReturnValue([]),
+      clearStudentOnDate: vi.fn(),
+      copyStudentItems: vi.fn(),
+      loadCart: vi.fn(),
+      checkoutDate: vi.fn(),
+      selectedStudentId: null,
+      setSelectedStudentId: vi.fn()
     });
 
     const today = new Date();

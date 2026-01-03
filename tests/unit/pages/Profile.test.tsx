@@ -5,6 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../../../src/components/Toast';
+import { ThemeProvider } from '../../../src/hooks/useTheme';
 import Profile from '../../../src/pages/Parent/Profile';
 
 // Mock the hooks and services
@@ -83,9 +84,11 @@ const renderProfile = () => {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <ToastProvider>
-          <Profile />
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <Profile />
+          </ToastProvider>
+        </ThemeProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );
