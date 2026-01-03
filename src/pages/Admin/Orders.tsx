@@ -41,7 +41,7 @@ export default function AdminOrders() {
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
-  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'future' | 'all'>('today');
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [refundOrder, setRefundOrder] = useState<OrderWithDetails | null>(null);
 
@@ -62,6 +62,7 @@ export default function AdminOrders() {
             product:products(name, image_url)
           )
         `)
+        .order('scheduled_for', { ascending: false })
         .order('created_at', { ascending: false });
 
       // Status filter
@@ -69,20 +70,27 @@ export default function AdminOrders() {
         query = query.eq('status', statusFilter);
       }
 
-      // Date filter
+      // Date filter - use scheduled_for instead of created_at
       if (dateFilter !== 'all') {
-        const now = new Date();
-        let startDate: Date;
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
         
         if (dateFilter === 'today') {
-          startDate = new Date(now.setHours(0, 0, 0, 0));
+          query = query.eq('scheduled_for', todayStr);
         } else if (dateFilter === 'week') {
-          startDate = new Date(now.setDate(now.getDate() - 7));
-        } else {
-          startDate = new Date(now.setMonth(now.getMonth() - 1));
+          const weekAgo = new Date(today);
+          weekAgo.setDate(today.getDate() - 7);
+          const weekAgoStr = weekAgo.toISOString().split('T')[0];
+          query = query.gte('scheduled_for', weekAgoStr).lte('scheduled_for', todayStr);
+        } else if (dateFilter === 'month') {
+          const monthAgo = new Date(today);
+          monthAgo.setMonth(today.getMonth() - 1);
+          const monthAgoStr = monthAgo.toISOString().split('T')[0];
+          query = query.gte('scheduled_for', monthAgoStr).lte('scheduled_for', todayStr);
+        } else if (dateFilter === 'future') {
+          // Show orders scheduled for future dates
+          query = query.gt('scheduled_for', todayStr);
         }
-        
-        query = query.gte('created_at', startDate.toISOString());
       }
 
       const { data, error } = await query.limit(100);
@@ -269,18 +277,18 @@ export default function AdminOrders() {
           </div>
 
           {/* Date Filter */}
-          <div className="flex gap-2">
-            {(['today', 'week', 'month', 'all'] as const).map(range => (
+          <div className="flex gap-2 flex-wrap">
+            {(['today', 'week', 'month', 'future', 'all'] as const).map(range => (
               <button
                 key={range}
                 onClick={() => setDateFilter(range)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium capitalize ${
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${
                   dateFilter === range
                     ? 'bg-primary-600 text-white'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
                 }`}
               >
-                {range === 'all' ? 'All Time' : range}
+                {range === 'all' ? 'All Time' : range === 'future' ? 'Future' : range === 'today' ? 'Today' : range === 'week' ? 'Week' : 'Month'}
               </button>
             ))}
           </div>

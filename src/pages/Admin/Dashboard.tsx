@@ -256,13 +256,18 @@ export default function AdminDashboard() {
   });
 
   const { data: statusDistribution } = useQuery<OrderStatusDistribution>({
-    queryKey: ['admin-status-distribution'],
+    queryKey: ['admin-status-distribution', dateRange],
     queryFn: async () => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const startDateStr = dateRange === 'today' 
+        ? todayStr
+        : dateRange === 'week' ? format(startOfWeek(new Date()), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+      
       const { data: orders } = await supabase
         .from('orders')
         .select('status')
-        .eq('scheduled_for', todayStr);
+        .gte('scheduled_for', startDateStr)
+        .lte('scheduled_for', todayStr);
 
       const distribution: OrderStatusDistribution = { pending: 0, preparing: 0, ready: 0, completed: 0, cancelled: 0 };
       orders?.forEach(order => {
@@ -276,13 +281,18 @@ export default function AdminDashboard() {
   });
 
   const { data: hourlyData } = useQuery<HourlyData[]>({
-    queryKey: ['admin-hourly-data'],
+    queryKey: ['admin-hourly-data', dateRange],
     queryFn: async () => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const startDateStr = dateRange === 'today' 
+        ? todayStr
+        : dateRange === 'week' ? format(startOfWeek(new Date()), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+      
       const { data: orders } = await supabase
         .from('orders')
         .select('total_amount, created_at, status')
-        .eq('scheduled_for', todayStr)
+        .gte('scheduled_for', startDateStr)
+        .lte('scheduled_for', todayStr)
         .neq('status', 'cancelled');
 
       const hourlyMap: Record<number, HourlyData> = {};
@@ -839,7 +849,7 @@ export default function AdminDashboard() {
             <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <PieChart size={18} className="text-gray-400 dark:text-gray-500" />
-                Order Status (Today)
+                Order Status ({dateRange === 'today' ? 'Today' : dateRange === 'week' ? 'This Week' : 'This Month'})
               </h3>
             </div>
             <div className="p-4">
@@ -851,7 +861,7 @@ export default function AdminDashboard() {
             <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <BarChart3 size={18} className="text-gray-400 dark:text-gray-500" />
-                Orders by Hour (Today)
+                Orders by Hour ({dateRange === 'today' ? 'Today' : dateRange === 'week' ? 'This Week' : 'This Month'})
               </h3>
               {peakHour && (
                 <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full flex items-center gap-1">

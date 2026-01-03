@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfDay, startOfWeek, subDays, eachDayOfInterval } from 'date-fns';
+import { format, startOfWeek, subDays, eachDayOfInterval } from 'date-fns';
 import { 
   DollarSign, 
   TrendingDown,
@@ -65,13 +65,15 @@ export default function AdminReports() {
     queryKey: ['admin-revenue', dateRange],
     queryFn: async () => {
       const { start, end } = getDateRange();
+      const startStr = format(start, 'yyyy-MM-dd');
+      const endStr = format(end, 'yyyy-MM-dd');
 
-      // Get all completed orders in date range
+      // Get all orders in date range by scheduled_for (excluding cancelled and future orders)
       const { data: orders } = await supabase
         .from('orders')
-        .select('total_amount, created_at, payment_method')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString())
+        .select('total_amount, scheduled_for, payment_method')
+        .gte('scheduled_for', startStr)
+        .lte('scheduled_for', endStr)
         .in('status', ['completed', 'ready', 'preparing', 'pending']);
 
       if (!orders) return { daily: [], total: 0, orderCount: 0, paymentBreakdown: [] };
@@ -81,7 +83,7 @@ export default function AdminReports() {
       const paymentMap = new Map<string, { amount: number; count: number }>();
 
       orders.forEach(order => {
-        const day = format(new Date(order.created_at), 'yyyy-MM-dd');
+        const day = order.scheduled_for;
         const existing = dailyMap.get(day) || { revenue: 0, orders: 0 };
         dailyMap.set(day, {
           revenue: existing.revenue + order.total_amount,
@@ -143,39 +145,45 @@ export default function AdminReports() {
   const { data: comparisonStats } = useQuery({
     queryKey: ['admin-comparison'],
     queryFn: async () => {
-      const today = startOfDay(new Date());
+      const today = new Date();
+      const todayStr = format(today, 'yyyy-MM-dd');
       const yesterday = subDays(today, 1);
+      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
       const thisWeekStart = startOfWeek(new Date());
+      const thisWeekStartStr = format(thisWeekStart, 'yyyy-MM-dd');
       const lastWeekStart = subDays(thisWeekStart, 7);
+      const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
+      const lastWeekEnd = subDays(thisWeekStart, 1);
+      const lastWeekEndStr = format(lastWeekEnd, 'yyyy-MM-dd');
 
-      // Today's revenue
+      // Today's revenue (scheduled_for = today)
       const { data: todayOrders } = await supabase
         .from('orders')
         .select('total_amount')
-        .gte('created_at', today.toISOString())
+        .eq('scheduled_for', todayStr)
         .neq('status', 'cancelled');
 
       // Yesterday's revenue
       const { data: yesterdayOrders } = await supabase
         .from('orders')
         .select('total_amount')
-        .gte('created_at', yesterday.toISOString())
-        .lt('created_at', today.toISOString())
+        .eq('scheduled_for', yesterdayStr)
         .neq('status', 'cancelled');
 
       // This week's revenue
       const { data: thisWeekOrders } = await supabase
         .from('orders')
         .select('total_amount')
-        .gte('created_at', thisWeekStart.toISOString())
+        .gte('scheduled_for', thisWeekStartStr)
+        .lte('scheduled_for', todayStr)
         .neq('status', 'cancelled');
 
       // Last week's revenue
       const { data: lastWeekOrders } = await supabase
         .from('orders')
         .select('total_amount')
-        .gte('created_at', lastWeekStart.toISOString())
-        .lt('created_at', thisWeekStart.toISOString())
+        .gte('scheduled_for', lastWeekStartStr)
+        .lte('scheduled_for', lastWeekEndStr)
         .neq('status', 'cancelled');
 
       const todayRevenue = todayOrders?.reduce((sum, o) => sum + o.total_amount, 0) || 0;
