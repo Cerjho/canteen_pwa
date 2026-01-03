@@ -166,16 +166,21 @@ export default function AdminDashboard() {
     queryKey: ['admin-dashboard-stats', dateRange],
     queryFn: async () => {
       const today = startOfDay(new Date());
+      const todayStr = format(today, 'yyyy-MM-dd');
       const yesterday = startOfDay(subDays(new Date(), 1));
+      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
       const weekStart = startOfWeek(new Date());
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const monthStart = startOfMonth(new Date());
+      const monthStartStr = format(monthStart, 'yyyy-MM-dd');
 
       // Batch queries for better performance
+      // Use scheduled_for for filtering orders by date (not created_at)
       const [ordersResult, parentsResult, studentsResult, productsResult] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, status, total_amount, created_at, updated_at, parent_id')
-          .gte('created_at', monthStart.toISOString()),
+          .select('id, status, total_amount, created_at, updated_at, parent_id, scheduled_for')
+          .gte('scheduled_for', monthStartStr),
         supabase
           .from('user_profiles')
           .select('*', { count: 'exact', head: true }),
@@ -198,12 +203,10 @@ export default function AdminDashboard() {
       const lowStockProducts = products.filter(p => p.stock_quantity !== null && p.stock_quantity <= 10 && p.stock_quantity > 0).length;
       const outOfStockProducts = products.filter(p => p.stock_quantity === 0 || !p.available).length;
 
-      const todayOrders = allOrders.filter(o => new Date(o.created_at) >= today);
-      const yesterdayOrders = allOrders.filter(o => {
-        const date = new Date(o.created_at);
-        return date >= yesterday && date < today;
-      });
-      const weekOrders = allOrders.filter(o => new Date(o.created_at) >= weekStart);
+      // Filter orders by scheduled_for date (when they should be fulfilled)
+      const todayOrders = allOrders.filter(o => o.scheduled_for === todayStr);
+      const yesterdayOrders = allOrders.filter(o => o.scheduled_for === yesterdayStr);
+      const weekOrders = allOrders.filter(o => o.scheduled_for >= weekStartStr);
       const monthOrders = allOrders;
 
       const completedToday = todayOrders.filter(o => o.status === 'completed');
@@ -250,11 +253,11 @@ export default function AdminDashboard() {
   const { data: statusDistribution } = useQuery<OrderStatusDistribution>({
     queryKey: ['admin-status-distribution'],
     queryFn: async () => {
-      const today = startOfDay(new Date());
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const { data: orders } = await supabase
         .from('orders')
         .select('status')
-        .gte('created_at', today.toISOString());
+        .eq('scheduled_for', todayStr);
 
       const distribution: OrderStatusDistribution = { pending: 0, preparing: 0, ready: 0, completed: 0, cancelled: 0 };
       orders?.forEach(order => {
@@ -270,11 +273,11 @@ export default function AdminDashboard() {
   const { data: hourlyData } = useQuery<HourlyData[]>({
     queryKey: ['admin-hourly-data'],
     queryFn: async () => {
-      const today = startOfDay(new Date());
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const { data: orders } = await supabase
         .from('orders')
         .select('total_amount, created_at, status')
-        .gte('created_at', today.toISOString())
+        .eq('scheduled_for', todayStr)
         .neq('status', 'cancelled');
 
       const hourlyMap: Record<number, HourlyData> = {};
@@ -383,11 +386,15 @@ export default function AdminDashboard() {
         });
       });
 
+      // Only alert on TODAY's orders that have been pending for more than 10 minutes
+      // Don't alert on future scheduled orders
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       const { data: oldPending } = await supabase
         .from('orders')
         .select('id')
         .eq('status', 'pending')
+        .eq('scheduled_for', todayStr)
         .lt('created_at', tenMinutesAgo.toISOString());
 
       if (oldPending && oldPending.length > 0) {
