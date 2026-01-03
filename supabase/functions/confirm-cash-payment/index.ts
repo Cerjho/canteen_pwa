@@ -67,7 +67,7 @@ serve(async (req) => {
     // Fetch the order
     const { data: order, error: fetchError } = await supabaseAdmin
       .from('orders')
-      .select('id, status, payment_status, payment_method, total_amount, parent_id')
+      .select('id, status, payment_status, payment_method, payment_due_at, total_amount, parent_id')
       .eq('id', order_id)
       .single();
 
@@ -108,6 +108,37 @@ serve(async (req) => {
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Check if payment deadline has passed (even if cleanup job hasn't run yet)
+    if (order.payment_due_at) {
+      const paymentDeadline = new Date(order.payment_due_at);
+      const now = new Date();
+      if (now > paymentDeadline) {
+        // Payment deadline passed - auto-update to timeout status
+        await supabaseAdmin
+          .from('orders')
+          .update({ 
+            status: 'cancelled',
+            payment_status: 'timeout',
+            updated_at: now.toISOString(),
+            notes: 'Auto-cancelled: Payment timeout'
+          })
+          .eq('id', order_id)
+          .eq('payment_status', 'awaiting_payment');
+        
+        console.log(`[CONFIRM-CASH] Order ${order_id} payment expired at ${order.payment_due_at}, rejecting confirmation`);
+        
+        return new Response(
+          JSON.stringify({ 
+            error: 'PAYMENT_EXPIRED', 
+            message: 'Payment deadline has passed. This order has been cancelled.',
+            payment_due_at: order.payment_due_at,
+            current_time: now.toISOString()
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     if (order.status === 'cancelled') {

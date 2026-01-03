@@ -18,7 +18,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+type OrderStatus = 'awaiting_payment' | 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 type Action = 'update-status' | 'cancel' | 'add-notes' | 'bulk-update-status';
 
 interface ManageOrderRequest {
@@ -31,7 +31,9 @@ interface ManageOrderRequest {
 }
 
 // Valid status transitions
+// Note: awaiting_payment -> pending is handled by confirm-cash-payment, not here
 const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+  awaiting_payment: ['cancelled'], // Can only cancel awaiting_payment orders (payment confirmation is separate)
   pending: ['preparing', 'cancelled'],
   preparing: ['ready', 'cancelled'],
   ready: ['completed', 'cancelled'],
@@ -104,7 +106,7 @@ serve(async (req) => {
         }
 
         // Validate status value
-        const validStatuses: OrderStatus[] = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
+        const validStatuses: OrderStatus[] = ['awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled'];
         if (!validStatuses.includes(status)) {
           return new Response(
             JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid status. Must be: ${validStatuses.join(', ')}` }),
@@ -115,7 +117,7 @@ serve(async (req) => {
         // Fetch current order
         const { data: order, error: orderError } = await supabaseAdmin
           .from('orders')
-          .select('id, status, parent_id, total_amount')
+          .select('id, status, payment_status, payment_due_at, payment_method, parent_id, total_amount')
           .eq('id', order_id)
           .single();
 
@@ -123,6 +125,44 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({ error: 'ORDER_NOT_FOUND', message: 'Order not found' }),
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Check if order payment has expired (for awaiting_payment orders)
+        if (order.status === 'awaiting_payment' && order.payment_due_at) {
+          const now = new Date();
+          const paymentDeadline = new Date(order.payment_due_at);
+          if (now > paymentDeadline && status !== 'cancelled') {
+            // Auto-update to timeout status
+            await supabaseAdmin
+              .from('orders')
+              .update({ 
+                status: 'cancelled',
+                payment_status: 'timeout',
+                updated_at: now.toISOString(),
+                notes: 'Auto-cancelled: Payment timeout'
+              })
+              .eq('id', order_id);
+            
+            return new Response(
+              JSON.stringify({ 
+                error: 'PAYMENT_EXPIRED', 
+                message: 'Payment deadline has passed. Order has been cancelled.',
+                payment_due_at: order.payment_due_at
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+        
+        // Block status changes on timeout orders
+        if (order.payment_status === 'timeout') {
+          return new Response(
+            JSON.stringify({ 
+              error: 'ORDER_TIMEOUT', 
+              message: 'This order has been cancelled due to payment timeout. No status changes allowed.'
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
@@ -254,7 +294,7 @@ serve(async (req) => {
         // Fetch current order
         const { data: order, error: orderError } = await supabaseAdmin
           .from('orders')
-          .select('id, status, parent_id, total_amount, payment_method')
+          .select('id, status, payment_status, parent_id, total_amount, payment_method')
           .eq('id', order_id)
           .single();
 
@@ -273,6 +313,17 @@ serve(async (req) => {
             JSON.stringify({ 
               error: 'INVALID_TRANSITION', 
               message: `Cannot cancel an order with status '${currentStatus}'`
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Order already timed out
+        if (order.payment_status === 'timeout') {
+          return new Response(
+            JSON.stringify({ 
+              error: 'ALREADY_TIMEOUT', 
+              message: 'Order was already cancelled due to payment timeout'
             }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );

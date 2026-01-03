@@ -75,11 +75,12 @@ export default function StaffDashboard() {
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [, setTimerTick] = useState(0); // Force re-render for countdown timers
   const previousOrderCount = useRef<number>(0);
   const { showToast } = useToast();
 
   const { data: orders, isLoading, refetch } = useQuery<StaffOrder[]>({
-    queryKey: ['staff-orders', statusFilter, dateFilter],
+    queryKey: ['staff-orders', dateFilter], // Remove statusFilter from query key
     queryFn: async () => {
       const todayStr = formatDateLocal(new Date());
       let query = supabase
@@ -104,11 +105,8 @@ export default function StaffDashboard() {
       }
       // 'all' - no date filter, show all orders
       
-      if (statusFilter === 'all') {
-        query = query.in('status', ['awaiting_payment', 'pending', 'preparing', 'ready']);
-      } else {
-        query = query.eq('status', statusFilter);
-      }
+      // Always fetch all active statuses - filter in frontend for accurate counts
+      query = query.in('status', ['awaiting_payment', 'pending', 'preparing', 'ready']);
       
       const { data, error } = await query;
       if (error) throw error;
@@ -117,18 +115,35 @@ export default function StaffDashboard() {
     refetchInterval: 10000 // Refetch every 10 seconds (faster for payment updates)
   });
 
-  // Filter orders by search query
+  // Filter orders by search query AND status filter
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
-    if (!searchQuery.trim()) return orders;
     
-    const query = searchQuery.toLowerCase();
-    return orders.filter(order => 
-      `${order.child?.first_name || ''} ${order.child?.last_name || ''}`.toLowerCase().includes(query) ||
-      `${order.child?.grade_level || ''} ${order.child?.section || ''}`.toLowerCase().includes(query) ||
-      order.items.some(item => item.product.name.toLowerCase().includes(query))
-    );
-  }, [orders, searchQuery]);
+    // First filter by status
+    let result = orders;
+    if (statusFilter !== 'all') {
+      result = result.filter(order => order.status === statusFilter);
+    }
+    
+    // Then filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(order => 
+        `${order.child?.first_name || ''} ${order.child?.last_name || ''}`.toLowerCase().includes(query) ||
+        `${order.child?.grade_level || ''} ${order.child?.section || ''}`.toLowerCase().includes(query) ||
+        order.items.some(item => item.product.name.toLowerCase().includes(query))
+      );
+    }
+    
+    return result;
+  }, [orders, statusFilter, searchQuery]);
+
+  // Calculate counts from ALL orders (not filtered by status)
+  const awaitingPaymentCount = orders?.filter(o => o.status === 'awaiting_payment').length || 0;
+  const pendingCount = orders?.filter(o => o.status === 'pending').length || 0;
+  const preparingCount = orders?.filter(o => o.status === 'preparing').length || 0;
+  const readyCount = orders?.filter(o => o.status === 'ready').length || 0;
+  const totalCount = orders?.length || 0;
 
   // Realtime subscription for new orders
   useEffect(() => {
@@ -171,9 +186,48 @@ export default function StaffDashboard() {
     previousOrderCount.current = orders?.length || 0;
   }, [orders, soundEnabled]);
 
+  // Real-time countdown timer for payment deadlines
+  useEffect(() => {
+    // Check if there are any awaiting_payment orders
+    const hasAwaitingPayment = orders?.some(o => o.status === 'awaiting_payment' && o.payment_due_at);
+    
+    if (!hasAwaitingPayment) return;
+    
+    // Update every second for real-time countdown
+    const interval = setInterval(() => {
+      setTimerTick(t => t + 1);
+      
+      // Check if any order just expired
+      orders?.forEach(order => {
+        if (order.status === 'awaiting_payment' && order.payment_due_at) {
+          const due = new Date(order.payment_due_at);
+          const now = new Date();
+          const diffMs = due.getTime() - now.getTime();
+          
+          // Just expired (within last second)
+          if (diffMs <= 0 && diffMs > -1000) {
+            showToast(`⏰ Payment for ${order.child?.first_name}'s order has expired`, 'error');
+            refetch(); // Refresh to get updated status
+          }
+        }
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [orders, showToast, refetch]);
+
   // Confirm cash payment
   const confirmCashPayment = async (orderId: string) => {
     try {
+      // First check if the order's payment has expired
+      const order = orders?.find(o => o.id === orderId);
+      if (order && isPaymentExpired(order.payment_due_at, order.payment_status)) {
+        showToast('Cannot confirm payment - deadline has passed. Order will be cancelled.', 'error');
+        setShowPaymentDialog(null);
+        refetch();
+        return;
+      }
+      
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {
@@ -418,6 +472,14 @@ export default function StaffDashboard() {
     const secs = Math.floor((diffMs % 60000) / 1000);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+  
+  // Check if payment is expired
+  const isPaymentExpired = (paymentDueAt: string | null, paymentStatus?: string) => {
+    if (paymentStatus === 'timeout') return true;
+    if (!paymentDueAt) return false;
+    const due = new Date(paymentDueAt);
+    return due.getTime() < Date.now();
+  };
 
   const getWaitTimeColor = (category: 'normal' | 'warning' | 'critical') => {
     switch (category) {
@@ -426,11 +488,6 @@ export default function StaffDashboard() {
       default: return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700';
     }
   };
-
-  const awaitingPaymentCount = filteredOrders?.filter(o => o.status === 'awaiting_payment').length || 0;
-  const pendingCount = filteredOrders?.filter(o => o.status === 'pending').length || 0;
-  const preparingCount = filteredOrders?.filter(o => o.status === 'preparing').length || 0;
-  const readyCount = filteredOrders?.filter(o => o.status === 'ready').length || 0;
 
   const getSubtitle = () => {
     switch (dateFilter) {
@@ -496,52 +553,42 @@ export default function StaffDashboard() {
         </div>
 
         {/* Status Summary Cards */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
+        <div className="grid grid-cols-5 gap-2 mb-4">
+          <button 
+            onClick={() => setStatusFilter('all')}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary-500' : ''}`}
+          >
+            <div className="text-xl font-bold text-primary-600 dark:text-primary-400">{totalCount}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">All</div>
+          </button>
           <button 
             onClick={() => setStatusFilter('awaiting_payment')}
             className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500' : ''}`}
           >
             <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{awaitingPaymentCount}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Awaiting Pay</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Awaiting</div>
           </button>
           <button 
             onClick={() => setStatusFilter('pending')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-gray-500' : ''}`}
           >
             <div className="text-xl font-bold text-gray-700 dark:text-gray-300">{pendingCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
           </button>
           <button 
             onClick={() => setStatusFilter('preparing')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-yellow-500' : ''}`}
           >
             <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{preparingCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Preparing</div>
           </button>
           <button 
             onClick={() => setStatusFilter('ready')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-green-500' : ''}`}
           >
             <div className="text-xl font-bold text-green-600">{readyCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Ready</div>
           </button>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-          {(['all', 'awaiting_payment', 'pending', 'preparing', 'ready'] as StatusFilter[]).map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                statusFilter === status
-                  ? status === 'awaiting_payment' ? 'bg-orange-600 text-white' : 'bg-primary-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {status === 'awaiting_payment' ? 'Awaiting Pay' : status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
-          ))}
         </div>
 
         {/* Batch Actions */}
@@ -597,13 +644,23 @@ export default function StaffDashboard() {
               const isSelected = selectedOrders.includes(order.id);
               const isAwaitingPayment = order.status === 'awaiting_payment';
               const paymentTimeRemaining = getPaymentTimeRemaining(order.payment_due_at);
+              const isExpired = isPaymentExpired(order.payment_due_at, order.payment_status);
+              
+              // Determine border style (priority: expired > awaiting_payment > critical wait > selected > default)
+              const getBorderClass = () => {
+                if (isAwaitingPayment && isExpired) return 'border-l-4 border-l-red-500';
+                if (isAwaitingPayment) return 'border-l-4 border-l-orange-500';
+                if (waitTime.category === 'critical' && order.status === 'pending') return 'border-l-4 border-l-red-500';
+                if (isSelected) return 'border-primary-500';
+                return 'border-gray-100 dark:border-gray-700';
+              };
               
               return (
                 <div 
                   key={order.id} 
-                  className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 border-2 transition-all ${
-                    isSelected ? 'border-primary-500 bg-primary-50 dark:bg-primary-900' : 'border-gray-100 dark:border-gray-700'
-                  } ${isAwaitingPayment ? 'border-l-4 border-l-orange-500' : ''} ${waitTime.category === 'critical' && order.status === 'pending' ? 'border-l-4 border-l-red-500' : ''}`}
+                  className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 border-2 transition-all ${getBorderClass()} ${
+                    isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
+                  }`}
                 >
                   {/* Order Header */}
                   <div className="flex items-start justify-between mb-3">
@@ -648,20 +705,47 @@ export default function StaffDashboard() {
 
                   {/* Awaiting Payment Banner */}
                   {isAwaitingPayment && (
-                    <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-3 mb-3">
+                    <div className={`border rounded-lg p-3 mb-3 ${
+                      isPaymentExpired(order.payment_due_at, order.payment_status)
+                        ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+                        : 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800'
+                    }`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Banknote className="text-orange-600 dark:text-orange-400" size={20} />
-                          <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
-                            Cash payment pending - ₱{order.total_amount.toFixed(2)}
+                          <Banknote className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'} size={20} />
+                          <span className={`text-sm font-medium ${
+                            isPaymentExpired(order.payment_due_at, order.payment_status)
+                              ? 'text-red-800 dark:text-red-300'
+                              : 'text-orange-800 dark:text-orange-300'
+                          }`}>
+                            {isPaymentExpired(order.payment_due_at, order.payment_status)
+                              ? 'Payment expired - Order will be cancelled'
+                              : `Cash payment pending - ₱${order.total_amount.toFixed(2)}`
+                            }
                           </span>
                         </div>
-                        <button
-                          onClick={() => setShowPaymentDialog(order.id)}
-                          className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
-                        >
-                          Confirm Payment
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {isPaymentExpired(order.payment_due_at, order.payment_status) ? (
+                            <span className="px-3 py-1.5 bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium cursor-not-allowed">
+                              Expired
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => setShowCancelDialog(order.id)}
+                                className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-500"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => setShowPaymentDialog(order.id)}
+                                className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
+                              >
+                                Confirm Payment
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -750,15 +834,13 @@ export default function StaffDashboard() {
                         Complete Order
                       </button>
                     )}
-                    {!isAwaitingPayment && (
-                      <button
-                        onClick={() => printOrder(order)}
-                        className="p-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                        title="Print order"
-                      >
-                        <Printer size={18} />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => printOrder(order)}
+                      className="p-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                      title="Print order"
+                    >
+                      <Printer size={18} />
+                    </button>
                   </div>
                 </div>
               );

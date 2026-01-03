@@ -27,10 +27,13 @@ export function useOrderSubscription() {
   const handleOrderUpdate = useCallback((payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => {
     const newStatus = payload.new?.status as string | undefined;
     const oldStatus = payload.old?.status as string | undefined;
+    const newPaymentStatus = payload.new?.payment_status as string | undefined;
+    const oldPaymentStatus = payload.old?.payment_status as string | undefined;
 
     // Show toast notification for status changes
     if (newStatus && newStatus !== oldStatus) {
       const messages: Record<string, string> = {
+        pending: '📋 Order confirmed and pending!',
         preparing: '👨‍🍳 Your order is being prepared!',
         ready: '✅ Your order is ready for pickup!',
         completed: '🎉 Order completed!',
@@ -41,9 +44,23 @@ export function useOrderSubscription() {
         showToastRef.current(messages[newStatus], newStatus === 'cancelled' ? 'error' : 'success');
       }
     }
+    
+    // Show toast for payment status changes
+    if (newPaymentStatus && newPaymentStatus !== oldPaymentStatus) {
+      if (newPaymentStatus === 'paid' && oldPaymentStatus === 'awaiting_payment') {
+        showToastRef.current('💰 Payment confirmed!', 'success');
+      } else if (newPaymentStatus === 'timeout') {
+        showToastRef.current('⏰ Payment expired - order cancelled', 'error');
+      } else if (newPaymentStatus === 'refunded') {
+        showToastRef.current('💵 Refund processed', 'info');
+      }
+    }
 
     // Invalidate orders query to refresh the list
     queryClientRef.current.invalidateQueries({ queryKey: ['orders'] });
+    queryClientRef.current.invalidateQueries({ queryKey: ['order-history'] });
+    queryClientRef.current.invalidateQueries({ queryKey: ['active-orders'] });
+    queryClientRef.current.invalidateQueries({ queryKey: ['scheduled-orders'] });
   }, []);
 
   useEffect(() => {

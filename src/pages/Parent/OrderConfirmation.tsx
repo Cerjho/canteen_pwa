@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, ArrowRight, Clock, User } from 'lucide-react';
+import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar } from 'lucide-react';
 
 interface OrderConfirmationState {
   orderId: string;
@@ -8,6 +8,9 @@ interface OrderConfirmationState {
   childName: string;
   itemCount: number;
   isOffline?: boolean;
+  paymentMethod?: 'cash' | 'balance';
+  scheduledFor?: string;
+  isFutureOrder?: boolean;
 }
 
 export default function OrderConfirmation() {
@@ -67,11 +70,47 @@ export default function OrderConfirmation() {
 
           <div className="flex justify-between items-center mb-4">
             <span className="text-gray-600 dark:text-gray-400">Status</span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full text-sm font-medium">
-              <Clock size={14} />
-              Pending
+            {state.paymentMethod === 'cash' ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full text-sm font-medium">
+                <Timer size={14} />
+                Awaiting Payment
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
+                <Clock size={14} />
+                Pending
+              </span>
+            )}
+          </div>
+
+          {/* Payment Method */}
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-gray-600 dark:text-gray-400">Payment</span>
+            <span className="inline-flex items-center gap-1 text-gray-900 dark:text-gray-100 text-sm font-medium">
+              {state.paymentMethod === 'cash' ? (
+                <>
+                  <CreditCard size={14} />
+                  Pay at Counter
+                </>
+              ) : (
+                <>
+                  <Wallet size={14} />
+                  Wallet Balance
+                </>
+              )}
             </span>
           </div>
+
+          {/* Scheduled Date (if future order) */}
+          {state.isFutureOrder && state.scheduledFor && (
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-gray-600 dark:text-gray-400">Pickup Date</span>
+              <span className="inline-flex items-center gap-1 text-gray-900 dark:text-gray-100 text-sm font-medium">
+                <Calendar size={14} />
+                {state.scheduledFor}
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
             <span className="text-lg font-medium text-gray-900 dark:text-gray-100">Total</span>
@@ -80,6 +119,16 @@ export default function OrderConfirmation() {
             </span>
           </div>
         </div>
+
+        {/* Cash Payment Notice */}
+        {state.paymentMethod === 'cash' && !state.isOffline && (
+          <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-orange-800 dark:text-orange-300">
+              <strong>⏰ Payment Required:</strong> Please pay at the canteen counter before the deadline. 
+              Your order will be automatically cancelled if not paid in time.
+            </p>
+          </div>
+        )}
 
         {/* Offline Notice */}
         {state.isOffline && (

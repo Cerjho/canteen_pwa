@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
-import { Package, Clock, ChefHat, CheckCircle, XCircle, AlertCircle, RefreshCw, CreditCard, Calendar } from 'lucide-react';
+import { Package, Clock, ChefHat, CheckCircle, XCircle, AlertCircle, RefreshCw, CreditCard, Calendar, Timer } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { getOrderHistory } from '../../services/orders';
 import { PageHeader } from '../../components/PageHeader';
@@ -88,6 +88,27 @@ export default function OrderHistory() {
       default:
         return { text: `${method}`, color: 'text-gray-500 dark:text-gray-400' };
     }
+  };
+
+  /**
+   * Get time remaining until payment expires
+   */
+  const getPaymentTimeRemaining = (paymentDueAt: string | undefined): string | null => {
+    if (!paymentDueAt) return null;
+    
+    const dueDate = new Date(paymentDueAt);
+    const now = new Date();
+    const diffMs = dueDate.getTime() - now.getTime();
+    
+    if (diffMs <= 0) return 'Expired';
+    
+    const minutes = Math.floor(diffMs / 60000);
+    const seconds = Math.floor((diffMs % 60000) / 1000);
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s remaining`;
+    }
+    return `${seconds}s remaining`;
   };
 
   /**
@@ -241,8 +262,21 @@ export default function OrderHistory() {
                         ₱{order.total_amount.toFixed(2)}
                       </p>
                     </div>
-                    <div className={`text-xs capitalize ${getPaymentDisplay(order).color}`}>
+                    <div className={`text-xs capitalize text-right ${getPaymentDisplay(order).color}`}>
                       {getPaymentDisplay(order).text}
+                      {/* Show countdown for awaiting payment orders */}
+                      {order.payment_status === 'awaiting_payment' && order.payment_due_at && (
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5 justify-end">
+                          <Timer size={12} />
+                          {getPaymentTimeRemaining(order.payment_due_at)}
+                        </span>
+                      )}
+                      {/* Show timeout message for timed out orders */}
+                      {order.payment_status === 'timeout' && (
+                        <span className="block text-red-600 dark:text-red-400 mt-0.5">
+                          Order auto-cancelled
+                        </span>
+                      )}
                       {/* Show refund note for cancelled + paid orders */}
                       {order.status === 'cancelled' && order.payment_status === 'paid' && (
                         <span className="block text-amber-600 dark:text-amber-400 mt-0.5">

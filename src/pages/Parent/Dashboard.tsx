@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO, differenceInMinutes } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
@@ -23,7 +23,9 @@ import {
   X, 
   RotateCcw, 
   MapPin, 
-  Sparkles
+  Sparkles,
+  Timer,
+  XCircle
 } from 'lucide-react';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -51,6 +53,8 @@ interface OrderItem {
 interface Order {
   id: string;
   status: string;
+  payment_status?: string;
+  payment_due_at?: string;
   total_amount: number;
   created_at: string;
   scheduled_for: string;
@@ -68,6 +72,31 @@ function getScheduledLabel(dateStr: string): string {
   if (isToday(date)) return 'Today';
   if (isTomorrow(date)) return 'Tomorrow';
   return format(date, 'EEE, MMM d');
+}
+
+// Get payment time remaining
+function getPaymentTimeRemaining(paymentDueAt?: string): { minutes: number; seconds: number; expired: boolean; text: string } {
+  if (!paymentDueAt) {
+    return { minutes: 0, seconds: 0, expired: true, text: 'No deadline set' };
+  }
+  
+  const dueDate = new Date(paymentDueAt);
+  const now = new Date();
+  const diffMs = dueDate.getTime() - now.getTime();
+  
+  if (diffMs <= 0) {
+    return { minutes: 0, seconds: 0, expired: true, text: 'Payment expired' };
+  }
+  
+  const minutes = Math.floor(diffMs / 60000);
+  const seconds = Math.floor((diffMs % 60000) / 1000);
+  
+  return { 
+    minutes, 
+    seconds, 
+    expired: false, 
+    text: `${minutes}:${seconds.toString().padStart(2, '0')} remaining`
+  };
 }
 
 // Get estimated wait time
@@ -93,18 +122,22 @@ export default function ParentDashboard() {
   const [activeTab, setActiveTab] = useState<'today' | 'scheduled'>('today');
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
   const [cancellingOrder, setCancellingOrder] = useState(false);
+  const [, setTimerTick] = useState(0); // Force re-render for countdown timers
   
   // Subscribe to realtime order updates
   useOrderSubscription();
   
   const todayStr = formatDateLocal(new Date());
   
-  // Fetch today's active orders (pending, preparing, ready)
+  // Fetch today's active orders (awaiting_payment, pending, preparing, ready)
+  // Also include recently timed out orders so parents can see what happened
   const { data: todayOrders, isLoading: loadingToday, refetch: refetchToday } = useQuery<Order[]>({
     queryKey: ['active-orders', user?.id, todayStr],
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
-      const { data, error } = await supabase
+      
+      // Fetch active orders
+      const { data: activeOrders, error: activeError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -116,14 +149,40 @@ export default function ParentDashboard() {
         `)
         .eq('parent_id', user.id)
         .eq('scheduled_for', todayStr)
-        .in('status', ['pending', 'preparing', 'ready'])
+        .in('status', ['awaiting_payment', 'pending', 'preparing', 'ready'])
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data;
+      if (activeError) throw activeError;
+      
+      // Also fetch recently timed-out orders (last 1 hour) so parents can see them
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: timedOutOrders, error: timeoutError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          child:students!orders_student_id_fkey(id, first_name, last_name),
+          items:order_items(
+            *,
+            product:products(name, image_url)
+          )
+        `)
+        .eq('parent_id', user.id)
+        .eq('scheduled_for', todayStr)
+        .eq('status', 'cancelled')
+        .eq('payment_status', 'timeout')
+        .gte('updated_at', oneHourAgo)
+        .order('created_at', { ascending: false });
+      
+      if (timeoutError) {
+        console.warn('Error fetching timed out orders:', timeoutError);
+      }
+      
+      // Combine and deduplicate
+      const allOrders = [...(activeOrders || []), ...(timedOutOrders || [])];
+      return allOrders;
     },
     enabled: !!user,
-    refetchInterval: 30000
+    refetchInterval: 10000 // More frequent refresh to update countdown timers
   });
 
   // Fetch scheduled future orders
@@ -143,7 +202,7 @@ export default function ParentDashboard() {
         `)
         .eq('parent_id', user.id)
         .gt('scheduled_for', todayStr)
-        .in('status', ['pending'])
+        .in('status', ['awaiting_payment', 'pending'])
         .order('scheduled_for', { ascending: true });
       
       if (error) throw error;
@@ -209,8 +268,48 @@ export default function ParentDashboard() {
   const handleRefresh = async () => {
     await Promise.all([refetchToday(), refetchScheduled()]);
   };
+  
+  // Real-time countdown timer for payment deadlines
+  useEffect(() => {
+    // Check if there are any awaiting_payment orders
+    const allOrders = [...(todayOrders || []), ...(scheduledOrders || [])];
+    const hasAwaitingPayment = allOrders.some(o => 
+      (o.status === 'awaiting_payment' || o.payment_status === 'awaiting_payment') && o.payment_due_at
+    );
+    
+    if (!hasAwaitingPayment) return;
+    
+    // Update every second for real-time countdown
+    const interval = setInterval(() => {
+      setTimerTick(t => t + 1);
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [todayOrders, scheduledOrders]);
 
-  const getStatusDetails = (status: string) => {
+  const getStatusDetails = (status: string, paymentStatus?: string) => {
+    // Check for timeout first
+    if (paymentStatus === 'timeout') {
+      return {
+        icon: XCircle,
+        label: 'Timed Out',
+        color: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
+        message: 'Payment expired - Order cancelled',
+        progress: 0
+      };
+    }
+    
+    // Check for awaiting payment
+    if (status === 'awaiting_payment' || paymentStatus === 'awaiting_payment') {
+      return {
+        icon: Timer,
+        label: 'Awaiting Payment',
+        color: 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+        message: 'Pay at the counter',
+        progress: 10
+      };
+    }
+    
     switch (status) {
       case 'pending':
         return { 
@@ -312,9 +411,10 @@ export default function ParentDashboard() {
           ) : orders && orders.length > 0 ? (
             <div className="space-y-4">
               {orders.map((order) => {
-                const status = getStatusDetails(order.status);
+                const status = getStatusDetails(order.status, order.payment_status);
                 const StatusIcon = status.icon;
                 const isFutureOrder = activeTab === 'scheduled';
+                const isTimedOut = order.payment_status === 'timeout';
                 
                 return (
                   <div 
@@ -371,6 +471,24 @@ export default function ParentDashboard() {
                         <Sparkles size={16} />
                         <span className="font-medium">Your order is ready for pickup!</span>
                         <Sparkles size={16} />
+                      </div>
+                    )}
+                    
+                    {/* Payment Countdown Banner */}
+                    {(order.status === 'awaiting_payment' || order.payment_status === 'awaiting_payment') && (
+                      <div className="bg-orange-500 text-white px-4 py-2 flex items-center justify-center gap-2">
+                        <Timer size={16} className="animate-pulse" />
+                        <span className="font-medium">
+                          Pay at counter: {getPaymentTimeRemaining(order.payment_due_at).text}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Timeout Banner */}
+                    {isTimedOut && (
+                      <div className="bg-red-500 text-white px-4 py-2 flex items-center justify-center gap-2">
+                        <XCircle size={16} />
+                        <span className="font-medium">Payment expired - Order cancelled</span>
                       </div>
                     )}
                     

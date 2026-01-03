@@ -99,27 +99,36 @@ serve(async (req) => {
 
     // Validate request
     if (!parent_id || !student_id || !client_order_id || !items || items.length === 0) {
+      console.error('Validation failed: Missing required fields', { parent_id: !!parent_id, student_id: !!student_id, client_order_id: !!client_order_id, items_count: items?.length });
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('Processing order:', { parent_id, student_id, client_order_id, items_count: items.length, payment_method, scheduled_for });
+
     // ============================================
     // SYSTEM SETTINGS ENFORCEMENT
     // ============================================
     
     // Fetch system settings
-    const { data: settingsData } = await supabaseAdmin
+    const { data: settingsData, error: settingsError } = await supabaseAdmin
       .from('system_settings')
       .select('key, value');
     
+    if (settingsError) {
+      console.error('Failed to fetch system settings:', settingsError);
+    }
+    
     const settings = new Map<string, unknown>();
     settingsData?.forEach(s => settings.set(s.key, s.value));
+    console.log('System settings loaded:', Object.fromEntries(settings));
 
     // Check maintenance mode
     const maintenanceMode = settings.get('maintenance_mode') === true;
     if (maintenanceMode) {
+      console.log('Rejected: Maintenance mode is ON');
       return new Response(
         JSON.stringify({ error: 'MAINTENANCE_MODE', message: 'The canteen is currently under maintenance. Please try again later.' }),
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -131,16 +140,20 @@ serve(async (req) => {
     const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
     const currentTimeStr = phTime.toISOString().substring(11, 16); // HH:MM
     const todayStr = getTodayPhilippines();
+    console.log('Time info:', { currentTimeStr, todayStr, now: now.toISOString() });
 
     // Determine effective order date FIRST (needed for operating hours check)
     const orderDate = scheduled_for || todayStr;
     const isToday = orderDate === todayStr;
+    console.log('Order date:', { orderDate, isToday, scheduled_for });
 
     // Check operating hours - ONLY for same-day orders
     const operatingHours = settings.get('operating_hours') as { open?: string; close?: string } | undefined;
+    console.log('Operating hours check:', { operatingHours, isToday, currentTimeStr });
     if (isToday && operatingHours?.open && operatingHours?.close) {
       const { open, close } = operatingHours;
       if (currentTimeStr < open || currentTimeStr > close) {
+        console.log('Rejected: Outside operating hours', { open, close, currentTimeStr });
         return new Response(
           JSON.stringify({ 
             error: 'OUTSIDE_HOURS', 
@@ -156,9 +169,11 @@ serve(async (req) => {
     // ============================================
     const orderDateObj = new Date(orderDate + 'T00:00:00');
     const dayOfWeek = orderDateObj.getDay(); // 0 = Sunday, 6 = Saturday
+    console.log('Day of week check:', { orderDate, dayOfWeek });
 
     // Check if it's a Sunday (never allowed)
     if (dayOfWeek === 0) {
+      console.log('Rejected: Sunday not allowed');
       return new Response(
         JSON.stringify({ 
           error: 'INVALID_DATE', 
@@ -170,6 +185,7 @@ serve(async (req) => {
 
     // Check if it's a Saturday (only allowed if it's a makeup day)
     if (dayOfWeek === 6) {
+      console.log('Checking if Saturday is a makeup day...');
       const { data: makeupDay } = await supabaseAdmin
         .from('makeup_days')
         .select('id, name')
@@ -177,6 +193,7 @@ serve(async (req) => {
         .single();
 
       if (!makeupDay) {
+        console.log('Rejected: Saturday is not a makeup day');
         return new Response(
           JSON.stringify({ 
             error: 'INVALID_DATE', 
@@ -185,12 +202,14 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      console.log('Saturday is a makeup day:', makeupDay.name);
     }
 
     // Check if the order date is a holiday
     const { data: holidays } = await supabaseAdmin
       .from('holidays')
       .select('id, name, date, is_recurring');
+    console.log('Holidays loaded:', holidays?.length || 0);
 
     const isHoliday = holidays?.some(h => {
       const holidayDateStr = h.date.split('T')[0];
@@ -209,6 +228,7 @@ serve(async (req) => {
         }
         return holidayDateStr === orderDate;
       });
+      console.log('Rejected: Holiday', holiday?.name);
       return new Response(
         JSON.stringify({ 
           error: 'HOLIDAY', 
@@ -221,7 +241,9 @@ serve(async (req) => {
 
     // Check order cutoff time for same-day orders
     const orderCutoffTime = settings.get('order_cutoff_time') as string | undefined;
+    console.log('Cutoff check:', { orderCutoffTime, isToday, currentTimeStr });
     if (isToday && orderCutoffTime && currentTimeStr > orderCutoffTime) {
+      console.log('Rejected: Past cutoff time');
       return new Response(
         JSON.stringify({ 
           error: 'PAST_CUTOFF', 
@@ -234,9 +256,11 @@ serve(async (req) => {
     // Check future orders settings
     const allowFutureOrders = settings.get('allow_future_orders') !== false; // Default true
     const maxFutureDays = (settings.get('max_future_days') as number) || 5;
+    console.log('Future orders settings:', { allowFutureOrders, maxFutureDays });
 
     if (!isToday) {
       if (!allowFutureOrders) {
+        console.log('Rejected: Future orders disabled');
         return new Response(
           JSON.stringify({ error: 'FUTURE_ORDERS_DISABLED', message: 'Future orders are currently not allowed.' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -247,8 +271,10 @@ serve(async (req) => {
       const orderDateObj = new Date(orderDate + 'T00:00:00');
       const todayDateObj = new Date(todayStr + 'T00:00:00');
       const daysDiff = Math.ceil((orderDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
+      console.log('Future order check:', { daysDiff, maxFutureDays });
 
       if (daysDiff > maxFutureDays) {
+        console.log('Rejected: Order too far in future');
         return new Response(
           JSON.stringify({ 
             error: 'ORDER_TOO_FAR', 
@@ -259,6 +285,7 @@ serve(async (req) => {
       }
 
       if (daysDiff < 0) {
+        console.log('Rejected: Past date');
         return new Response(
           JSON.stringify({ error: 'PAST_DATE', message: 'Cannot place orders for past dates.' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -266,12 +293,15 @@ serve(async (req) => {
       }
     }
 
+    console.log('Passed all date/time validations');
+
     // ============================================
     // END SETTINGS ENFORCEMENT
     // ============================================
 
     // Verify parent_id matches authenticated user
     if (parent_id !== user.id) {
+      console.log('Rejected: Parent ID mismatch', { parent_id, user_id: user.id });
       return new Response(
         JSON.stringify({ error: 'UNAUTHORIZED', message: 'Parent ID does not match authenticated user' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -287,11 +317,13 @@ serve(async (req) => {
       .single();
 
     if (linkError || !studentLink) {
+      console.log('Rejected: Parent not linked to student', { student_id, parent_id, linkError });
       return new Response(
         JSON.stringify({ error: 'UNAUTHORIZED', message: 'Parent is not linked to this student' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    console.log('Parent-student link verified');
 
     // Check for duplicate order (idempotency)
     const { data: existingOrder } = await supabaseAdmin
@@ -301,6 +333,7 @@ serve(async (req) => {
       .single();
 
     if (existingOrder) {
+      console.log('Duplicate order detected:', existingOrder);
       return new Response(
         JSON.stringify({
           error: 'DUPLICATE_ORDER',
@@ -315,12 +348,14 @@ serve(async (req) => {
 
     // Fetch products and validate stock
     const productIds = items.map(item => item.product_id);
+    console.log('Validating products:', productIds);
     const { data: products, error: productsError } = await supabaseAdmin
       .from('products')
       .select('id, name, price, stock_quantity, available')
       .in('id', productIds);
 
     if (productsError || !products) {
+      console.log('Failed to fetch products:', productsError);
       return new Response(
         JSON.stringify({ error: 'SERVER_ERROR', message: 'Failed to fetch products' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
