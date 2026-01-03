@@ -44,7 +44,20 @@ export default function Menu() {
   const { showToast } = useToast();
 
   // Cart hook now manages selectedStudentId
-  const { items, itemsByStudent, addItem, updateQuantity, checkout, total, selectedStudentId, setSelectedStudentId } = useCart();
+  const { 
+    items, 
+    itemsByStudent, 
+    itemsByDateAndStudent,
+    addItem, 
+    updateQuantity, 
+    checkout, 
+    total, 
+    selectedStudentId, 
+    setSelectedStudentId,
+    clearDate,
+    copyDateItems,
+    summary
+  } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { data: students } = useStudents();
 
@@ -161,19 +174,24 @@ export default function Menu() {
     }
   }, [selectedStudentId, students, products, addItem, showToast, effectiveDate]);
 
-  const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string) => {
+  const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string, selectedDates?: string[]) => {
     if (items.length === 0) {
       showToast('Cart is empty', 'error');
       return;
     }
 
-    // Get unique scheduled dates from cart items
-    const scheduledDates = [...new Set(items.map(i => i.scheduled_for))];
+    // Filter items for checkout (if selectedDates provided)
+    const itemsToCheckout = selectedDates && selectedDates.length > 0
+      ? items.filter(i => selectedDates.includes(i.scheduled_for))
+      : items;
+
+    // Get unique scheduled dates from items to checkout
+    const scheduledDates = [...new Set(itemsToCheckout.map(i => i.scheduled_for))];
     const hasFutureOrders = scheduledDates.some(d => d !== format(new Date(), 'yyyy-MM-dd'));
 
     try {
       // Each item has its own scheduled_for date, checkout groups by student+date
-      const result = await checkout(paymentMethod, notes);
+      const result = await checkout(paymentMethod, notes, selectedDates);
       setCartOpen(false);
       
       // Invalidate wallet balance if paid with balance
@@ -183,16 +201,17 @@ export default function Menu() {
       }
       
       // Get student names for confirmation
-      const studentNames = [...new Set(items.map(i => i.student_name))].join(', ');
+      const studentNames = [...new Set(itemsToCheckout.map(i => i.student_name))].join(', ');
+      const checkoutTotal = itemsToCheckout.reduce((sum, i) => sum + i.price * i.quantity, 0);
       
       // Navigate to confirmation page
       navigate('/order-confirmation', {
         state: {
           orderId: result?.orders?.[0]?.order_id || crypto.randomUUID(),
           orderCount: result?.orders?.length || 1,
-          totalAmount: total,
+          totalAmount: checkoutTotal,
           childName: studentNames || 'Your children',
-          itemCount: items.length,
+          itemCount: itemsToCheckout.length,
           isOffline: false,
           paymentMethod,
           scheduledDates: scheduledDates,
@@ -338,9 +357,14 @@ export default function Menu() {
               className="relative p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
             >
               <ShoppingCart size={24} />
-              {items.length > 0 && (
+              {summary.totalItems > 0 && (
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                  {items.length}
+                  {summary.totalItems}
+                </span>
+              )}
+              {summary.dateCount > 1 && (
+                <span className="absolute -bottom-1 -right-1 bg-amber-500 text-white text-[10px] rounded-full px-1">
+                  {summary.dateCount}d
                 </span>
               )}
             </button>
@@ -493,8 +517,11 @@ export default function Menu() {
         onClose={() => setCartOpen(false)}
         items={items}
         itemsByStudent={itemsByStudent}
+        itemsByDateAndStudent={itemsByDateAndStudent}
         onUpdateQuantity={updateQuantity}
         onCheckout={handleCheckout}
+        onClearDate={clearDate}
+        onCopyDateItems={copyDateItems}
         parentBalance={parentBalance}
       />
     </div>
