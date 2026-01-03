@@ -15,6 +15,27 @@ import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 
+// ===========================================
+// TIMEZONE & DATE HELPERS
+// Revenue reports use COMPLETED_AT (when order was paid/fulfilled)
+// This is the correct financial accounting date, NOT scheduled_for
+// ===========================================
+
+/**
+ * Convert a UTC timestamp to Philippine local date string (YYYY-MM-DD)
+ * This ensures orders near midnight are grouped correctly
+ */
+const toPhilippineDate = (utcTimestamp: string): string => {
+  return new Date(utcTimestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+};
+
+/**
+ * Get today's date in Philippine timezone as YYYY-MM-DD
+ */
+const getTodayPH = (): string => {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+};
+
 interface RevenueData {
   date: string;
   revenue: number;
@@ -61,39 +82,50 @@ export default function AdminReports() {
   };
 
   // Fetch revenue data
+  // CRITICAL: Revenue is based on COMPLETED orders, grouped by COMPLETED_AT date
+  // This is the financially correct approach - revenue is recognized when transaction completes
   const { data: revenueData, isLoading } = useQuery({
     queryKey: ['admin-revenue', dateRange],
     queryFn: async () => {
       const { start, end } = getDateRange();
-      const startStr = format(start, 'yyyy-MM-dd');
-      const endStr = format(end, 'yyyy-MM-dd');
+      // Use ISO timestamps for completed_at range queries
+      const startISO = format(start, "yyyy-MM-dd'T'00:00:00");
+      const endISO = format(end, "yyyy-MM-dd'T'23:59:59");
 
-      // Get all orders in date range by scheduled_for (excluding cancelled and future orders)
-      const { data: orders } = await supabase
+      // REVENUE = COMPLETED ORDERS ONLY, grouped by completion date
+      // This is the only financially correct way to calculate revenue
+      const { data: orders, error } = await supabase
         .from('orders')
-        .select('total_amount, scheduled_for, payment_method')
-        .gte('scheduled_for', startStr)
-        .lte('scheduled_for', endStr)
-        .in('status', ['completed', 'ready', 'preparing', 'pending']);
+        .select('total_amount, completed_at, payment_method')
+        .eq('status', 'completed')
+        .not('completed_at', 'is', null)
+        .gte('completed_at', startISO)
+        .lte('completed_at', endISO);
 
+      if (error) {
+        console.error('Revenue query error:', error);
+        return { daily: [], total: 0, orderCount: 0, paymentBreakdown: [] };
+      }
       if (!orders) return { daily: [], total: 0, orderCount: 0, paymentBreakdown: [] };
 
-      // Group by day
+      // Group by COMPLETION day (Philippine timezone)
       const dailyMap = new Map<string, { revenue: number; orders: number }>();
       const paymentMap = new Map<string, { amount: number; count: number }>();
 
       orders.forEach(order => {
-        const day = order.scheduled_for;
+        // Use Philippine timezone for correct day grouping
+        const day = toPhilippineDate(order.completed_at!);
         const existing = dailyMap.get(day) || { revenue: 0, orders: 0 };
         dailyMap.set(day, {
-          revenue: existing.revenue + order.total_amount,
+          revenue: existing.revenue + (order.total_amount ?? 0),
           orders: existing.orders + 1
         });
 
-        // Payment breakdown
-        const paymentExisting = paymentMap.get(order.payment_method) || { amount: 0, count: 0 };
-        paymentMap.set(order.payment_method, {
-          amount: paymentExisting.amount + order.total_amount,
+        // Payment breakdown (only from completed orders)
+        const method = order.payment_method || 'unknown';
+        const paymentExisting = paymentMap.get(method) || { amount: 0, count: 0 };
+        paymentMap.set(method, {
+          amount: paymentExisting.amount + (order.total_amount ?? 0),
           count: paymentExisting.count + 1
         });
       });
@@ -142,54 +174,64 @@ export default function AdminReports() {
   });
 
   // Calculate comparison stats
+  // CRITICAL: All revenue comparisons use COMPLETED_AT, not scheduled_for
+  // Revenue is recognized when the transaction is completed (status='completed')
   const { data: comparisonStats } = useQuery({
     queryKey: ['admin-comparison'],
     queryFn: async () => {
-      const today = new Date();
-      const todayStr = format(today, 'yyyy-MM-dd');
-      const yesterday = subDays(today, 1);
+      // Use Philippine timezone for date boundaries
+      const todayStr = getTodayPH();
+      const yesterday = subDays(new Date(), 1);
       const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-      const thisWeekStart = startOfWeek(new Date());
+      
+      // Week starts on MONDAY for Philippine business logic
+      const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
       const thisWeekStartStr = format(thisWeekStart, 'yyyy-MM-dd');
       const lastWeekStart = subDays(thisWeekStart, 7);
       const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
       const lastWeekEnd = subDays(thisWeekStart, 1);
       const lastWeekEndStr = format(lastWeekEnd, 'yyyy-MM-dd');
 
-      // Today's revenue (scheduled_for = today)
+      // Today's revenue: orders COMPLETED today (by completed_at)
       const { data: todayOrders } = await supabase
         .from('orders')
-        .select('total_amount')
-        .eq('scheduled_for', todayStr)
-        .neq('status', 'cancelled');
+        .select('total_amount, completed_at')
+        .eq('status', 'completed')
+        .not('completed_at', 'is', null)
+        .gte('completed_at', `${todayStr}T00:00:00`)
+        .lte('completed_at', `${todayStr}T23:59:59`);
 
-      // Yesterday's revenue
+      // Yesterday's revenue: orders COMPLETED yesterday
       const { data: yesterdayOrders } = await supabase
         .from('orders')
-        .select('total_amount')
-        .eq('scheduled_for', yesterdayStr)
-        .neq('status', 'cancelled');
+        .select('total_amount, completed_at')
+        .eq('status', 'completed')
+        .not('completed_at', 'is', null)
+        .gte('completed_at', `${yesterdayStr}T00:00:00`)
+        .lte('completed_at', `${yesterdayStr}T23:59:59`);
 
-      // This week's revenue
+      // This week's revenue: orders COMPLETED this week
       const { data: thisWeekOrders } = await supabase
         .from('orders')
-        .select('total_amount')
-        .gte('scheduled_for', thisWeekStartStr)
-        .lte('scheduled_for', todayStr)
-        .neq('status', 'cancelled');
+        .select('total_amount, completed_at')
+        .eq('status', 'completed')
+        .not('completed_at', 'is', null)
+        .gte('completed_at', `${thisWeekStartStr}T00:00:00`)
+        .lte('completed_at', `${todayStr}T23:59:59`);
 
-      // Last week's revenue
+      // Last week's revenue: orders COMPLETED last week
       const { data: lastWeekOrders } = await supabase
         .from('orders')
-        .select('total_amount')
-        .gte('scheduled_for', lastWeekStartStr)
-        .lte('scheduled_for', lastWeekEndStr)
-        .neq('status', 'cancelled');
+        .select('total_amount, completed_at')
+        .eq('status', 'completed')
+        .not('completed_at', 'is', null)
+        .gte('completed_at', `${lastWeekStartStr}T00:00:00`)
+        .lte('completed_at', `${lastWeekEndStr}T23:59:59`);
 
-      const todayRevenue = todayOrders?.reduce((sum, o) => sum + o.total_amount, 0) || 0;
-      const yesterdayRevenue = yesterdayOrders?.reduce((sum, o) => sum + o.total_amount, 0) || 0;
-      const thisWeekRevenue = thisWeekOrders?.reduce((sum, o) => sum + o.total_amount, 0) || 0;
-      const lastWeekRevenue = lastWeekOrders?.reduce((sum, o) => sum + o.total_amount, 0) || 0;
+      const todayRevenue = todayOrders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0;
+      const yesterdayRevenue = yesterdayOrders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0;
+      const thisWeekRevenue = thisWeekOrders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0;
+      const lastWeekRevenue = lastWeekOrders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0;
 
       return {
         todayRevenue,
