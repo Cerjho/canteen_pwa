@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { 
   Search, 
@@ -39,11 +40,29 @@ const STATUS_OPTIONS: OrderStatus[] = ['pending', 'preparing', 'ready', 'complet
 export default function AdminOrders() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
-  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'future' | 'all'>('today');
+  
+  // Initialize filters from URL params
+  const initialStatus = searchParams.get('status') as OrderStatus | null;
+  const initialDateFilter = searchParams.get('filter') as 'today' | 'week' | 'month' | 'future' | 'all' | null;
+  
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>(
+    initialStatus && STATUS_OPTIONS.includes(initialStatus) ? initialStatus : 'all'
+  );
+  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'future' | 'all'>(
+    initialDateFilter && ['today', 'week', 'month', 'future', 'all'].includes(initialDateFilter) ? initialDateFilter : 'today'
+  );
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [refundOrder, setRefundOrder] = useState<OrderWithDetails | null>(null);
+  
+  // Clear URL params after reading (optional - keeps URL clean)
+  useEffect(() => {
+    if (searchParams.has('status') || searchParams.has('filter')) {
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch orders
   const { data: orders, isLoading, refetch } = useQuery<OrderWithDetails[]>({

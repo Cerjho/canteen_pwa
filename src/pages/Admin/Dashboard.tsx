@@ -853,7 +853,7 @@ export default function AdminDashboard() {
               </h3>
             </div>
             <div className="p-4">
-              <StatusDistributionChart distribution={statusDistribution} />
+              <StatusDistributionChart distribution={statusDistribution} dateRange={dateRange} />
             </div>
           </div>
 
@@ -1112,17 +1112,20 @@ function QuickActionButton({ icon, label, onClick, color }: QuickActionButtonPro
 
 interface StatusDistributionChartProps {
   distribution?: OrderStatusDistribution;
+  dateRange: 'today' | 'week' | 'month';
 }
 
-function StatusDistributionChart({ distribution }: StatusDistributionChartProps) {
+function StatusDistributionChart({ distribution, dateRange }: StatusDistributionChartProps) {
   if (!distribution) return <div className="h-40 flex items-center justify-center text-gray-400 dark:text-gray-500">Loading...</div>;
 
   const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+  const periodLabel = dateRange === 'today' ? 'today' : dateRange === 'week' ? 'this week' : 'this month';
+  
   if (total === 0) {
     return (
       <div className="h-40 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
         <PieChart size={32} className="mb-2 opacity-50" />
-        <p className="text-sm">No orders today</p>
+        <p className="text-sm">No orders {periodLabel}</p>
       </div>
     );
   }

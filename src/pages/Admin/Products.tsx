@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
@@ -13,10 +14,24 @@ const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
 export default function AdminProducts() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'low-stock' | 'out-of-stock'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  
+  // Initialize stock filter from URL params
+  useEffect(() => {
+    const filterParam = searchParams.get('filter');
+    if (filterParam === 'low-stock') {
+      setStockFilter('low-stock');
+      setSearchParams({}, { replace: true });
+    } else if (filterParam === 'out-of-stock') {
+      setStockFilter('out-of-stock');
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   // Fetch products
   const { data: products, isLoading } = useQuery<Product[]>({
@@ -153,7 +168,16 @@ export default function AdminProducts() {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    
+    // Stock filter logic
+    let matchesStock = true;
+    if (stockFilter === 'low-stock') {
+      matchesStock = p.stock_quantity !== null && p.stock_quantity > 0 && p.stock_quantity <= 10;
+    } else if (stockFilter === 'out-of-stock') {
+      matchesStock = p.stock_quantity === 0 || !p.available;
+    }
+    
+    return matchesSearch && matchesCategory && matchesStock;
   });
 
   const handleEdit = (product: Product) => {
@@ -204,7 +228,7 @@ export default function AdminProducts() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setCategoryFilter('all')}
               className={`px-4 py-2 rounded-lg font-medium ${
@@ -225,6 +249,36 @@ export default function AdminProducts() {
               </button>
             ))}
           </div>
+        </div>
+        
+        {/* Stock Filter */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setStockFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+              stockFilter === 'all' ? 'bg-gray-700 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
+            }`}
+          >
+            All Stock
+          </button>
+          <button
+            onClick={() => setStockFilter('low-stock')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 ${
+              stockFilter === 'low-stock' ? 'bg-amber-500 text-white' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
+            }`}
+          >
+            <AlertTriangle size={14} />
+            Low Stock
+          </button>
+          <button
+            onClick={() => setStockFilter('out-of-stock')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 ${
+              stockFilter === 'out-of-stock' ? 'bg-red-500 text-white' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700'
+            }`}
+          >
+            <Package size={14} />
+            Out of Stock
+          </button>
         </div>
 
         {/* Products Table */}
