@@ -170,7 +170,7 @@ export default function AdminDashboard() {
       const todayStr = format(today, 'yyyy-MM-dd');
       const yesterday = startOfDay(subDays(new Date(), 1));
       const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-      const weekStart = startOfWeek(new Date());
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const monthStart = startOfMonth(new Date());
       const monthStartStr = format(monthStart, 'yyyy-MM-dd');
@@ -261,7 +261,7 @@ export default function AdminDashboard() {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const startDateStr = dateRange === 'today' 
         ? todayStr
-        : dateRange === 'week' ? format(startOfWeek(new Date()), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        : dateRange === 'week' ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
       
       const { data: orders } = await supabase
         .from('orders')
@@ -286,7 +286,7 @@ export default function AdminDashboard() {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const startDateStr = dateRange === 'today' 
         ? todayStr
-        : dateRange === 'week' ? format(startOfWeek(new Date()), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        : dateRange === 'week' ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
       
       const { data: orders } = await supabase
         .from('orders')
@@ -319,7 +319,7 @@ export default function AdminDashboard() {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const startDateStr = dateRange === 'today' 
         ? todayStr
-        : dateRange === 'week' ? format(startOfWeek(new Date()), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        : dateRange === 'week' ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
 
       // Use scheduled_for instead of created_at, and exclude future orders
       const { data: orderItems } = await supabase
@@ -506,13 +506,13 @@ export default function AdminDashboard() {
         queryClient.invalidateQueries({ queryKey: ['admin-alerts'] });
         queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'parents' }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_profiles' }, () => {
         // Track new user registrations
         const newActivity: LiveActivity = {
           id: `user-${Date.now()}`,
           type: 'user',
           title: 'New User',
-          message: 'A new parent has registered',
+          message: 'A new user has registered',
           timestamp: new Date(),
           severity: 'success'
         };
@@ -838,7 +838,7 @@ export default function AdminDashboard() {
           <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
             <Calendar size={14} />
             {dateRange === 'today' && format(new Date(), 'MMM d')}
-            {dateRange === 'week' && `${format(startOfWeek(new Date()), 'MMM d')} - ${format(new Date(), 'MMM d')}`}
+            {dateRange === 'week' && `${format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d')} - ${format(new Date(), 'MMM d')}`}
             {dateRange === 'month' && format(new Date(), 'MMMM yyyy')}
           </div>
         </div>
@@ -871,7 +871,7 @@ export default function AdminDashboard() {
               )}
             </div>
             <div className="p-4">
-              <HourlyChart data={hourlyData || []} />
+              <HourlyChart data={hourlyData || []} dateRange={dateRange} />
             </div>
           </div>
         </div>
@@ -1168,9 +1168,10 @@ function StatusDistributionChart({ distribution, dateRange }: StatusDistribution
 
 interface HourlyChartProps {
   data: HourlyData[];
+  dateRange: 'today' | 'week' | 'month';
 }
 
-function HourlyChart({ data }: HourlyChartProps) {
+function HourlyChart({ data, dateRange }: HourlyChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="h-40 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
@@ -1187,7 +1188,8 @@ function HourlyChart({ data }: HourlyChartProps) {
       <div className="flex items-end justify-between gap-1 h-32 mb-2">
         {data.map((hour) => {
           const heightPercent = (hour.orders / maxOrders) * 100;
-          const isCurrentHour = new Date().getHours() === hour.hour;
+          // Only highlight current hour when viewing today's data
+          const isCurrentHour = dateRange === 'today' && new Date().getHours() === hour.hour;
           return (
             <div key={hour.hour} className="flex-1 flex flex-col items-center">
               <div className="w-full flex flex-col items-center">
