@@ -24,6 +24,7 @@ interface CartItem {
 interface CartItemDB {
   id: string;
   user_id: string;
+  student_id: string;
   product_id: string;
   quantity: number;
   products: {
@@ -34,18 +35,11 @@ interface CartItemDB {
   };
 }
 
-interface CartStateDB {
-  user_id: string;
-  student_id: string | null;
-  notes: string | null;
-  payment_method: PaymentMethod | null;
-}
-
 export function useCart() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [selectedStudentId, setSelectedStudentIdState] = useState<string | null>(null);
-  const [notes, setNotesState] = useState('');
-  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>('cash');
+  const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,49 +57,67 @@ export function useCart() {
   paymentMethodRef.current = paymentMethod;
   selectedStudentIdRef.current = selectedStudentId;
 
-  // Load cart items and state from database on mount or user change
+  // Load selected student from cart_state on mount
   useEffect(() => {
-    async function loadCart() {
+    async function loadCartState() {
       if (!user) {
-        setItems([]);
         setSelectedStudentIdState(null);
-        setNotesState('');
-        setPaymentMethodState('cash');
         setIsLoadingCart(false);
         return;
       }
 
-      setIsLoadingCart(true);
       try {
-        // Load cart items and state in parallel
-        const [itemsResult, stateResult] = await Promise.all([
-          supabase
-            .from('cart_items')
-            .select(`
-              id,
-              user_id,
-              product_id,
-              quantity,
-              products (
-                id,
-                name,
-                price,
-                image_url
-              )
-            `)
-            .eq('user_id', user.id),
-          supabase
-            .from('cart_state')
-            .select('user_id, student_id, notes, payment_method')
-            .eq('user_id', user.id)
-            .maybeSingle()
-        ]);
+        const { data } = await supabase
+          .from('cart_state')
+          .select('student_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-        if (itemsResult.error) {
-          console.error('Failed to load cart items:', itemsResult.error);
+        if (data?.student_id) {
+          setSelectedStudentIdState(data.student_id);
+        }
+      } catch (err) {
+        console.error('Failed to load cart state:', err);
+      } finally {
+        setIsLoadingCart(false);
+      }
+    }
+
+    loadCartState();
+  }, [user]);
+
+  // Load cart items when selectedStudentId changes
+  useEffect(() => {
+    async function loadCartItems() {
+      if (!user || !selectedStudentId) {
+        setItems([]);
+        return;
+      }
+
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('cart_items')
+          .select(`
+            id,
+            user_id,
+            student_id,
+            product_id,
+            quantity,
+            products (
+              id,
+              name,
+              price,
+              image_url
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('student_id', selectedStudentId);
+
+        if (fetchError) {
+          console.error('Failed to load cart items:', fetchError);
           setItems([]);
-        } else if (itemsResult.data) {
-          const cartItems: CartItem[] = (itemsResult.data as unknown as CartItemDB[])
+        } else if (data) {
+          const cartItems: CartItem[] = (data as unknown as CartItemDB[])
             .filter(item => item.products)
             .map(item => ({
               id: item.id,
@@ -117,63 +129,38 @@ export function useCart() {
             }));
           setItems(cartItems);
         }
-
-        // Load cart state
-        if (!stateResult.error && stateResult.data) {
-          const state = stateResult.data as CartStateDB;
-          if (state.student_id) setSelectedStudentIdState(state.student_id);
-          if (state.notes) setNotesState(state.notes);
-          if (state.payment_method) setPaymentMethodState(state.payment_method);
-        }
       } catch (err) {
-        console.error('Failed to load cart:', err);
+        console.error('Failed to load cart items:', err);
         setItems([]);
-      } finally {
-        setIsLoadingCart(false);
       }
     }
 
-    loadCart();
-  }, [user]);
+    loadCartItems();
+  }, [user, selectedStudentId]);
 
-  // Save cart state to database
-  const saveCartState = useCallback(async (updates: Partial<{ student_id: string | null; notes: string; payment_method: PaymentMethod }>) => {
+  // Save selected student to database
+  const setSelectedStudentId = useCallback(async (studentId: string | null) => {
+    setSelectedStudentIdState(studentId);
+    
     if (!user) return;
     
     try {
-      const { error } = await supabase
+      await supabase
         .from('cart_state')
         .upsert({
           user_id: user.id,
-          ...updates,
+          student_id: studentId,
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
-      
-      if (error) console.error('Failed to save cart state:', error);
     } catch (err) {
       console.error('Failed to save cart state:', err);
     }
   }, [user]);
 
-  // Wrapped setters that also persist to database
-  const setSelectedStudentId = useCallback((studentId: string | null) => {
-    setSelectedStudentIdState(studentId);
-    saveCartState({ student_id: studentId });
-  }, [saveCartState]);
-
-  const setNotes = useCallback((newNotes: string) => {
-    setNotesState(newNotes);
-    // Debounce notes saving - don't save on every keystroke
-  }, []);
-
-  const setPaymentMethod = useCallback((method: PaymentMethod) => {
-    setPaymentMethodState(method);
-    saveCartState({ payment_method: method });
-  }, [saveCartState]);
-
   const addItem = useCallback(async (item: Omit<CartItem, 'id'>) => {
-    if (!user) return;
+    if (!user || !selectedStudentIdRef.current) return;
 
+    const studentId = selectedStudentIdRef.current;
     setError(null);
     
     // Optimistic update
@@ -197,6 +184,7 @@ export function useCart() {
         .from('cart_items')
         .select('id, quantity')
         .eq('user_id', user.id)
+        .eq('student_id', studentId)
         .eq('product_id', item.product_id)
         .single();
 
@@ -210,6 +198,7 @@ export function useCart() {
           .from('cart_items')
           .insert({
             user_id: user.id,
+            student_id: studentId,
             product_id: item.product_id,
             quantity: item.quantity
           });
@@ -220,8 +209,9 @@ export function useCart() {
   }, [user]);
 
   const updateQuantity = useCallback(async (productId: string, quantity: number) => {
-    if (!user) return;
+    if (!user || !selectedStudentIdRef.current) return;
 
+    const studentId = selectedStudentIdRef.current;
     setError(null);
 
     if (quantity <= 0) {
@@ -232,6 +222,7 @@ export function useCart() {
           .from('cart_items')
           .delete()
           .eq('user_id', user.id)
+          .eq('student_id', studentId)
           .eq('product_id', productId);
       } catch (err) {
         console.error('Failed to delete cart item:', err);
@@ -248,6 +239,7 @@ export function useCart() {
           .from('cart_items')
           .update({ quantity })
           .eq('user_id', user.id)
+          .eq('student_id', studentId)
           .eq('product_id', productId);
       } catch (err) {
         console.error('Failed to update cart item:', err);
@@ -255,19 +247,20 @@ export function useCart() {
     }
   }, [user]);
 
+  // Clear cart for current student only
   const clearCart = useCallback(async () => {
     setItems([]);
-    setNotesState('');
-    setPaymentMethodState('cash');
-    // Don't clear student selection - keep it for convenience
+    setNotes('');
+    setPaymentMethod('cash');
     setError(null);
 
-    if (user) {
+    if (user && selectedStudentIdRef.current) {
       try {
-        await Promise.all([
-          supabase.from('cart_items').delete().eq('user_id', user.id),
-          supabase.from('cart_state').update({ notes: '', payment_method: 'cash' }).eq('user_id', user.id)
-        ]);
+        await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('student_id', selectedStudentIdRef.current);
       } catch (err) {
         console.error('Failed to clear cart:', err);
       }
