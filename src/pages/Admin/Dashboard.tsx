@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format, startOfWeek, startOfMonth, subDays, differenceInMinutes, getHours } from 'date-fns';
+import { format, startOfWeek, startOfMonth, subDays, differenceInMinutes } from 'date-fns';
 import { 
   ShoppingBag, 
   Users, 
@@ -235,12 +235,13 @@ export default function AdminDashboard() {
       const weekStartStr = getWeekStartDateString();
       const monthStartStr = getMonthStartDateString();
 
-      // Batch queries for better performance
+      // Fetch more orders to cover both created_at and completed_at ranges
+      // We need orders from the month for historical data
       const [ordersResult, parentsResult, studentsResult, productsResult] = await Promise.all([
         supabase
           .from('orders')
           .select('id, status, total_amount, created_at, updated_at, completed_at, parent_id, scheduled_for')
-          .gte('scheduled_for', monthStartStr),
+          .gte('created_at', `${monthStartStr}T00:00:00`),
         // Only count parents (not staff/admin) - filter by role
         supabase
           .from('user_profiles')
@@ -262,15 +263,12 @@ export default function AdminDashboard() {
       }
       if (parentsResult.error) {
         console.error('Parents query error:', parentsResult.error);
-        // Don't throw, use 0 as fallback
       }
       if (studentsResult.error) {
         console.error('Students query error:', studentsResult.error);
-        // Don't throw, use 0 as fallback
       }
       if (productsResult.error) {
         console.error('Products query error:', productsResult.error);
-        // Don't throw, use empty array as fallback
       }
       
       const allOrders = ordersResult.data || [];
@@ -289,60 +287,130 @@ export default function AdminDashboard() {
         p.stock_quantity === 0 || p.available === false
       ).length;
 
-      // Filter orders by scheduled_for date using helper function
-      // This safely handles null scheduled_for values
-      const todayOrders = allOrders.filter(o => getOrderDate(o) === todayStr);
-      const yesterdayOrders = allOrders.filter(o => getOrderDate(o) === yesterdayStr);
-      const weekOrders = allOrders.filter(o => {
-        const orderDate = getOrderDate(o);
-        return orderDate >= weekStartStr && orderDate <= todayStr;
+      // ===========================================
+      // DATE SEMANTICS (CRITICAL):
+      // - Orders PLACED today → created_at::date = today
+      // - Revenue EARNED today → completed_at::date = today (completed orders only)
+      // - Today's WORKLOAD → scheduled_for = today (pending/preparing/ready)
+      // - Future orders → scheduled_for > today
+      // ===========================================
+
+      // Helper to get date string from timestamp (converts to local date)
+      const getDateFromTimestamp = (timestamp: string): string => {
+        return format(new Date(timestamp), 'yyyy-MM-dd');
+      };
+
+      // Orders PLACED today (by created_at)
+      const ordersPlacedToday = allOrders.filter(o => 
+        getDateFromTimestamp(o.created_at) === todayStr
+      );
+      const ordersPlacedYesterday = allOrders.filter(o => 
+        getDateFromTimestamp(o.created_at) === yesterdayStr
+      );
+      const ordersPlacedThisWeek = allOrders.filter(o => {
+        const createdDate = getDateFromTimestamp(o.created_at);
+        return createdDate >= weekStartStr && createdDate <= todayStr;
       });
-      const monthOrders = allOrders.filter(o => getOrderDate(o) <= todayStr);
+      const ordersPlacedThisMonth = allOrders.filter(o => {
+        const createdDate = getDateFromTimestamp(o.created_at);
+        return createdDate >= monthStartStr && createdDate <= todayStr;
+      });
+
+      // Revenue EARNED today (completed_at date for completed orders)
+      const ordersCompletedToday = allOrders.filter(o => 
+        o.status === 'completed' && 
+        o.completed_at && 
+        getDateFromTimestamp(o.completed_at) === todayStr
+      );
+      const ordersCompletedYesterday = allOrders.filter(o => 
+        o.status === 'completed' && 
+        o.completed_at && 
+        getDateFromTimestamp(o.completed_at) === yesterdayStr
+      );
+      const ordersCompletedThisWeek = allOrders.filter(o => {
+        if (o.status !== 'completed' || !o.completed_at) return false;
+        const completedDate = getDateFromTimestamp(o.completed_at);
+        return completedDate >= weekStartStr && completedDate <= todayStr;
+      });
+      const ordersCompletedThisMonth = allOrders.filter(o => {
+        if (o.status !== 'completed' || !o.completed_at) return false;
+        const completedDate = getDateFromTimestamp(o.completed_at);
+        return completedDate >= monthStartStr && completedDate <= todayStr;
+      });
+
+      // Today's WORKLOAD (scheduled_for = today) - for operational status
+      const todaysWorkload = allOrders.filter(o => getOrderDate(o) === todayStr);
       
-      // Count future scheduled orders (orders for dates after today)
+      // Future scheduled orders
       const futureOrders = allOrders.filter(o => {
         const orderDate = getOrderDate(o);
         return orderDate > todayStr && o.status !== 'cancelled';
       }).length;
 
-      // Use completed_at instead of updated_at for accurate fulfillment time
-      const completedToday = todayOrders.filter(o => o.status === 'completed');
+      // Calculate fulfillment time from orders completed today
       let avgFulfillmentTime = 0;
-      if (completedToday.length > 0) {
-        const times = completedToday
+      if (ordersCompletedToday.length > 0) {
+        const times = ordersCompletedToday
           .filter((o): o is typeof o & { completed_at: string } => Boolean(o.completed_at))
           .map(o => differenceInMinutes(new Date(o.completed_at), new Date(o.created_at)));
         avgFulfillmentTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
       }
 
-      // Calculate revenue excluding cancelled orders
-      const nonCancelledToday = todayOrders.filter(o => o.status !== 'cancelled');
-      const totalRevenueToday = nonCancelledToday.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
-      const avgOrderValue = nonCancelledToday.length > 0 ? totalRevenueToday / nonCancelledToday.length : 0;
-      const activeParentsToday = new Set(todayOrders.map(o => o.parent_id)).size;
+      // Revenue calculations (based on completed orders)
+      const revenueToday = ordersCompletedToday.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+      const revenueYesterday = ordersCompletedYesterday.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+      const revenueWeek = ordersCompletedThisWeek.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+      const revenueMonth = ordersCompletedThisMonth.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+
+      // Average order value (from orders placed today, excluding cancelled)
+      const nonCancelledPlacedToday = ordersPlacedToday.filter(o => o.status !== 'cancelled');
+      const avgOrderValue = nonCancelledPlacedToday.length > 0 
+        ? nonCancelledPlacedToday.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) / nonCancelledPlacedToday.length 
+        : 0;
+
+      // Active parents (unique parents who placed orders today)
+      const activeParentsToday = new Set(ordersPlacedToday.map(o => o.parent_id)).size;
+
+      // Cancelled today (orders cancelled today, by updated_at since that's when status changed)
+      const cancelledToday = allOrders.filter(o => 
+        o.status === 'cancelled' && 
+        o.updated_at &&
+        getDateFromTimestamp(o.updated_at) === todayStr
+      ).length;
 
       return {
-        totalOrdersToday: todayOrders.length,
-        totalOrdersWeek: weekOrders.length,
-        totalOrdersMonth: monthOrders.length,
-        revenueToday: totalRevenueToday,
-        revenueWeek: weekOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
-        revenueMonth: monthOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
-        pendingOrders: todayOrders.filter(o => o.status === 'pending').length,
-        preparingOrders: todayOrders.filter(o => o.status === 'preparing').length,
-        readyOrders: todayOrders.filter(o => o.status === 'ready').length,
-        awaitingPaymentOrders: todayOrders.filter(o => o.status === 'awaiting_payment').length,
-        completedOrdersToday: completedToday.length,
-        cancelledOrdersToday: todayOrders.filter(o => o.status === 'cancelled').length,
+        // Orders placed (by created_at)
+        totalOrdersToday: ordersPlacedToday.length,
+        totalOrdersWeek: ordersPlacedThisWeek.length,
+        totalOrdersMonth: ordersPlacedThisMonth.length,
+        ordersYesterday: ordersPlacedYesterday.length,
+        
+        // Revenue earned (by completed_at)
+        revenueToday,
+        revenueYesterday,
+        revenueWeek,
+        revenueMonth,
+        
+        // Today's operational status (by scheduled_for = today)
+        pendingOrders: todaysWorkload.filter(o => o.status === 'pending').length,
+        preparingOrders: todaysWorkload.filter(o => o.status === 'preparing').length,
+        readyOrders: todaysWorkload.filter(o => o.status === 'ready').length,
+        awaitingPaymentOrders: todaysWorkload.filter(o => o.status === 'awaiting_payment').length,
+        
+        // Completed/cancelled today (by actual completion/cancellation time)
+        completedOrdersToday: ordersCompletedToday.length,
+        cancelledOrdersToday: cancelledToday,
+        
+        // Counts
         totalParents,
         totalStudents,
         totalProducts,
         lowStockProducts,
         outOfStockProducts,
+        
+        // Metrics
         avgOrderValue,
         avgFulfillmentTime,
-        revenueYesterday: yesterdayOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
-        ordersYesterday: yesterdayOrders.length,
         activeParentsToday,
         futureOrders
       };
@@ -359,11 +427,13 @@ export default function AdminDashboard() {
         ? todayStr
         : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
       
+      // Fetch orders by created_at date range (when orders were placed)
+      // This shows "what happened during this period"
       const { data: orders, error } = await supabase
         .from('orders')
-        .select('status, scheduled_for, created_at')
-        .gte('scheduled_for', startDateStr)
-        .lte('scheduled_for', todayStr);
+        .select('status, created_at, completed_at, updated_at')
+        .gte('created_at', `${startDateStr}T00:00:00`)
+        .lte('created_at', `${todayStr}T23:59:59`);
 
       if (error) {
         console.error('Status distribution query error:', error);
@@ -400,11 +470,12 @@ export default function AdminDashboard() {
         ? todayStr
         : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
       
+      // Fetch by created_at date range (when orders were placed)
       const { data: orders, error } = await supabase
         .from('orders')
-        .select('total_amount, created_at, status, scheduled_for')
-        .gte('scheduled_for', startDateStr)
-        .lte('scheduled_for', todayStr)
+        .select('total_amount, created_at, status')
+        .gte('created_at', `${startDateStr}T00:00:00`)
+        .lte('created_at', `${todayStr}T23:59:59`)
         .neq('status', 'cancelled');
 
       if (error) {
@@ -412,19 +483,20 @@ export default function AdminDashboard() {
         return [];
       }
 
-      // Initialize hourly buckets for operating hours (6 AM to 6 PM)
+      // Initialize hourly buckets for operating hours (6 AM to 6 PM local time)
       const hourlyMap: Record<number, HourlyData> = {};
       for (let i = 6; i <= 18; i++) {
         hourlyMap[i] = { hour: i, orders: 0, revenue: 0 };
       }
 
-      // Group orders by the hour they were created (not scheduled_for)
-      // This shows when orders are actually placed
+      // Group orders by the LOCAL hour they were created
+      // getHours() already returns local time hour from Date object
       (orders || []).forEach(order => {
-        const hour = getHours(new Date(order.created_at));
-        if (hourlyMap[hour]) {
-          hourlyMap[hour].orders++;
-          hourlyMap[hour].revenue += order.total_amount ?? 0;
+        const localDate = new Date(order.created_at);
+        const localHour = localDate.getHours(); // This is already local time
+        if (hourlyMap[localHour]) {
+          hourlyMap[localHour].orders++;
+          hourlyMap[localHour].revenue += order.total_amount ?? 0;
         }
       });
 
@@ -442,17 +514,19 @@ export default function AdminDashboard() {
         ? todayStr
         : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
 
+      // Use created_at to find orders placed during this period
+      // This shows "what products were ordered during this time range"
       const { data: orderItems, error } = await supabase
         .from('order_items')
         .select(`
           quantity, 
           price_at_order, 
           product_id, 
-          order:orders!inner(scheduled_for, status), 
+          order:orders!inner(created_at, status), 
           product:products(name, category)
         `)
-        .gte('order.scheduled_for', startDateStr)
-        .lte('order.scheduled_for', todayStr)
+        .gte('order.created_at', `${startDateStr}T00:00:00`)
+        .lte('order.created_at', `${todayStr}T23:59:59`)
         .neq('order.status', 'cancelled');
 
       if (error) {
@@ -465,7 +539,7 @@ export default function AdminDashboard() {
         quantity: number;
         price_at_order: number;
         product_id: string;
-        order: { scheduled_for: string; status: string } | Array<{ scheduled_for: string; status: string }>;
+        order: { created_at: string; status: string } | Array<{ created_at: string; status: string }>;
         product: { name: string; category: string } | Array<{ name: string; category: string }> | null;
       }
 
