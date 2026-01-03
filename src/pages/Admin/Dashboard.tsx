@@ -128,35 +128,47 @@ interface Alert {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get today's date in YYYY-MM-DD format using local timezone.
- * This matches PostgreSQL DATE column behavior.
+ * Get today's date in YYYY-MM-DD format using Philippine timezone (UTC+8).
+ * This ensures consistency with school canteen operations in Philippines.
  */
 function getTodayDateString(): string {
+  // Get current UTC time and convert to Philippine timezone (UTC+8)
   const now = new Date();
-  return format(now, 'yyyy-MM-dd');
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const phTime = new Date(utcTime + (8 * 3600000)); // UTC+8
+  return format(phTime, 'yyyy-MM-dd');
 }
 
 /**
- * Get a date string for N days ago.
+ * Get a date string for N days ago in Philippine timezone.
  */
 function getDateStringDaysAgo(days: number): string {
-  const date = subDays(new Date(), days);
+  const now = new Date();
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const phTime = new Date(utcTime + (8 * 3600000)); // UTC+8
+  const date = subDays(phTime, days);
   return format(date, 'yyyy-MM-dd');
 }
 
 /**
- * Get the start of the current week (Monday).
+ * Get the start of the current week (Monday) in Philippine timezone.
  */
 function getWeekStartDateString(): string {
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const now = new Date();
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const phTime = new Date(utcTime + (8 * 3600000)); // UTC+8
+  const weekStart = startOfWeek(phTime, { weekStartsOn: 1 });
   return format(weekStart, 'yyyy-MM-dd');
 }
 
 /**
- * Get the start of the current month.
+ * Get the start of the current month in Philippine timezone.
  */
 function getMonthStartDateString(): string {
-  const monthStart = startOfMonth(new Date());
+  const now = new Date();
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const phTime = new Date(utcTime + (8 * 3600000)); // UTC+8
+  const monthStart = startOfMonth(phTime);
   return format(monthStart, 'yyyy-MM-dd');
 }
 
@@ -295,9 +307,12 @@ export default function AdminDashboard() {
       // - Future orders → scheduled_for > today
       // ===========================================
 
-      // Helper to get date string from timestamp (converts to local date)
+      // Helper to get date string from UTC timestamp in Philippine timezone
       const getDateFromTimestamp = (timestamp: string): string => {
-        return format(new Date(timestamp), 'yyyy-MM-dd');
+        const date = new Date(timestamp);
+        const utcTime = date.getTime();
+        const phTime = new Date(utcTime + (8 * 3600000)); // Convert UTC to UTC+8
+        return format(phTime, 'yyyy-MM-dd');
       };
 
       // Orders PLACED today (by created_at)
