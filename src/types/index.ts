@@ -70,6 +70,8 @@ export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'can
 
 export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymongo';
 
+export type PaymentStatus = 'awaiting_payment' | 'paid' | 'timeout' | 'refunded';
+
 export interface Order {
   id: string;
   parent_id: string;
@@ -78,6 +80,8 @@ export interface Order {
   status: OrderStatus;
   total_amount: number;
   payment_method: PaymentMethod;
+  payment_status?: PaymentStatus;
+  payment_due_at?: string;
   notes?: string;
   scheduled_for?: string;
   created_at: string;

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { Package, Clock, ChefHat, CheckCircle, XCircle } from 'lucide-react';
+import { format, isToday, isTomorrow, parseISO } from 'date-fns';
+import { Package, Clock, ChefHat, CheckCircle, XCircle, AlertCircle, RefreshCw, CreditCard, Calendar } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { getOrderHistory } from '../../services/orders';
 import { PageHeader } from '../../components/PageHeader';
@@ -11,17 +11,24 @@ import type { OrderWithDetails } from '../../types';
 export default function OrderHistory() {
   const { user } = useAuth();
   
-  const { data: orders, isLoading } = useQuery<OrderWithDetails[]>({
+  const { data: orders, isLoading, isError, error, refetch } = useQuery<OrderWithDetails[]>({
     queryKey: ['order-history', user?.id],
     queryFn: () => {
       if (!user) throw new Error('User not authenticated');
       return getOrderHistory(user.id);
     },
-    enabled: !!user
+    enabled: !!user,
+    retry: 2
   });
 
   const getStatusDetails = (status: string) => {
     switch (status) {
+      case 'awaiting_payment':
+        return { 
+          icon: CreditCard, 
+          label: 'Awaiting Payment', 
+          color: 'text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30' 
+        };
       case 'pending':
         return { 
           icon: Clock, 
@@ -61,10 +68,75 @@ export default function OrderHistory() {
     }
   };
 
+  /**
+   * Get payment display text based on payment_status and payment_method
+   * Distinguishes between paid, unpaid, and refunded states
+   */
+  const getPaymentDisplay = (order: OrderWithDetails) => {
+    const method = order.payment_method || 'cash';
+    const paymentStatus = order.payment_status || 'paid'; // Default for backward compatibility
+    
+    switch (paymentStatus) {
+      case 'paid':
+        return { text: `Paid via ${method}`, color: 'text-green-600 dark:text-green-400' };
+      case 'awaiting_payment':
+        return { text: `Unpaid (${method})`, color: 'text-amber-600 dark:text-amber-400' };
+      case 'refunded':
+        return { text: `Refunded (${method})`, color: 'text-blue-600 dark:text-blue-400' };
+      case 'timeout':
+        return { text: 'Payment expired', color: 'text-red-600 dark:text-red-400' };
+      default:
+        return { text: `${method}`, color: 'text-gray-500 dark:text-gray-400' };
+    }
+  };
+
+  /**
+   * Format scheduled_for date with friendly labels
+   */
+  const formatScheduledDate = (scheduledFor: string | undefined) => {
+    if (!scheduledFor) return null;
+    
+    const date = parseISO(scheduledFor);
+    if (isToday(date)) return 'Today';
+    if (isTomorrow(date)) return 'Tomorrow';
+    return format(date, 'MMM d');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
+        <div className="container mx-auto px-4 py-6">
+          <PageHeader
+            title="Order History"
+            subtitle="View your past orders"
+          />
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="p-4 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+              <AlertCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              Failed to load orders
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-sm">
+              {error instanceof Error ? error.message : 'Something went wrong. Please try again.'}
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <RefreshCw size={18} />
+              Try Again
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -105,6 +177,20 @@ export default function OrderHistory() {
                         <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                           For {child?.first_name || 'Unknown'} {child?.last_name || 'Student'}
                         </h3>
+                        {/* Show scheduled pickup for non-completed orders */}
+                        {order.scheduled_for && !['completed', 'cancelled'].includes(order.status) && (
+                          <p className="text-xs text-primary-600 dark:text-primary-400 flex items-center gap-1 mt-1">
+                            <Calendar size={12} />
+                            Pickup: {formatScheduledDate(order.scheduled_for)}
+                          </p>
+                        )}
+                        {/* Show completion time for completed orders */}
+                        {order.status === 'completed' && order.completed_at && (
+                          <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 mt-1">
+                            <CheckCircle size={12} />
+                            Completed {format(new Date(order.completed_at), 'MMM d, h:mm a')}
+                          </p>
+                        )}
                       </div>
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${status.color}`}>
                         <StatusIcon size={14} />
@@ -155,8 +241,14 @@ export default function OrderHistory() {
                         ₱{order.total_amount.toFixed(2)}
                       </p>
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                      Paid via {order.payment_method || 'cash'}
+                    <div className={`text-xs capitalize ${getPaymentDisplay(order).color}`}>
+                      {getPaymentDisplay(order).text}
+                      {/* Show refund note for cancelled + paid orders */}
+                      {order.status === 'cancelled' && order.payment_status === 'paid' && (
+                        <span className="block text-amber-600 dark:text-amber-400 mt-0.5">
+                          Refund pending
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
