@@ -57,6 +57,7 @@ interface Order {
   scheduled_for: string;
   notes?: string;
   child: {
+    id: string;
     first_name: string;
     last_name: string;
   };
@@ -242,13 +243,16 @@ export default function ParentDashboard() {
 
   // Reorder functionality
   const handleReorder = (order: Order) => {
+    const studentName = `${order.child.first_name} ${order.child.last_name}`;
     order.items.forEach(item => {
       addItem({
         product_id: item.product_id,
         name: item.product.name,
         price: item.price_at_order,
         image_url: item.product.image_url,
-        quantity: item.quantity
+        quantity: item.quantity,
+        student_id: order.child.id,
+        student_name: studentName
       });
     });
     showToast('Items added to cart!', 'success');
