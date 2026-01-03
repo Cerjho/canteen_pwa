@@ -92,19 +92,19 @@ export default function AdminOrders() {
       // Date filter - use scheduled_for instead of created_at
       if (dateFilter !== 'all') {
         const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         
         if (dateFilter === 'today') {
           query = query.eq('scheduled_for', todayStr);
         } else if (dateFilter === 'week') {
           const weekAgo = new Date(today);
           weekAgo.setDate(today.getDate() - 7);
-          const weekAgoStr = weekAgo.toISOString().split('T')[0];
+          const weekAgoStr = weekAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
           query = query.gte('scheduled_for', weekAgoStr).lte('scheduled_for', todayStr);
         } else if (dateFilter === 'month') {
           const monthAgo = new Date(today);
           monthAgo.setMonth(today.getMonth() - 1);
-          const monthAgoStr = monthAgo.toISOString().split('T')[0];
+          const monthAgoStr = monthAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
           query = query.gte('scheduled_for', monthAgoStr).lte('scheduled_for', todayStr);
         } else if (dateFilter === 'future') {
           // Show orders scheduled for future dates

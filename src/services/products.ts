@@ -27,12 +27,9 @@ export interface CanteenStatus {
   makeupDayName?: string;
 }
 
-// Helper to format date as YYYY-MM-DD in LOCAL timezone (not UTC)
+// Helper to format date as YYYY-MM-DD in Philippine timezone (UTC+8)
 function formatDateLocal(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
 // Check if a date matches a holiday (including recurring holidays)
