@@ -60,6 +60,7 @@ interface DashboardStats {
   revenueYesterday: number;
   ordersYesterday: number;
   activeParentsToday: number;
+  futureOrders: number;
 }
 
 interface TopProduct {
@@ -204,10 +205,13 @@ export default function AdminDashboard() {
       const outOfStockProducts = products.filter(p => p.stock_quantity === 0 || !p.available).length;
 
       // Filter orders by scheduled_for date (when they should be fulfilled)
+      // Exclude future orders from stats (only count orders scheduled for today or past)
       const todayOrders = allOrders.filter(o => o.scheduled_for === todayStr);
       const yesterdayOrders = allOrders.filter(o => o.scheduled_for === yesterdayStr);
-      const weekOrders = allOrders.filter(o => o.scheduled_for >= weekStartStr);
-      const monthOrders = allOrders;
+      const weekOrders = allOrders.filter(o => o.scheduled_for >= weekStartStr && o.scheduled_for <= todayStr);
+      const monthOrders = allOrders.filter(o => o.scheduled_for <= todayStr);
+      // Count future scheduled orders (orders for dates after today)
+      const futureOrders = allOrders.filter(o => o.scheduled_for > todayStr && o.status !== 'cancelled').length;
 
       const completedToday = todayOrders.filter(o => o.status === 'completed');
       let avgFulfillmentTime = 0;
@@ -244,7 +248,8 @@ export default function AdminDashboard() {
         avgFulfillmentTime,
         revenueYesterday: yesterdayOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total_amount, 0),
         ordersYesterday: yesterdayOrders.length,
-        activeParentsToday
+        activeParentsToday,
+        futureOrders
       };
     },
     refetchInterval: 10000
@@ -301,14 +306,17 @@ export default function AdminDashboard() {
   const { data: topProducts } = useQuery<TopProduct[]>({
     queryKey: ['admin-top-products', dateRange],
     queryFn: async () => {
-      const startDate = dateRange === 'today' 
-        ? startOfDay(new Date())
-        : dateRange === 'week' ? startOfWeek(new Date()) : startOfMonth(new Date());
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const startDateStr = dateRange === 'today' 
+        ? todayStr
+        : dateRange === 'week' ? format(startOfWeek(new Date()), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
 
+      // Use scheduled_for instead of created_at, and exclude future orders
       const { data: orderItems } = await supabase
         .from('order_items')
-        .select(`quantity, price_at_order, product_id, order:orders!inner(created_at, status), product:products(name, category)`)
-        .gte('order.created_at', startDate.toISOString())
+        .select(`quantity, price_at_order, product_id, order:orders!inner(scheduled_for, status), product:products(name, category)`)
+        .gte('order.scheduled_for', startDateStr)
+        .lte('order.scheduled_for', todayStr)
         .neq('order.status', 'cancelled');
 
       const productMap: Record<string, TopProduct> = {};
@@ -794,11 +802,12 @@ export default function AdminDashboard() {
         </div>
 
         {/* Secondary Stats Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
           <StatCard title="Avg Order Value" value={`P${(stats?.avgOrderValue || 0).toFixed(0)}`} icon={Target} color="purple" />
           <StatCard title="Avg Fulfillment" value={`${Math.round(stats?.avgFulfillmentTime || 0)} min`} icon={Timer} color="indigo" subtitle={fulfillmentRate > 80 ? 'Good' : 'Needs improvement'} />
           <StatCard title="Low Stock Items" value={stats?.lowStockProducts || 0} icon={Package} color={(stats?.lowStockProducts || 0) > 0 ? 'red' : 'gray'} onClick={() => navigate('/admin/products?filter=low-stock')} clickable />
           <StatCard title="Cancelled Today" value={stats?.cancelledOrdersToday || 0} icon={XCircle} color={(stats?.cancelledOrdersToday || 0) > 0 ? 'red' : 'gray'} />
+          <StatCard title="Future Orders" value={stats?.futureOrders || 0} icon={Calendar} color={(stats?.futureOrders || 0) > 0 ? 'blue' : 'gray'} subtitle="Scheduled ahead" onClick={() => navigate('/admin/orders?filter=future')} clickable />
         </div>
 
         {/* Date Range Selector */}
