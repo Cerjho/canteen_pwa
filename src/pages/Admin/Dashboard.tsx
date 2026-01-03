@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format, startOfDay, startOfWeek, startOfMonth, subDays, differenceInMinutes, getHours } from 'date-fns';
+import { format, startOfWeek, startOfMonth, subDays, differenceInMinutes, getHours } from 'date-fns';
 import { 
   ShoppingBag, 
   Users, 
@@ -29,13 +29,16 @@ import {
   FileText,
   Award,
   Star,
-  WifiOff
+  WifiOff,
+  CreditCard,
+  ShieldAlert
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { useNavigate } from 'react-router-dom';
 import { playNotificationSound } from '../../utils/notificationSound';
+import { useAuth } from '../../hooks/useAuth';
 
 // ==================== INTERFACES ====================
 interface DashboardStats {
@@ -48,6 +51,7 @@ interface DashboardStats {
   pendingOrders: number;
   preparingOrders: number;
   readyOrders: number;
+  awaitingPaymentOrders: number;
   completedOrdersToday: number;
   cancelledOrdersToday: number;
   totalParents: number;
@@ -77,11 +81,14 @@ interface RecentOrder {
   total_amount: number;
   created_at: string;
   updated_at?: string;
-  child: { first_name: string; last_name: string } | null;
+  completed_at?: string;
+  scheduled_for?: string;
+  student: { first_name: string; last_name: string } | null;
   parent: { first_name: string; last_name: string } | null;
 }
 
 interface OrderStatusDistribution {
+  awaiting_payment: number;
   pending: number;
   preparing: number;
   ready: number;
@@ -118,11 +125,59 @@ interface Alert {
   actionRoute?: string;
 }
 
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Get today's date in YYYY-MM-DD format using local timezone.
+ * This matches PostgreSQL DATE column behavior.
+ */
+function getTodayDateString(): string {
+  const now = new Date();
+  return format(now, 'yyyy-MM-dd');
+}
+
+/**
+ * Get a date string for N days ago.
+ */
+function getDateStringDaysAgo(days: number): string {
+  const date = subDays(new Date(), days);
+  return format(date, 'yyyy-MM-dd');
+}
+
+/**
+ * Get the start of the current week (Monday).
+ */
+function getWeekStartDateString(): string {
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  return format(weekStart, 'yyyy-MM-dd');
+}
+
+/**
+ * Get the start of the current month.
+ */
+function getMonthStartDateString(): string {
+  const monthStart = startOfMonth(new Date());
+  return format(monthStart, 'yyyy-MM-dd');
+}
+
+/**
+ * Safely get scheduled_for date, falling back to created_at date.
+ * Handles legacy orders that may not have scheduled_for.
+ */
+function getOrderDate(order: { scheduled_for?: string | null; created_at: string }): string {
+  if (order.scheduled_for) {
+    return order.scheduled_for;
+  }
+  // Fallback to created_at date portion for legacy orders
+  return format(new Date(order.created_at), 'yyyy-MM-dd');
+}
+
 // ==================== MAIN COMPONENT ====================
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { user } = useAuth();
   
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('today');
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -135,6 +190,10 @@ export default function AdminDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // Get user role from JWT metadata
+  const userRole = user?.user_metadata?.role as string | undefined;
+  const isStaffOrAdmin = userRole === 'staff' || userRole === 'admin';
+
   // Save sound preference
   useEffect(() => {
     localStorage.setItem('admin-sound-enabled', String(soundEnabled));
@@ -144,7 +203,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      // Use ref to avoid dependency issues
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -155,75 +213,111 @@ export default function AdminDashboard() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []); // Empty deps - handlers are stable
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Memoized toast function to prevent re-subscriptions
+  const stableShowToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+    showToast(message, type);
+  }, [showToast]);
+
   // ==================== DATA FETCHING ====================
   const { data: stats, isLoading: statsLoading, refetch: refetchStats, error: statsError } = useQuery<DashboardStats>({
     queryKey: ['admin-dashboard-stats', dateRange],
     queryFn: async () => {
-      const today = startOfDay(new Date());
-      const todayStr = format(today, 'yyyy-MM-dd');
-      const yesterday = startOfDay(subDays(new Date(), 1));
-      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-      const monthStart = startOfMonth(new Date());
-      const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+      // Use consistent date strings for comparison with PostgreSQL DATE column
+      const todayStr = getTodayDateString();
+      const yesterdayStr = getDateStringDaysAgo(1);
+      const weekStartStr = getWeekStartDateString();
+      const monthStartStr = getMonthStartDateString();
 
       // Batch queries for better performance
-      // Use scheduled_for for filtering orders by date (not created_at)
       const [ordersResult, parentsResult, studentsResult, productsResult] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, status, total_amount, created_at, updated_at, parent_id, scheduled_for')
+          .select('id, status, total_amount, created_at, updated_at, completed_at, parent_id, scheduled_for')
           .gte('scheduled_for', monthStartStr),
+        // Only count parents (not staff/admin) - filter by role
         supabase
           .from('user_profiles')
-          .select('*', { count: 'exact', head: true }),
+          .select('*', { count: 'exact', head: true })
+          .eq('role', 'parent'),
         supabase
           .from('students')
-          .select('*', { count: 'exact', head: true }),
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true),
         supabase
           .from('products')
           .select('id, stock_quantity, available')
       ]);
 
-      if (ordersResult.error) throw ordersResult.error;
+      // Check all query errors
+      if (ordersResult.error) {
+        console.error('Orders query error:', ordersResult.error);
+        throw new Error(`Failed to fetch orders: ${ordersResult.error.message}`);
+      }
+      if (parentsResult.error) {
+        console.error('Parents query error:', parentsResult.error);
+        // Don't throw, use 0 as fallback
+      }
+      if (studentsResult.error) {
+        console.error('Students query error:', studentsResult.error);
+        // Don't throw, use 0 as fallback
+      }
+      if (productsResult.error) {
+        console.error('Products query error:', productsResult.error);
+        // Don't throw, use empty array as fallback
+      }
       
       const allOrders = ordersResult.data || [];
-      const totalParents = parentsResult.count || 0;
-      const totalStudents = studentsResult.count || 0;
+      const totalParents = parentsResult.count ?? 0;
+      const totalStudents = studentsResult.count ?? 0;
       const products = productsResult.data || [];
 
       const totalProducts = products.length;
-      const lowStockProducts = products.filter(p => p.stock_quantity !== null && p.stock_quantity <= 10 && p.stock_quantity > 0).length;
-      const outOfStockProducts = products.filter(p => p.stock_quantity === 0 || !p.available).length;
+      const lowStockProducts = products.filter(p => 
+        p.stock_quantity !== null && 
+        p.stock_quantity <= 10 && 
+        p.stock_quantity > 0 && 
+        p.available === true
+      ).length;
+      const outOfStockProducts = products.filter(p => 
+        p.stock_quantity === 0 || p.available === false
+      ).length;
 
-      // Filter orders by scheduled_for date (when they should be fulfilled)
-      // Exclude future orders from stats (only count orders scheduled for today or past)
-      const todayOrders = allOrders.filter(o => o.scheduled_for === todayStr);
-      const yesterdayOrders = allOrders.filter(o => o.scheduled_for === yesterdayStr);
-      const weekOrders = allOrders.filter(o => o.scheduled_for >= weekStartStr && o.scheduled_for <= todayStr);
-      const monthOrders = allOrders.filter(o => o.scheduled_for <= todayStr);
+      // Filter orders by scheduled_for date using helper function
+      // This safely handles null scheduled_for values
+      const todayOrders = allOrders.filter(o => getOrderDate(o) === todayStr);
+      const yesterdayOrders = allOrders.filter(o => getOrderDate(o) === yesterdayStr);
+      const weekOrders = allOrders.filter(o => {
+        const orderDate = getOrderDate(o);
+        return orderDate >= weekStartStr && orderDate <= todayStr;
+      });
+      const monthOrders = allOrders.filter(o => getOrderDate(o) <= todayStr);
+      
       // Count future scheduled orders (orders for dates after today)
-      const futureOrders = allOrders.filter(o => o.scheduled_for > todayStr && o.status !== 'cancelled').length;
+      const futureOrders = allOrders.filter(o => {
+        const orderDate = getOrderDate(o);
+        return orderDate > todayStr && o.status !== 'cancelled';
+      }).length;
 
+      // Use completed_at instead of updated_at for accurate fulfillment time
       const completedToday = todayOrders.filter(o => o.status === 'completed');
       let avgFulfillmentTime = 0;
       if (completedToday.length > 0) {
         const times = completedToday
-          .filter((o): o is typeof o & { updated_at: string } => Boolean(o.updated_at))
-          .map(o => differenceInMinutes(new Date(o.updated_at), new Date(o.created_at)));
+          .filter((o): o is typeof o & { completed_at: string } => Boolean(o.completed_at))
+          .map(o => differenceInMinutes(new Date(o.completed_at), new Date(o.created_at)));
         avgFulfillmentTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
       }
 
+      // Calculate revenue excluding cancelled orders
       const nonCancelledToday = todayOrders.filter(o => o.status !== 'cancelled');
-      const totalRevenueToday = nonCancelledToday.reduce((sum, o) => sum + o.total_amount, 0);
+      const totalRevenueToday = nonCancelledToday.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
       const avgOrderValue = nonCancelledToday.length > 0 ? totalRevenueToday / nonCancelledToday.length : 0;
       const activeParentsToday = new Set(todayOrders.map(o => o.parent_id)).size;
 
@@ -232,152 +326,228 @@ export default function AdminDashboard() {
         totalOrdersWeek: weekOrders.length,
         totalOrdersMonth: monthOrders.length,
         revenueToday: totalRevenueToday,
-        revenueWeek: weekOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total_amount, 0),
-        revenueMonth: monthOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total_amount, 0),
+        revenueWeek: weekOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
+        revenueMonth: monthOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
         pendingOrders: todayOrders.filter(o => o.status === 'pending').length,
         preparingOrders: todayOrders.filter(o => o.status === 'preparing').length,
         readyOrders: todayOrders.filter(o => o.status === 'ready').length,
+        awaitingPaymentOrders: todayOrders.filter(o => o.status === 'awaiting_payment').length,
         completedOrdersToday: completedToday.length,
         cancelledOrdersToday: todayOrders.filter(o => o.status === 'cancelled').length,
-        totalParents: totalParents || 0,
-        totalStudents: totalStudents || 0,
+        totalParents,
+        totalStudents,
         totalProducts,
         lowStockProducts,
         outOfStockProducts,
         avgOrderValue,
         avgFulfillmentTime,
-        revenueYesterday: yesterdayOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total_amount, 0),
+        revenueYesterday: yesterdayOrders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
         ordersYesterday: yesterdayOrders.length,
         activeParentsToday,
         futureOrders
       };
     },
-    refetchInterval: 10000
+    refetchInterval: 10000,
+    enabled: isStaffOrAdmin // Only fetch if user has permission
   });
 
   const { data: statusDistribution } = useQuery<OrderStatusDistribution>({
     queryKey: ['admin-status-distribution', dateRange],
     queryFn: async () => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = getTodayDateString();
       const startDateStr = dateRange === 'today' 
         ? todayStr
-        : dateRange === 'week' ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
       
-      const { data: orders } = await supabase
+      const { data: orders, error } = await supabase
         .from('orders')
-        .select('status')
+        .select('status, scheduled_for, created_at')
         .gte('scheduled_for', startDateStr)
         .lte('scheduled_for', todayStr);
 
-      const distribution: OrderStatusDistribution = { pending: 0, preparing: 0, ready: 0, completed: 0, cancelled: 0 };
-      orders?.forEach(order => {
-        if (order.status in distribution) {
-          distribution[order.status as keyof OrderStatusDistribution]++;
+      if (error) {
+        console.error('Status distribution query error:', error);
+        return { awaiting_payment: 0, pending: 0, preparing: 0, ready: 0, completed: 0, cancelled: 0 };
+      }
+
+      const distribution: OrderStatusDistribution = { 
+        awaiting_payment: 0, 
+        pending: 0, 
+        preparing: 0, 
+        ready: 0, 
+        completed: 0, 
+        cancelled: 0 
+      };
+      
+      (orders || []).forEach(order => {
+        const status = order.status as keyof OrderStatusDistribution;
+        if (status in distribution) {
+          distribution[status]++;
         }
       });
+      
       return distribution;
     },
-    refetchInterval: 10000
+    refetchInterval: 10000,
+    enabled: isStaffOrAdmin
   });
 
   const { data: hourlyData } = useQuery<HourlyData[]>({
     queryKey: ['admin-hourly-data', dateRange],
     queryFn: async () => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = getTodayDateString();
       const startDateStr = dateRange === 'today' 
         ? todayStr
-        : dateRange === 'week' ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
       
-      const { data: orders } = await supabase
+      const { data: orders, error } = await supabase
         .from('orders')
-        .select('total_amount, created_at, status')
+        .select('total_amount, created_at, status, scheduled_for')
         .gte('scheduled_for', startDateStr)
         .lte('scheduled_for', todayStr)
         .neq('status', 'cancelled');
 
+      if (error) {
+        console.error('Hourly data query error:', error);
+        return [];
+      }
+
+      // Initialize hourly buckets for operating hours (6 AM to 6 PM)
       const hourlyMap: Record<number, HourlyData> = {};
       for (let i = 6; i <= 18; i++) {
         hourlyMap[i] = { hour: i, orders: 0, revenue: 0 };
       }
 
-      orders?.forEach(order => {
+      // Group orders by the hour they were created (not scheduled_for)
+      // This shows when orders are actually placed
+      (orders || []).forEach(order => {
         const hour = getHours(new Date(order.created_at));
         if (hourlyMap[hour]) {
           hourlyMap[hour].orders++;
-          hourlyMap[hour].revenue += order.total_amount;
+          hourlyMap[hour].revenue += order.total_amount ?? 0;
         }
       });
 
       return Object.values(hourlyMap).sort((a, b) => a.hour - b.hour);
     },
-    refetchInterval: 30000
+    refetchInterval: 30000,
+    enabled: isStaffOrAdmin
   });
 
   const { data: topProducts } = useQuery<TopProduct[]>({
     queryKey: ['admin-top-products', dateRange],
     queryFn: async () => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = getTodayDateString();
       const startDateStr = dateRange === 'today' 
         ? todayStr
-        : dateRange === 'week' ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
 
-      // Use scheduled_for instead of created_at, and exclude future orders
-      const { data: orderItems } = await supabase
+      const { data: orderItems, error } = await supabase
         .from('order_items')
-        .select(`quantity, price_at_order, product_id, order:orders!inner(scheduled_for, status), product:products(name, category)`)
+        .select(`
+          quantity, 
+          price_at_order, 
+          product_id, 
+          order:orders!inner(scheduled_for, status), 
+          product:products(name, category)
+        `)
         .gte('order.scheduled_for', startDateStr)
         .lte('order.scheduled_for', todayStr)
         .neq('order.status', 'cancelled');
 
-      const productMap: Record<string, TopProduct> = {};
-      // Supabase returns arrays for joined tables - handle both array and single object cases
-      interface OrderItemRaw {
+      if (error) {
+        console.error('Top products query error:', error);
+        return [];
+      }
+
+      // Type-safe handling of Supabase joined data
+      interface OrderItemResult {
         quantity: number;
         price_at_order: number;
         product_id: string;
-        product: Array<{ name: string; category: string }> | { name: string; category: string } | null;
+        order: { scheduled_for: string; status: string } | Array<{ scheduled_for: string; status: string }>;
+        product: { name: string; category: string } | Array<{ name: string; category: string }> | null;
       }
-      ((orderItems || []) as OrderItemRaw[]).forEach((item) => {
+
+      const productMap: Record<string, TopProduct> = {};
+      
+      ((orderItems || []) as OrderItemResult[]).forEach((item) => {
         const id = item.product_id;
+        // Handle Supabase returning either array or single object for joins
         const product = Array.isArray(item.product) ? item.product[0] : item.product;
+        
         if (!productMap[id]) {
-          productMap[id] = { product_id: id, name: product?.name || 'Unknown', category: product?.category, total_quantity: 0, total_revenue: 0 };
+          productMap[id] = { 
+            product_id: id, 
+            name: product?.name || 'Unknown Product', 
+            category: product?.category, 
+            total_quantity: 0, 
+            total_revenue: 0 
+          };
         }
-        productMap[id].total_quantity += item.quantity;
-        productMap[id].total_revenue += item.quantity * item.price_at_order;
+        productMap[id].total_quantity += item.quantity ?? 0;
+        productMap[id].total_revenue += (item.quantity ?? 0) * (item.price_at_order ?? 0);
       });
 
-      return Object.values(productMap).sort((a, b) => b.total_revenue - a.total_revenue).slice(0, 5);
+      return Object.values(productMap)
+        .sort((a, b) => b.total_revenue - a.total_revenue)
+        .slice(0, 5);
     },
-    refetchInterval: 30000
+    refetchInterval: 30000,
+    enabled: isStaffOrAdmin
   });
 
   const { data: recentOrders, refetch: refetchOrders } = useQuery<RecentOrder[]>({
     queryKey: ['admin-recent-orders'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('orders')
-        .select(`id, status, total_amount, created_at, updated_at, child:students!orders_student_id_fkey(first_name, last_name), parent:user_profiles(first_name, last_name)`)
+        .select(`
+          id, 
+          status, 
+          total_amount, 
+          created_at, 
+          updated_at, 
+          completed_at,
+          scheduled_for,
+          student:students!orders_student_id_fkey(first_name, last_name), 
+          parent:user_profiles(first_name, last_name)
+        `)
         .order('created_at', { ascending: false })
         .limit(8);
       
-      // Map FK join arrays to single objects
+      if (error) {
+        console.error('Recent orders query error:', error);
+        return [];
+      }
+
+      // Type-safe mapping of Supabase joined data
       interface OrderResult {
         id: string;
         status: string;
         total_amount: number;
         created_at: string;
         updated_at?: string;
-        child: Array<{ first_name: string; last_name: string }> | { first_name: string; last_name: string } | null;
+        completed_at?: string;
+        scheduled_for?: string;
+        student: Array<{ first_name: string; last_name: string }> | { first_name: string; last_name: string } | null;
         parent: Array<{ first_name: string; last_name: string }> | { first_name: string; last_name: string } | null;
       }
-      return (data as OrderResult[] || []).map((order) => ({
-        ...order,
-        child: Array.isArray(order.child) ? order.child[0] || null : order.child,
+
+      return ((data || []) as OrderResult[]).map((order) => ({
+        id: order.id,
+        status: order.status,
+        total_amount: order.total_amount,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        completed_at: order.completed_at,
+        scheduled_for: order.scheduled_for,
+        student: Array.isArray(order.student) ? order.student[0] || null : order.student,
         parent: Array.isArray(order.parent) ? order.parent[0] || null : order.parent
       }));
     },
-    refetchInterval: 5000
+    refetchInterval: 5000,
+    enabled: isStaffOrAdmin
   });
 
   const { data: alerts } = useQuery<Alert[]>({
@@ -385,37 +555,45 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const alertsList: Alert[] = [];
 
-      const { data: lowStock } = await supabase
+      // Check for low stock products
+      const { data: lowStock, error: lowStockError } = await supabase
         .from('products')
         .select('name, stock_quantity')
         .lte('stock_quantity', 10)
         .gt('stock_quantity', 0)
         .eq('available', true);
 
-      lowStock?.forEach(product => {
-        alertsList.push({
-          id: `low-stock-${product.name}`,
-          type: 'low_stock',
-          title: 'Low Stock Alert',
-          message: `${product.name} has only ${product.stock_quantity} items left`,
-          severity: (product.stock_quantity ?? 0) <= 5 ? 'error' : 'warning',
-          actionLabel: 'Manage Products',
-          actionRoute: '/admin/products'
+      if (lowStockError) {
+        console.error('Low stock query error:', lowStockError);
+      } else {
+        (lowStock || []).forEach(product => {
+          alertsList.push({
+            id: `low-stock-${product.name}`,
+            type: 'low_stock',
+            title: 'Low Stock Alert',
+            message: `${product.name} has only ${product.stock_quantity} items left`,
+            severity: (product.stock_quantity ?? 0) <= 5 ? 'error' : 'warning',
+            actionLabel: 'Manage Products',
+            actionRoute: '/admin/products'
+          });
         });
-      });
+      }
 
       // Only alert on TODAY's orders that have been pending for more than 10 minutes
       // Don't alert on future scheduled orders
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = getTodayDateString();
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-      const { data: oldPending } = await supabase
+      
+      const { data: oldPending, error: pendingError } = await supabase
         .from('orders')
         .select('id')
         .eq('status', 'pending')
         .eq('scheduled_for', todayStr)
         .lt('created_at', tenMinutesAgo.toISOString());
 
-      if (oldPending && oldPending.length > 0) {
+      if (pendingError) {
+        console.error('Pending orders query error:', pendingError);
+      } else if (oldPending && oldPending.length > 0) {
         alertsList.push({
           id: 'old-pending-orders',
           type: 'pending_order',
@@ -427,14 +605,36 @@ export default function AdminDashboard() {
         });
       }
 
+      // Check for orders awaiting payment
+      const { data: awaitingPayment, error: awaitingError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('status', 'awaiting_payment')
+        .eq('scheduled_for', todayStr);
+
+      if (awaitingError) {
+        console.error('Awaiting payment query error:', awaitingError);
+      } else if (awaitingPayment && awaitingPayment.length > 0) {
+        alertsList.push({
+          id: 'awaiting-payment-orders',
+          type: 'pending_order',
+          title: 'Cash Payments Pending',
+          message: `${awaitingPayment.length} order${awaitingPayment.length > 1 ? 's' : ''} awaiting cash payment confirmation`,
+          severity: 'info',
+          actionLabel: 'View Orders',
+          actionRoute: '/admin/orders?status=awaiting_payment'
+        });
+      }
+
       return alertsList.slice(0, 5);
     },
-    refetchInterval: 30000
+    refetchInterval: 30000,
+    enabled: isStaffOrAdmin
   });
 
   // ==================== REAL-TIME SUBSCRIPTIONS ====================
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || !isStaffOrAdmin) return;
 
     const channel = supabase
       .channel('admin-dashboard-realtime')
@@ -445,7 +645,7 @@ export default function AdminDashboard() {
         }
         
         // Show toast notification
-        showToast('🔔 New order received!', 'info');
+        stableShowToast('🔔 New order received!', 'info');
         
         const newActivity: LiveActivity = {
           id: `order-${payload.new.id}`,
@@ -465,6 +665,7 @@ export default function AdminDashboard() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
         const statusMessages: Record<string, string> = {
+          awaiting_payment: '💳 Order awaiting payment',
           preparing: '🍳 Order is being prepared',
           ready: '✅ Order is ready for pickup',
           completed: '🎉 Order completed',
@@ -473,7 +674,7 @@ export default function AdminDashboard() {
         
         const status = payload.new.status as string;
         if (statusMessages[status]) {
-          showToast(statusMessages[status], status === 'cancelled' ? 'error' : 'success');
+          stableShowToast(statusMessages[status], status === 'cancelled' ? 'error' : 'success');
         }
 
         const newActivity: LiveActivity = {
@@ -523,7 +724,7 @@ export default function AdminDashboard() {
         if (err) {
           console.error('Realtime subscription error:', err);
           setSystemHealth({ realtime: 'down' });
-          showToast('Real-time connection lost', 'error');
+          stableShowToast('Real-time connection lost', 'error');
         } else {
           setSystemHealth({ realtime: status === 'SUBSCRIBED' ? 'healthy' : 'degraded' });
         }
@@ -532,7 +733,7 @@ export default function AdminDashboard() {
     return () => { 
       supabase.removeChannel(channel); 
     };
-  }, [soundEnabled, queryClient, isOnline, showToast]);
+  }, [soundEnabled, queryClient, isOnline, stableShowToast, isStaffOrAdmin]);
 
   // ==================== HANDLERS ====================
   const handleRefresh = async () => {
@@ -585,6 +786,7 @@ export default function AdminDashboard() {
   // ==================== HELPERS ====================
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
+      awaiting_payment: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
       pending: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
       preparing: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
       ready: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
@@ -596,6 +798,7 @@ export default function AdminDashboard() {
 
   const getStatusIcon = (status: string) => {
     const icons: Record<string, React.ReactNode> = {
+      awaiting_payment: <CreditCard size={14} />,
       pending: <Clock size={14} />,
       preparing: <Coffee size={14} />,
       ready: <CheckCircle size={14} />,
@@ -614,6 +817,30 @@ export default function AdminDashboard() {
         <div className="text-center">
           <LoadingSpinner size="lg" />
           <p className="mt-4 text-gray-500 dark:text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================== AUTHORIZATION CHECK ====================
+  if (!isStaffOrAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+            <ShieldAlert size={32} className="text-red-600 dark:text-red-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            You don't have permission to access the admin dashboard. 
+            Please contact your administrator if you believe this is an error.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            Go Home
+          </button>
         </div>
       </div>
     );
@@ -764,7 +991,14 @@ export default function AdminDashboard() {
             </div>
             <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.pendingOrders || 0}</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Pending Orders</p>
-            {(stats?.preparingOrders || 0) > 0 && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{stats?.preparingOrders} preparing</p>}
+            <div className="flex flex-wrap gap-1 mt-1">
+              {(stats?.preparingOrders || 0) > 0 && (
+                <span className="text-xs text-blue-600 dark:text-blue-400">{stats?.preparingOrders} preparing</span>
+              )}
+              {(stats?.awaitingPaymentOrders || 0) > 0 && (
+                <span className="text-xs text-purple-600 dark:text-purple-400">{stats?.awaitingPaymentOrders} awaiting pay</span>
+              )}
+            </div>
           </div>
 
           <div 
@@ -792,9 +1026,9 @@ export default function AdminDashboard() {
                 {Math.abs(revenueTrend).toFixed(0)}%
               </div>
             </div>
-            <p className="text-3xl font-bold">P{(stats?.revenueToday || 0).toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
+            <p className="text-3xl font-bold">₱{(stats?.revenueToday || 0).toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
             <p className="text-sm opacity-90">Revenue Today</p>
-            <p className="text-xs opacity-75 mt-1">vs P{(stats?.revenueYesterday || 0).toLocaleString()} yesterday</p>
+            <p className="text-xs opacity-75 mt-1">vs ₱{(stats?.revenueYesterday || 0).toLocaleString()} yesterday</p>
           </div>
 
           <div className="rounded-xl p-4 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg">
@@ -812,11 +1046,12 @@ export default function AdminDashboard() {
         </div>
 
         {/* Secondary Stats Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
-          <StatCard title="Avg Order Value" value={`P${(stats?.avgOrderValue || 0).toFixed(0)}`} icon={Target} color="purple" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+          <StatCard title="Avg Order Value" value={`₱${(stats?.avgOrderValue || 0).toFixed(0)}`} icon={Target} color="purple" />
           <StatCard title="Avg Fulfillment" value={`${Math.round(stats?.avgFulfillmentTime || 0)} min`} icon={Timer} color="indigo" subtitle={fulfillmentRate > 80 ? 'Good' : 'Needs improvement'} />
           <StatCard title="Low Stock Items" value={stats?.lowStockProducts || 0} icon={Package} color={(stats?.lowStockProducts || 0) > 0 ? 'red' : 'gray'} onClick={() => navigate('/admin/products?filter=low-stock')} clickable />
           <StatCard title="Cancelled Today" value={stats?.cancelledOrdersToday || 0} icon={XCircle} color={(stats?.cancelledOrdersToday || 0) > 0 ? 'red' : 'gray'} />
+          <StatCard title="Awaiting Payment" value={stats?.awaitingPaymentOrders || 0} icon={CreditCard} color={(stats?.awaitingPaymentOrders || 0) > 0 ? 'purple' : 'gray'} onClick={() => navigate('/admin/orders?status=awaiting_payment')} clickable />
           <StatCard title="Future Orders" value={stats?.futureOrders || 0} icon={Calendar} color={(stats?.futureOrders || 0) > 0 ? 'blue' : 'gray'} subtitle="Scheduled ahead" onClick={() => navigate('/admin/orders?filter=future')} clickable />
         </div>
 
@@ -906,7 +1141,7 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">{product.total_quantity} sold</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-green-600 dark:text-green-400">P{product.total_revenue.toFixed(0)}</p>
+                      <p className="font-semibold text-green-600 dark:text-green-400">₱{product.total_revenue.toFixed(0)}</p>
                     </div>
                   </div>
                 ))
@@ -933,22 +1168,24 @@ export default function AdminDashboard() {
             </div>
             <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-96 overflow-y-auto">
               {recentOrders?.map((order) => {
-                const childName = order.child ? `${order.child.first_name} ${order.child.last_name}` : 'Unknown Student';
+                const studentName = order.student 
+                  ? `${order.student.first_name} ${order.student.last_name}` 
+                  : 'Unknown Student';
                 return (
                   <div key={order.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer" onClick={() => navigate(`/admin/orders?id=${order.id}`)}>
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{childName}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{studentName}</p>
                         <span className="text-xs text-gray-400 dark:text-gray-500">#{order.id.slice(-6).toUpperCase()}</span>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1 ${getStatusColor(order.status)}`}>
                         {getStatusIcon(order.status)}
-                        {order.status}
+                        {order.status === 'awaiting_payment' ? 'awaiting' : order.status}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <p className="text-gray-500 dark:text-gray-400">{format(new Date(order.created_at), 'h:mm a')}</p>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">P{order.total_amount.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">₱{order.total_amount.toFixed(2)}</p>
                     </div>
                   </div>
                 );
@@ -1010,7 +1247,7 @@ export default function AdminDashboard() {
           <QuickStatCard icon={<Users size={18} />} label="Total Parents" value={stats?.totalParents || 0} onClick={() => navigate('/admin/users')} />
           <QuickStatCard icon={<Package size={18} />} label="Total Products" value={stats?.totalProducts || 0} onClick={() => navigate('/admin/products')} />
           <QuickStatCard icon={<ShoppingBag size={18} />} label="Weekly Orders" value={stats?.totalOrdersWeek || 0} />
-          <QuickStatCard icon={<DollarSign size={18} />} label="Monthly Revenue" value={`P${((stats?.revenueMonth || 0) / 1000).toFixed(1)}k`} />
+          <QuickStatCard icon={<DollarSign size={18} />} label="Monthly Revenue" value={`₱${((stats?.revenueMonth || 0) / 1000).toFixed(1)}k`} />
         </div>
 
         {/* Quick Actions */}
@@ -1131,6 +1368,7 @@ function StatusDistributionChart({ distribution, dateRange }: StatusDistribution
   }
 
   const statuses = [
+    { key: 'awaiting_payment', label: 'Awaiting Payment', color: 'bg-purple-500', textColor: 'text-purple-600 dark:text-purple-400' },
     { key: 'pending', label: 'Pending', color: 'bg-amber-500', textColor: 'text-amber-600 dark:text-amber-400' },
     { key: 'preparing', label: 'Preparing', color: 'bg-blue-500', textColor: 'text-blue-600 dark:text-blue-400' },
     { key: 'ready', label: 'Ready', color: 'bg-green-500', textColor: 'text-green-600 dark:text-green-400' },
@@ -1151,11 +1389,12 @@ function StatusDistributionChart({ distribution, dateRange }: StatusDistribution
       <div className="grid grid-cols-2 gap-2">
         {statuses.map(status => {
           const value = distribution[status.key as keyof OrderStatusDistribution];
+          if (value === 0) return null; // Hide statuses with 0 count
           const percentage = total > 0 ? ((value / total) * 100).toFixed(0) : 0;
           return (
             <div key={status.key} className="flex items-center gap-2 text-sm">
               <div className={`w-3 h-3 rounded-full ${status.color}`} />
-              <span className="text-gray-600 dark:text-gray-400">{status.label}</span>
+              <span className="text-gray-600 dark:text-gray-400 truncate">{status.label}</span>
               <span className={`font-semibold ${status.textColor}`}>{value}</span>
               <span className="text-gray-400 dark:text-gray-500 text-xs">({percentage}%)</span>
             </div>
