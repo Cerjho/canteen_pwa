@@ -387,10 +387,70 @@ serve(async (req) => {
           console.error('Stock restoration errors:', stockRestoreErrors);
         }
 
-        // If paid with balance, refund is handled separately via refund-order function
-        // This function just cancels and restores stock
+        // Refund to wallet for all payment methods
+        let refundApplied = false;
+        if (order.total_amount > 0) {
+          // Get or create wallet for parent
+          let wallet = null;
+          const { data: existingWallet } = await supabaseAdmin
+            .from('wallets')
+            .select('id, balance')
+            .eq('user_id', order.parent_id)
+            .single();
 
-        console.log(`[AUDIT] ${userRole} ${user.email} cancelled order ${order_id}. Reason: ${reason || 'Not provided'}`);
+          if (existingWallet) {
+            wallet = existingWallet;
+          } else {
+            // Create wallet if it doesn't exist
+            const { data: newWallet, error: createError } = await supabaseAdmin
+              .from('wallets')
+              .insert({ user_id: order.parent_id, balance: 0 })
+              .select('id, balance')
+              .single();
+            
+            if (!createError && newWallet) {
+              wallet = newWallet;
+            }
+          }
+
+          if (wallet) {
+            // Add refund to wallet
+            const { error: refundError } = await supabaseAdmin
+              .from('wallets')
+              .update({
+                balance: (wallet.balance || 0) + order.total_amount,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', order.parent_id);
+
+            if (!refundError) {
+              refundApplied = true;
+              
+              // Determine refund description based on payment method
+              let refundDescription = `Refund for cancelled order #${order_id.slice(-6)}`;
+              if (order.payment_method === 'cash') {
+                refundDescription = `Credit for cancelled cash order #${order_id.slice(-6)}`;
+              } else if (order.payment_method === 'gcash') {
+                refundDescription = `Credit for cancelled GCash order #${order_id.slice(-6)}`;
+              }
+
+              // Record the refund transaction
+              await supabaseAdmin
+                .from('wallet_transactions')
+                .insert({
+                  wallet_id: wallet.id,
+                  user_id: order.parent_id,
+                  type: 'refund',
+                  amount: order.total_amount,
+                  description: refundDescription,
+                  reference_id: order_id,
+                  performed_by: user.id
+                });
+            }
+          }
+        }
+
+        console.log(`[AUDIT] ${userRole} ${user.email} cancelled order ${order_id}. Reason: ${reason || 'Not provided'}. Refund: ${refundApplied ? '₱' + order.total_amount : 'N/A'}`);
 
         return new Response(
           JSON.stringify({
@@ -398,7 +458,8 @@ serve(async (req) => {
             order_id,
             previous_status: currentStatus,
             new_status: 'cancelled',
-            refund_required: order.payment_method === 'balance'
+            refund_applied: refundApplied,
+            refund_amount: refundApplied ? order.total_amount : 0
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

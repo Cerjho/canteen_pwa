@@ -196,17 +196,33 @@ serve(async (req) => {
       }
     }
 
-    // If paid with balance, refund to wallet
+    // Refund to wallet for all payment methods
     let refundApplied = false;
     let refundMessage = 'Order cancelled successfully.';
     
-    if (order.payment_method === 'balance' && order.total_amount > 0) {
-      // Get current wallet balance
-      const { data: wallet } = await supabaseAdmin
+    if (order.total_amount > 0) {
+      // Get or create wallet for user
+      let wallet = null;
+      const { data: existingWallet } = await supabaseAdmin
         .from('wallets')
-        .select('balance')
+        .select('id, balance')
         .eq('user_id', user.id)
         .single();
+
+      if (existingWallet) {
+        wallet = existingWallet;
+      } else {
+        // Create wallet if it doesn't exist
+        const { data: newWallet, error: createError } = await supabaseAdmin
+          .from('wallets')
+          .insert({ user_id: user.id, balance: 0 })
+          .select('id, balance')
+          .single();
+        
+        if (!createError && newWallet) {
+          wallet = newWallet;
+        }
+      }
 
       if (wallet) {
         // Add refund to wallet
@@ -220,28 +236,31 @@ serve(async (req) => {
 
         if (!refundError) {
           refundApplied = true;
-          refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been refunded to your wallet.`;
+          
+          // Determine refund description based on payment method
+          let refundDescription = `Refund for cancelled order #${order_id.slice(-6)}`;
+          if (order.payment_method === 'cash') {
+            refundDescription = `Credit for cancelled cash order #${order_id.slice(-6)}`;
+          } else if (order.payment_method === 'gcash') {
+            refundDescription = `Credit for cancelled GCash order #${order_id.slice(-6)}`;
+          }
+          
+          refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
 
           // Record the refund transaction
           await supabaseAdmin
             .from('wallet_transactions')
             .insert({
-              wallet_id: user.id,
+              wallet_id: wallet.id,
               user_id: user.id,
               type: 'refund',
               amount: order.total_amount,
-              description: `Refund for cancelled order #${order_id.slice(-6)}`,
+              description: refundDescription,
               reference_id: order_id,
               performed_by: user.id
             });
         }
       }
-    } else if (order.payment_method === 'cash') {
-      // Cash payment - no payment collected yet
-      refundMessage = 'Order cancelled. No payment was collected as this was a cash payment.';
-    } else if (order.payment_method === 'gcash') {
-      // GCash payment - manual refund needed
-      refundMessage = 'Order cancelled. GCash payments require manual refund. Please contact the canteen staff.';
     }
 
     console.log(`[AUDIT] Parent ${user.email} cancelled order ${order_id}. Payment: ${order.payment_method}. Refund: ${refundApplied ? '₱' + order.total_amount : 'N/A'}`);
