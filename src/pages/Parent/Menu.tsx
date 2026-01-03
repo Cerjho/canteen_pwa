@@ -12,6 +12,7 @@ import { CartDrawer } from '../../components/CartDrawer';
 import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { ProductCardSkeleton } from '../../components/Skeleton';
+import { WeeklyCartSummary } from '../../components/WeeklyCartSummary';
 import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -428,6 +429,20 @@ export default function Menu() {
           students={students || []}
           selectedChildId={selectedStudentId}
           onSelect={setSelectedStudentId}
+        />
+
+        {/* Weekly Cart Summary - shows multi-day cart at a glance */}
+        <WeeklyCartSummary
+          items={items}
+          daysToShow={5}
+          onDateClick={(dateStr) => {
+            // Navigate to that date
+            const targetDay = weekdaysInfo?.find(d => d.dateStr === dateStr);
+            if (targetDay) {
+              setSelectedDate(targetDay.date);
+            }
+          }}
+          onViewCart={() => setCartOpen(true)}
         />
 
         {/* Category Filter Tabs */}
