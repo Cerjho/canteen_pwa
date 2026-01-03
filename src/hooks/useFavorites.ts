@@ -1,101 +1,99 @@
 import { useState, useEffect, useCallback } from 'react';
-// Favorites are stored locally for now
 import { useAuth } from './useAuth';
-
-const FAVORITES_KEY = 'canteen_favorites';
-
-// Type guard to validate favorites array
-function isValidFavoritesArray(data: unknown): data is string[] {
-  return Array.isArray(data) && data.every(item => typeof item === 'string');
-}
+import { supabase } from '../services/supabaseClient';
 
 export function useFavorites() {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(true);
 
-  // Load favorites from localStorage on mount or user change
+  // Load favorites from database on mount or user change
   useEffect(() => {
-    const userId = user?.id;
-    if (userId) {
-      try {
-        const stored = localStorage.getItem(`${FAVORITES_KEY}_${userId}`);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          // Validate the parsed data
-          if (isValidFavoritesArray(parsed)) {
-            setFavorites(parsed);
-          } else {
-            // eslint-disable-next-line no-console
-            console.warn('Invalid favorites data in localStorage, resetting');
-            setFavorites([]);
-          }
-        } else {
-          setFavorites([]);
-        }
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to parse favorites from localStorage:', error);
+    async function loadFavorites() {
+      if (!user) {
         setFavorites([]);
+        setIsLoadingFavorites(false);
+        return;
       }
-    } else {
-      // Clear favorites when user logs out
-      setFavorites([]);
+
+      setIsLoadingFavorites(true);
+      try {
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('product_id')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Failed to load favorites:', error);
+          setFavorites([]);
+        } else if (data) {
+          setFavorites(data.map(item => item.product_id));
+        }
+      } catch (err) {
+        console.error('Failed to load favorites:', err);
+        setFavorites([]);
+      } finally {
+        setIsLoadingFavorites(false);
+      }
     }
+
+    loadFavorites();
   }, [user]);
 
-  const addFavorite = useCallback((productId: string) => {
-    const userId = user?.id;
+  const addFavorite = useCallback(async (productId: string) => {
+    if (!user) return;
+
+    // Optimistic update
     setFavorites(current => {
       if (!current.includes(productId)) {
-        const newFavorites = [...current, productId];
-        if (userId) {
-          try {
-            localStorage.setItem(`${FAVORITES_KEY}_${userId}`, JSON.stringify(newFavorites));
-          } catch (e) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to save favorites:', e);
-          }
-        }
-        return newFavorites;
+        return [...current, productId];
       }
       return current;
     });
+
+    // Persist to database
+    try {
+      await supabase
+        .from('favorites')
+        .insert({ user_id: user.id, product_id: productId });
+    } catch (err) {
+      console.error('Failed to save favorite:', err);
+      // Revert on error
+      setFavorites(current => current.filter(id => id !== productId));
+    }
   }, [user]);
 
-  const removeFavorite = useCallback((productId: string) => {
-    const userId = user?.id;
-    setFavorites(current => {
-      const newFavorites = current.filter(id => id !== productId);
-      if (userId) {
-        try {
-          localStorage.setItem(`${FAVORITES_KEY}_${userId}`, JSON.stringify(newFavorites));
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to save favorites:', e);
-        }
-      }
-      return newFavorites;
-    });
+  const removeFavorite = useCallback(async (productId: string) => {
+    if (!user) return;
+
+    // Optimistic update
+    setFavorites(current => current.filter(id => id !== productId));
+
+    // Delete from database
+    try {
+      await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('product_id', productId);
+    } catch (err) {
+      console.error('Failed to remove favorite:', err);
+      // Revert on error
+      setFavorites(current => [...current, productId]);
+    }
   }, [user]);
 
-  const toggleFavorite = useCallback((productId: string) => {
-    const userId = user?.id;
-    setFavorites(current => {
-      const newFavorites = current.includes(productId)
-        ? current.filter(id => id !== productId)
-        : [...current, productId];
-      
-      if (userId) {
-        try {
-          localStorage.setItem(`${FAVORITES_KEY}_${userId}`, JSON.stringify(newFavorites));
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to save favorites:', e);
-        }
-      }
-      return newFavorites;
-    });
-  }, [user]);
+  const toggleFavorite = useCallback(async (productId: string) => {
+    if (!user) return;
+
+    const isCurrentlyFavorite = favorites.includes(productId);
+    
+    if (isCurrentlyFavorite) {
+      await removeFavorite(productId);
+    } else {
+      await addFavorite(productId);
+    }
+  }, [user, favorites, addFavorite, removeFavorite]);
 
   const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
 
@@ -104,6 +102,7 @@ export function useFavorites() {
     addFavorite,
     removeFavorite,
     toggleFavorite,
-    isFavorite
+    isFavorite,
+    isLoadingFavorites
   };
 }

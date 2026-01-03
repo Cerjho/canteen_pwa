@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { createOrder } from '../services/orders';
 import { useAuth } from './useAuth';
+import { supabase } from '../services/supabaseClient';
 import type { PaymentMethod } from '../types';
 
 // Helper to format date as YYYY-MM-DD in LOCAL timezone
@@ -20,11 +21,25 @@ interface CartItem {
   image_url: string;
 }
 
+interface CartItemDB {
+  id: string;
+  user_id: string;
+  product_id: string;
+  quantity: number;
+  products: {
+    id: string;
+    name: string;
+    price: number;
+    image_url: string | null;
+  };
+}
+
 export function useCart() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   
@@ -38,7 +53,66 @@ export function useCart() {
   notesRef.current = notes;
   paymentMethodRef.current = paymentMethod;
 
-  const addItem = useCallback((item: Omit<CartItem, 'id'>) => {
+  // Load cart from database on mount or user change
+  useEffect(() => {
+    async function loadCart() {
+      if (!user) {
+        setItems([]);
+        setIsLoadingCart(false);
+        return;
+      }
+
+      setIsLoadingCart(true);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('cart_items')
+          .select(`
+            id,
+            user_id,
+            product_id,
+            quantity,
+            products (
+              id,
+              name,
+              price,
+              image_url
+            )
+          `)
+          .eq('user_id', user.id);
+
+        if (fetchError) {
+          console.error('Failed to load cart:', fetchError);
+          setItems([]);
+        } else if (data) {
+          const cartItems: CartItem[] = (data as unknown as CartItemDB[])
+            .filter(item => item.products) // Filter out items with deleted products
+            .map(item => ({
+              id: item.id,
+              product_id: item.product_id,
+              name: item.products.name,
+              price: item.products.price,
+              quantity: item.quantity,
+              image_url: item.products.image_url || ''
+            }));
+          setItems(cartItems);
+        }
+      } catch (err) {
+        console.error('Failed to load cart:', err);
+        setItems([]);
+      } finally {
+        setIsLoadingCart(false);
+      }
+    }
+
+    loadCart();
+  }, [user]);
+
+  const addItem = useCallback(async (item: Omit<CartItem, 'id'>) => {
+    if (!user) return;
+
+    setError(null);
+    
+    // Optimistic update
     setItems((prevItems) => {
       const existingItem = prevItems.find((i) => i.product_id === item.product_id);
       
@@ -52,28 +126,96 @@ export function useCart() {
       
       return [...prevItems, { ...item, id: crypto.randomUUID() }];
     });
-    setError(null);
-  }, []);
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+    // Persist to database
+    try {
+      // Check if item already exists
+      const { data: existing } = await supabase
+        .from('cart_items')
+        .select('id, quantity')
+        .eq('user_id', user.id)
+        .eq('product_id', item.product_id)
+        .single();
+
+      if (existing) {
+        // Update quantity
+        await supabase
+          .from('cart_items')
+          .update({ quantity: existing.quantity + item.quantity })
+          .eq('id', existing.id);
+      } else {
+        // Insert new item
+        await supabase
+          .from('cart_items')
+          .insert({
+            user_id: user.id,
+            product_id: item.product_id,
+            quantity: item.quantity
+          });
+      }
+    } catch (err) {
+      console.error('Failed to save cart item:', err);
+    }
+  }, [user]);
+
+  const updateQuantity = useCallback(async (productId: string, quantity: number) => {
+    if (!user) return;
+
+    setError(null);
+
     if (quantity <= 0) {
+      // Optimistic delete
       setItems((prevItems) => prevItems.filter((i) => i.product_id !== productId));
+      
+      // Delete from database
+      try {
+        await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('product_id', productId);
+      } catch (err) {
+        console.error('Failed to delete cart item:', err);
+      }
     } else {
+      // Optimistic update
       setItems((prevItems) =>
         prevItems.map((i) =>
           i.product_id === productId ? { ...i, quantity } : i
         )
       );
-    }
-    setError(null);
-  }, []);
 
-  const clearCart = useCallback(() => {
+      // Update in database
+      try {
+        await supabase
+          .from('cart_items')
+          .update({ quantity })
+          .eq('user_id', user.id)
+          .eq('product_id', productId);
+      } catch (err) {
+        console.error('Failed to update cart item:', err);
+      }
+    }
+  }, [user]);
+
+  const clearCart = useCallback(async () => {
     setItems([]);
     setNotes('');
     setPaymentMethod('cash');
     setError(null);
-  }, []);
+
+    // Clear from database
+    if (user) {
+      try {
+        await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', user.id);
+      } catch (err) {
+        console.error('Failed to clear cart:', err);
+      }
+    }
+  }, [user]);
 
   // Calculate total using functional approach to get latest items
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -112,7 +254,7 @@ export function useCart() {
       };
 
       const result = await createOrder(orderData);
-      clearCart();
+      await clearCart();
       return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Checkout failed';
@@ -135,6 +277,7 @@ export function useCart() {
     paymentMethod,
     setPaymentMethod,
     isLoading,
+    isLoadingCart,
     error,
     clearError: () => setError(null)
   };
