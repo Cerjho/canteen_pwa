@@ -430,13 +430,12 @@ export default function AdminDashboard() {
         ? todayStr
         : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
       
-      // Fetch orders by created_at date range (when orders were placed)
-      // This shows "what happened during this period"
+      // Fetch orders by scheduled_for date range (operational workload)
       const { data: orders, error } = await supabase
         .from('orders')
-        .select('status, created_at, completed_at, updated_at')
-        .gte('created_at', `${startDateStr}T00:00:00`)
-        .lte('created_at', `${todayStr}T23:59:59`);
+        .select('status, scheduled_for')
+        .gte('scheduled_for', startDateStr)
+        .lte('scheduled_for', todayStr);
 
       if (error) {
         console.error('Status distribution query error:', error);
@@ -473,12 +472,12 @@ export default function AdminDashboard() {
         ? todayStr
         : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
       
-      // Fetch by created_at date range (when orders were placed)
+      // Fetch by scheduled_for and use created_at time for hourly distribution
       const { data: orders, error } = await supabase
         .from('orders')
-        .select('total_amount, created_at, status')
-        .gte('created_at', `${startDateStr}T00:00:00`)
-        .lte('created_at', `${todayStr}T23:59:59`)
+        .select('total_amount, created_at, scheduled_for, status')
+        .gte('scheduled_for', startDateStr)
+        .lte('scheduled_for', todayStr)
         .neq('status', 'cancelled');
 
       if (error) {
@@ -517,19 +516,18 @@ export default function AdminDashboard() {
         ? todayStr
         : dateRange === 'week' ? getWeekStartDateString() : getMonthStartDateString();
 
-      // Use created_at to find orders placed during this period
-      // This shows "what products were ordered during this time range"
+      // Use scheduled_for to find orders for this period's workload
       const { data: orderItems, error } = await supabase
         .from('order_items')
         .select(`
           quantity, 
           price_at_order, 
           product_id, 
-          order:orders!inner(created_at, status), 
+          order:orders!inner(scheduled_for, status), 
           product:products(name, category)
         `)
-        .gte('order.created_at', `${startDateStr}T00:00:00`)
-        .lte('order.created_at', `${todayStr}T23:59:59`)
+        .gte('order.scheduled_for', startDateStr)
+        .lte('order.scheduled_for', todayStr)
         .neq('order.status', 'cancelled');
 
       if (error) {
@@ -542,7 +540,7 @@ export default function AdminDashboard() {
         quantity: number;
         price_at_order: number;
         product_id: string;
-        order: { created_at: string; status: string } | Array<{ created_at: string; status: string }>;
+        order: { scheduled_for: string; status: string } | Array<{ scheduled_for: string; status: string }>;
         product: { name: string; category: string } | Array<{ name: string; category: string }> | null;
       }
 
