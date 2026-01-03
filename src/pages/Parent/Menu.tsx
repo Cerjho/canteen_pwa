@@ -51,7 +51,6 @@ export default function Menu() {
     addItem, 
     updateQuantity, 
     checkout, 
-    total, 
     selectedStudentId, 
     setSelectedStudentId,
     clearDate,
@@ -222,7 +221,7 @@ export default function Menu() {
       console.error('Checkout error:', error);
       showToast('Failed to place order. Please try again.', 'error');
     }
-  }, [items, checkout, queryClient, navigate, total, showToast]);
+  }, [items, checkout, queryClient, navigate, showToast]);
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
