@@ -28,50 +28,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // Use injectManifest to include custom service worker logic
       strategies: 'injectManifest',
       srcDir: 'src/pwa',
       filename: 'service-worker.ts',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
-      manifest: {
-        name: 'School Canteen',
-        short_name: 'Canteen',
-        description: 'Order food for your kids from school canteen',
-        theme_color: '#4F46E5',
-        background_color: '#ffffff',
-        display: 'standalone',
-        start_url: '/',
-        scope: '/',
-        icons: [
-          {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any'
-          },
-          {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'maskable'
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any'
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
-          }
-        ]
-      },
-      // injectManifest options for custom service worker
+      manifest: false, // Use public/manifest.webmanifest instead
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB
