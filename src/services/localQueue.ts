@@ -90,7 +90,7 @@ export async function queueOrder(orderData: Omit<QueuedOrder, 'id' | 'queued_at'
       }
       await (registration as ServiceWorkerRegistrationWithSync).sync.register('sync-orders');
     } catch (error) {
-      console.warn('Background sync registration failed:', error);
+      // console.warn('Background sync registration failed:', error);
     }
   }
 }
@@ -148,7 +148,7 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session) {
-    console.warn('No active session, cannot process queue');
+    // console.warn('No active session, cannot process queue');
     return { processed: 0, failed: orders.length };
   }
 
@@ -298,13 +298,13 @@ if (typeof window !== 'undefined') {
       // console.log('Back online, processing queue...');
     }
     processQueue()
-      .then(({ processed, failed }) => {
+      .then(({ processed: _processed, failed: _failed }) => {
         if (import.meta.env.DEV) {
-          // console.log(`Queue processed: ${processed} successful, ${failed} failed`);
+          // console.log(`Queue processed: ${_processed} successful, ${_failed} failed`);
         }
       })
-      .catch((error) => {
-        // console.error('Failed to process queue on reconnect:', error);
+      .catch((_error) => {
+        // console.error('Failed to process queue on reconnect:', _error);
       });
   });
 }
