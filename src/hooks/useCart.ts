@@ -397,11 +397,13 @@ export function useCart() {
       const { data: existing } = await supabase
         .from('cart_items')
         .select('id, quantity')
-        .eq('user_id', user.id)
-        .eq('student_id', item.student_id)
-        .eq('product_id', item.product_id)
-        .eq('scheduled_for', item.scheduled_for)
-        .single();
+        .match({
+          user_id: user.id,
+          student_id: item.student_id,
+          product_id: item.product_id,
+          scheduled_for: item.scheduled_for
+        })
+        .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
@@ -451,10 +453,12 @@ export function useCart() {
         const { error } = await supabase
           .from('cart_items')
           .delete()
-          .eq('user_id', user.id)
-          .eq('student_id', studentId)
-          .eq('product_id', productId)
-          .eq('scheduled_for', scheduledFor);
+          .match({
+            user_id: user.id,
+            student_id: studentId,
+            product_id: productId,
+            scheduled_for: scheduledFor
+          });
         if (error) throw error;
       } catch (err) {
         console.error('Failed to delete cart item:', err);
@@ -474,10 +478,12 @@ export function useCart() {
         const { error } = await supabase
           .from('cart_items')
           .update({ quantity })
-          .eq('user_id', user.id)
-          .eq('student_id', studentId)
-          .eq('product_id', productId)
-          .eq('scheduled_for', scheduledFor);
+          .match({
+            user_id: user.id,
+            student_id: studentId,
+            product_id: productId,
+            scheduled_for: scheduledFor
+          });
         if (error) throw error;
       } catch (err) {
         console.error('Failed to update cart item:', err);
@@ -542,9 +548,11 @@ export function useCart() {
       const { error } = await supabase
         .from('cart_items')
         .delete()
-        .eq('user_id', user.id)
-        .eq('student_id', studentId)
-        .eq('scheduled_for', dateStr);
+        .match({
+          user_id: user.id,
+          student_id: studentId,
+          scheduled_for: dateStr
+        });
       if (error) throw error;
     } catch (err) {
       console.error('Failed to clear student on date:', err);
@@ -607,11 +615,13 @@ export function useCart() {
         const { data: existing } = await supabase
           .from('cart_items')
           .select('id, quantity')
-          .eq('user_id', user.id)
-          .eq('student_id', item.student_id)
-          .eq('product_id', item.product_id)
-          .eq('scheduled_for', toDate)
-          .single();
+          .match({
+            user_id: user.id,
+            student_id: item.student_id,
+            product_id: item.product_id,
+            scheduled_for: toDate
+          })
+          .maybeSingle();
 
         if (existing) {
           await supabase
@@ -696,11 +706,13 @@ export function useCart() {
         const { data: existing } = await supabase
           .from('cart_items')
           .select('id, quantity')
-          .eq('user_id', user.id)
-          .eq('student_id', item.student_id)
-          .eq('product_id', item.product_id)
-          .eq('scheduled_for', toDate)
-          .single();
+          .match({
+            user_id: user.id,
+            student_id: item.student_id,
+            product_id: item.product_id,
+            scheduled_for: toDate
+          })
+          .maybeSingle();
 
         if (existing) {
           await supabase
