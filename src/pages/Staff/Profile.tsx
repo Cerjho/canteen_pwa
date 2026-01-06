@@ -51,7 +51,6 @@ export default function StaffProfilePage() {
         .maybeSingle();
       
       if (error) {
-        // eslint-disable-next-line no-console
         console.error('Error fetching staff profile:', error);
       }
       

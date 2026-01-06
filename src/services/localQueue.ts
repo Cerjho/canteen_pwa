@@ -90,7 +90,6 @@ export async function queueOrder(orderData: Omit<QueuedOrder, 'id' | 'queued_at'
       }
       await (registration as ServiceWorkerRegistrationWithSync).sync.register('sync-orders');
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.warn('Background sync registration failed:', error);
     }
   }
@@ -184,7 +183,6 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
           // Order already exists - this is fine, remove from queue
         // Order already processed (dedupe check)
         if (import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
           console.log('Order already processed (duplicate):', order.client_order_id);
         }
           await removeQueuedOrder(order.id);
@@ -209,7 +207,6 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
 
       // Success - remove from queue
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
         console.log('Order processed successfully:', data.order_id);
       }
       await removeQueuedOrder(order.id);
@@ -298,13 +295,11 @@ export async function retryFailedOrder(clientOrderId: string): Promise<void> {
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.log('Back online, processing queue...');
     }
     processQueue()
       .then(({ processed, failed }) => {
         if (import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
           console.log(`Queue processed: ${processed} successful, ${failed} failed`);
         }
       })

@@ -92,7 +92,6 @@ export default function AdminProfile() {
         .maybeSingle();
       
       if (error) {
-        // eslint-disable-next-line no-console
         console.error('Error fetching admin profile:', error);
       }
       

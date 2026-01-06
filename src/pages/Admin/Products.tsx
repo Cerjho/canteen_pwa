@@ -31,7 +31,7 @@ export default function AdminProducts() {
       setStockFilter('out-of-stock');
       setSearchParams({}, { replace: true });
     }
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   // Fetch products
   const { data: products, isLoading } = useQuery<Product[]>({

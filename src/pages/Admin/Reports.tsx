@@ -114,7 +114,8 @@ export default function AdminReports() {
 
       orders.forEach(order => {
         // Use Philippine timezone for correct day grouping
-        const day = toPhilippineDate(order.completed_at!);
+        if (!order.completed_at) return;
+        const day = toPhilippineDate(order.completed_at);
         const existing = dailyMap.get(day) || { revenue: 0, orders: 0 };
         dailyMap.set(day, {
           revenue: existing.revenue + (order.total_amount ?? 0),
