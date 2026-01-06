@@ -183,7 +183,7 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
           // Order already exists - this is fine, remove from queue
         // Order already processed (dedupe check)
         if (import.meta.env.DEV) {
-          console.log('Order already processed (duplicate):', order.client_order_id);
+          // console.log('Order already processed (duplicate):', order.client_order_id);
         }
           await removeQueuedOrder(order.id);
           processed++;
@@ -192,7 +192,7 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
 
         if (data.error === 'INSUFFICIENT_STOCK') {
           // Stock issue - notify user and remove from queue
-          console.warn('Order failed due to insufficient stock:', data.message);
+          // console.warn('Order failed due to insufficient stock:', data.message);
           await updateOrderError(order.id, data.message);
           
           // Move to failed queue after notifying
@@ -207,13 +207,13 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
 
       // Success - remove from queue
       if (import.meta.env.DEV) {
-        console.log('Order processed successfully:', data.order_id);
+        // console.log('Order processed successfully:', data.order_id);
       }
       await removeQueuedOrder(order.id);
       processed++;
 
     } catch (error) {
-      console.error('Failed to process order:', order.id, error);
+      // console.error('Failed to process order:', order.id, error);
       
       // Update error message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -225,7 +225,7 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
       // Check if max retries exceeded
       const updatedOrder = await (await getDB()).get('order-queue', order.id);
       if (updatedOrder && updatedOrder.retry_count >= MAX_RETRIES) {
-        console.warn('Max retries exceeded, moving to failed queue:', order.id);
+        // console.warn('Max retries exceeded, moving to failed queue:', order.id);
         await moveToFailedQueue(updatedOrder, 'Max retries exceeded');
         await removeQueuedOrder(order.id);
         failed++;
@@ -295,16 +295,16 @@ export async function retryFailedOrder(clientOrderId: string): Promise<void> {
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     if (import.meta.env.DEV) {
-      console.log('Back online, processing queue...');
+      // console.log('Back online, processing queue...');
     }
     processQueue()
       .then(({ processed, failed }) => {
         if (import.meta.env.DEV) {
-          console.log(`Queue processed: ${processed} successful, ${failed} failed`);
+          // console.log(`Queue processed: ${processed} successful, ${failed} failed`);
         }
       })
       .catch((error) => {
-        console.error('Failed to process queue on reconnect:', error);
+        // console.error('Failed to process queue on reconnect:', error);
       });
   });
 }
