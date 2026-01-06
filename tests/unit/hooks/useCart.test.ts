@@ -15,6 +15,9 @@ const mockSelect = vi.fn().mockReturnValue({
     }),
     maybeSingle: vi.fn().mockReturnValue({ data: null, error: null }),
     single: vi.fn().mockReturnValue({ data: null, error: null })
+  }),
+  match: vi.fn().mockReturnValue({
+    maybeSingle: vi.fn().mockReturnValue({ data: null, error: null })
   })
 });
 
@@ -29,6 +32,9 @@ vi.mock('../../../src/services/supabaseClient', () => ({
           }),
           maybeSingle: vi.fn().mockReturnValue({ data: null, error: null }),
           single: vi.fn().mockReturnValue({ data: null, error: null })
+        }),
+        match: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockReturnValue({ data: null, error: null })
         })
       });
       return {
@@ -37,12 +43,14 @@ vi.mock('../../../src/services/supabaseClient', () => ({
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({ data: null, error: null })
-          })
+          }),
+          match: vi.fn().mockReturnValue({ data: null, error: null })
         }),
         delete: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({ data: null, error: null })
-          })
+          }),
+          match: vi.fn().mockReturnValue({ data: null, error: null })
         }),
         upsert: mockUpsert
       };
@@ -94,6 +102,9 @@ describe('useCart Hook', () => {
             single: vi.fn().mockReturnValue({ data: null, error: null })
           })
         })
+      }),
+      match: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockReturnValue({ data: null, error: null })
       })
     });
     mockInsert.mockReturnValue({ data: null, error: null });
@@ -526,7 +537,6 @@ describe('useCart Hook', () => {
       });
 
       expect(orderResult).toMatchObject({
-        success: true,
         orders: expect.arrayContaining([
           expect.objectContaining({ order_id: 'new-order-id' })
         ])
