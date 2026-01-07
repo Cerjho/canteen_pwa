@@ -244,7 +244,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading || inviteCode.length !== 6 || attempts >= 5}
-              className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
+              className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -397,7 +397,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
+              className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>

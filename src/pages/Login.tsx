@@ -50,7 +50,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
         <h1 className="text-3xl font-bold text-center mb-2 text-gray-900 dark:text-gray-100">School Canteen</h1>
         <p className="text-gray-600 dark:text-gray-400 text-center mb-8">Login to order food for your kids</p>
 
@@ -94,7 +94,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white py-2 rounded-lg font-medium"
+            className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white py-2 rounded-lg font-medium"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
