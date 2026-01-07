@@ -27,20 +27,26 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return 'light';
   });
 
-  // Utility to update manifest colors
-  const updateManifestColors = (theme: Theme) => {
+  // Utility to update manifest and meta theme-color
+  const updateThemeColors = (theme: Theme) => {
+    // Update manifest
     const manifestEl = document.querySelector('link[rel="manifest"]');
-    if (!manifestEl) return;
-    fetch(manifestEl.getAttribute('href') || '/manifest.webmanifest')
-      .then(res => res.json())
-      .then(manifest => {
-        // Set colors based on theme
-        manifest.background_color = theme === 'dark' ? '#18181b' : '#ffffff';
-        manifest.theme_color = theme === 'dark' ? '#18181b' : '#4F46E5';
-        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        manifestEl.setAttribute('href', url);
-      });
+    if (manifestEl) {
+      fetch(manifestEl.getAttribute('href') || '/manifest.webmanifest')
+        .then(res => res.json())
+        .then(manifest => {
+          manifest.background_color = theme === 'dark' ? '#18181b' : '#ffffff';
+          manifest.theme_color = theme === 'dark' ? '#18181b' : '#4F46E5';
+          const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          manifestEl.setAttribute('href', url);
+        });
+    }
+    // Update meta theme-color
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', theme === 'dark' ? '#18181b' : '#4F46E5');
+    }
   };
 
   useEffect(() => {
@@ -53,8 +59,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     // Save to localStorage
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-    // Update manifest colors
-    updateManifestColors(theme);
+    // Update manifest and meta theme-color
+    updateThemeColors(theme);
   }, [theme]);
 
   const toggleTheme = () => {
