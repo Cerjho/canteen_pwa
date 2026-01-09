@@ -4,7 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4F46E5" />
+    <!-- Dynamically set theme-color based on user/app preference -->
+    <meta name="theme-color" content="" id="dynamic-theme-color" />
+    <script>
+      (function() {
+        try {
+          var THEME_STORAGE_KEY = 'theme';
+          var theme = localStorage.getItem(THEME_STORAGE_KEY);
+          if (!theme) {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          var color = theme === 'dark' ? '#18181b' : '#6366F1'; // Match Tailwind primary 500
+          var meta = document.getElementById('dynamic-theme-color');
+          if (meta) meta.setAttribute('content', color);
+        } catch (e) {}
+      })();
+    </script>
     <meta name="description" content="Order food for your kids from school canteen" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
