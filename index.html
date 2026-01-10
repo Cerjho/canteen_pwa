@@ -14,7 +14,7 @@
           if (!theme) {
             theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
           }
-          var color = theme === 'dark' ? '#18181b' : '#6366F1'; // Match Tailwind primary 500
+          var color = theme === 'dark' ? '#18181b' : '#EEF2FF'; // Match Tailwind primary 500
           var meta = document.getElementById('dynamic-theme-color');
           if (meta) meta.setAttribute('content', color);
         } catch (e) {}

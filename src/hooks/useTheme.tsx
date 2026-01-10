@@ -35,8 +35,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       fetch(manifestEl.getAttribute('href') || '/manifest.webmanifest')
         .then(res => res.json())
         .then(manifest => {
-          manifest.background_color = theme === 'dark' ? '#18181b' : '#ffffff';
-          manifest.theme_color = theme === 'dark' ? '#18181b' : '#ffffff';
+          manifest.background_color = theme === 'dark' ? '#18181b' : '#EEF2FF';
+          manifest.theme_color = theme === 'dark' ? '#18181b' : '#EEF2FF';
           const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           manifestEl.setAttribute('href', url);
@@ -45,7 +45,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Update meta theme-color
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
-      metaTheme.setAttribute('content', theme === 'dark' ? '#18181b' : '#4F46E5');
+      metaTheme.setAttribute('content', theme === 'dark' ? '#18181b' : '#EEF2FF');
     }
   };
 
