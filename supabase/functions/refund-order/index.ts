@@ -125,11 +125,12 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to cancelled (with optimistic lock to prevent double-refund)
+    // Update order status to cancelled with payment_status (with optimistic lock to prevent double-refund)
     const { data: updatedOrder, error: updateError } = await supabaseAdmin
       .from('orders')
       .update({ 
         status: 'cancelled',
+        payment_status: 'refunded',
         notes: order.notes ? `${order.notes}\n\nRefund reason: ${reason}` : `Refund reason: ${reason}`
       })
       .eq('id', order_id)
@@ -163,7 +164,7 @@ serve(async (req) => {
       console.error('Transaction insert error:', txError);
     }
 
-    // If payment was from balance, restore parent balance
+    // If payment was from balance, restore parent balance with optimistic locking
     if (order.payment_method === 'balance') {
       const { data: wallet } = await supabaseAdmin
         .from('wallets')
@@ -172,10 +173,35 @@ serve(async (req) => {
         .single();
 
       if (wallet) {
-        await supabaseAdmin
+        const previousBalance = wallet.balance;
+        const { error: walletError } = await supabaseAdmin
           .from('wallets')
-          .update({ balance: wallet.balance + order.total_amount })
-          .eq('user_id', order.parent_id);
+          .update({ 
+            balance: previousBalance + order.total_amount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', order.parent_id)
+          .eq('balance', previousBalance); // Optimistic lock
+
+        if (walletError) {
+          // Retry once with fresh balance
+          const { data: freshWallet } = await supabaseAdmin
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', order.parent_id)
+            .single();
+          
+          if (freshWallet) {
+            await supabaseAdmin
+              .from('wallets')
+              .update({ 
+                balance: freshWallet.balance + order.total_amount,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', order.parent_id)
+              .eq('balance', freshWallet.balance);
+          }
+        }
       }
     }
 

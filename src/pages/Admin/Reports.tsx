@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfWeek, subDays, eachDayOfInterval } from 'date-fns';
+import { format, startOfWeek, subDays } from 'date-fns';
 import { 
   DollarSign, 
   TrendingDown,
@@ -19,6 +19,8 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 // TIMEZONE & DATE HELPERS
 // Revenue reports use COMPLETED_AT (when order was paid/fulfilled)
 // This is the correct financial accounting date, NOT scheduled_for
+// All date boundaries use +08:00 offset so PostgreSQL correctly
+// interprets them as Philippine midnight, not UTC midnight.
 // ===========================================
 
 /**
@@ -34,6 +36,41 @@ const toPhilippineDate = (utcTimestamp: string): string => {
  */
 const getTodayPH = (): string => {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+};
+
+/**
+ * Get a date N days ago in Philippine timezone as YYYY-MM-DD
+ */
+const getDatePH = (date: Date): string => {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+};
+
+/**
+ * Convert a PH date string to a UTC-aware ISO string for Supabase queries.
+ * E.g. "2025-01-15" + "00:00:00" => "2025-01-15T00:00:00+08:00"
+ * PostgreSQL correctly interprets +08:00 as PH timezone offset.
+ */
+const phDateToISO = (dateStr: string, time: string): string => {
+  return `${dateStr}T${time}+08:00`;
+};
+
+/**
+ * Generate an array of PH-timezone date strings between two dates.
+ * Unlike eachDayOfInterval (which uses browser timezone), this
+ * generates dates purely in PH timezone.
+ */
+const eachDayPH = (startDate: Date, endDate: Date): string[] => {
+  const days: string[] = [];
+  const current = new Date(startDate);
+  const endStr = getDatePH(endDate);
+  let currentStr = getDatePH(current);
+  
+  while (currentStr <= endStr) {
+    days.push(currentStr);
+    current.setDate(current.getDate() + 1);
+    currentStr = getDatePH(current);
+  }
+  return days;
 };
 
 interface RevenueData {
@@ -84,13 +121,17 @@ export default function AdminReports() {
   // Fetch revenue data
   // CRITICAL: Revenue is based on COMPLETED orders, grouped by COMPLETED_AT date
   // This is the financially correct approach - revenue is recognized when transaction completes
+  // All date boundaries use +08:00 to ensure PH timezone correctness
   const { data: revenueData, isLoading } = useQuery({
     queryKey: ['admin-revenue', dateRange],
     queryFn: async () => {
       const { start, end } = getDateRange();
-      // Use ISO timestamps for completed_at range queries
-      const startISO = format(start, "yyyy-MM-dd'T'00:00:00");
-      const endISO = format(end, "yyyy-MM-dd'T'23:59:59");
+      // Use PH timezone-aware ISO timestamps for completed_at range queries
+      // +08:00 ensures PostgreSQL interprets boundaries as PH midnight, not UTC midnight
+      const startStr = getDatePH(start);
+      const endStr = getDatePH(end);
+      const startISO = phDateToISO(startStr, '00:00:00');
+      const endISO = phDateToISO(endStr, '23:59:59');
 
       // REVENUE = COMPLETED ORDERS ONLY, grouped by completion date
       // This is the only financially correct way to calculate revenue
@@ -131,10 +172,9 @@ export default function AdminReports() {
         });
       });
 
-      // Fill in missing days
-      const allDays = eachDayOfInterval({ start, end });
-      const daily: RevenueData[] = allDays.map(day => {
-        const dayStr = day.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      // Fill in missing days using PH timezone (not browser locale)
+      const allDays = eachDayPH(start, end);
+      const daily: RevenueData[] = allDays.map(dayStr => {
         const data = dailyMap.get(dayStr) || { revenue: 0, orders: 0 };
         return {
           date: dayStr,
@@ -149,14 +189,14 @@ export default function AdminReports() {
 
       return {
         daily,
-        total: orders.reduce((sum, o) => sum + o.total_amount, 0),
+        total: orders.reduce((sum, o) => sum + (o.total_amount ?? 0), 0),
         orderCount: orders.length,
         paymentBreakdown
       };
     }
   });
 
-  // Fetch recent transactions
+  // Fetch recent transactions (only completed ones for financial accuracy)
   const { data: transactions } = useQuery<TransactionRecord[]>({
     queryKey: ['admin-transactions'],
     queryFn: async () => {
@@ -166,6 +206,7 @@ export default function AdminReports() {
           *,
           parent:user_profiles(first_name, last_name)
         `)
+        .in('status', ['completed'])
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -175,34 +216,33 @@ export default function AdminReports() {
   });
 
   // Calculate comparison stats
-  // CRITICAL: All revenue comparisons use COMPLETED_AT, not scheduled_for
+  // CRITICAL: All revenue comparisons use COMPLETED_AT with +08:00 timezone offset
   // Revenue is recognized when the transaction is completed (status='completed')
   const { data: comparisonStats } = useQuery({
     queryKey: ['admin-comparison'],
     queryFn: async () => {
       // Use Philippine timezone for date boundaries
       const todayStr = getTodayPH();
-      // Use PH timezone consistently for all date boundaries
-      const toDatePH = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const yesterday = subDays(new Date(), 1);
-      const yesterdayStr = toDatePH(yesterday);
+      const yesterdayStr = getDatePH(yesterday);
       
       // Week starts on MONDAY for Philippine business logic
       const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-      const thisWeekStartStr = toDatePH(thisWeekStart);
+      const thisWeekStartStr = getDatePH(thisWeekStart);
       const lastWeekStart = subDays(thisWeekStart, 7);
-      const lastWeekStartStr = toDatePH(lastWeekStart);
+      const lastWeekStartStr = getDatePH(lastWeekStart);
       const lastWeekEnd = subDays(thisWeekStart, 1);
-      const lastWeekEndStr = toDatePH(lastWeekEnd);
+      const lastWeekEndStr = getDatePH(lastWeekEnd);
 
-      // Today's revenue: orders COMPLETED today (by completed_at)
+      // Today's revenue: orders COMPLETED today (by completed_at, PH timezone)
+      // +08:00 ensures PostgreSQL matches PH midnight-to-midnight
       const { data: todayOrders } = await supabase
         .from('orders')
         .select('total_amount, completed_at')
         .eq('status', 'completed')
         .not('completed_at', 'is', null)
-        .gte('completed_at', `${todayStr}T00:00:00`)
-        .lte('completed_at', `${todayStr}T23:59:59`);
+        .gte('completed_at', phDateToISO(todayStr, '00:00:00'))
+        .lte('completed_at', phDateToISO(todayStr, '23:59:59'));
 
       // Yesterday's revenue: orders COMPLETED yesterday
       const { data: yesterdayOrders } = await supabase
@@ -210,8 +250,8 @@ export default function AdminReports() {
         .select('total_amount, completed_at')
         .eq('status', 'completed')
         .not('completed_at', 'is', null)
-        .gte('completed_at', `${yesterdayStr}T00:00:00`)
-        .lte('completed_at', `${yesterdayStr}T23:59:59`);
+        .gte('completed_at', phDateToISO(yesterdayStr, '00:00:00'))
+        .lte('completed_at', phDateToISO(yesterdayStr, '23:59:59'));
 
       // This week's revenue: orders COMPLETED this week
       const { data: thisWeekOrders } = await supabase
@@ -219,8 +259,8 @@ export default function AdminReports() {
         .select('total_amount, completed_at')
         .eq('status', 'completed')
         .not('completed_at', 'is', null)
-        .gte('completed_at', `${thisWeekStartStr}T00:00:00`)
-        .lte('completed_at', `${todayStr}T23:59:59`);
+        .gte('completed_at', phDateToISO(thisWeekStartStr, '00:00:00'))
+        .lte('completed_at', phDateToISO(todayStr, '23:59:59'));
 
       // Last week's revenue: orders COMPLETED last week
       const { data: lastWeekOrders } = await supabase
@@ -228,8 +268,8 @@ export default function AdminReports() {
         .select('total_amount, completed_at')
         .eq('status', 'completed')
         .not('completed_at', 'is', null)
-        .gte('completed_at', `${lastWeekStartStr}T00:00:00`)
-        .lte('completed_at', `${lastWeekEndStr}T23:59:59`);
+        .gte('completed_at', phDateToISO(lastWeekStartStr, '00:00:00'))
+        .lte('completed_at', phDateToISO(lastWeekEndStr, '23:59:59'));
 
       const todayRevenue = todayOrders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0;
       const yesterdayRevenue = yesterdayOrders?.reduce((sum, o) => sum + (o.total_amount ?? 0), 0) ?? 0;
@@ -250,15 +290,34 @@ export default function AdminReports() {
   const exportReport = () => {
     if (!revenueData?.daily) return;
     
-    const csv = [
-      ['Date', 'Revenue', 'Orders'].join(','),
+    const csvLines = [
+      ['Date', 'Revenue (PHP)', 'Orders'].join(','),
       ...revenueData.daily.map(d => [
         d.date,
         d.revenue.toFixed(2),
         d.orders
       ].join(','))
-    ].join('\n');
+    ];
 
+    // Add summary section
+    csvLines.push('');
+    csvLines.push('Summary');
+    csvLines.push(`Total Revenue,${(revenueData.total || 0).toFixed(2)}`);
+    csvLines.push(`Total Orders,${revenueData.orderCount || 0}`);
+    csvLines.push(`Average Order Value,${revenueData.orderCount ? (revenueData.total / revenueData.orderCount).toFixed(2) : '0.00'}`);
+
+    // Add payment breakdown
+    if (revenueData.paymentBreakdown.length > 0) {
+      csvLines.push('');
+      csvLines.push('Payment Method Breakdown');
+      csvLines.push(['Method', 'Amount (PHP)', 'Count', 'Percentage'].join(','));
+      revenueData.paymentBreakdown.forEach(p => {
+        const pct = revenueData.total > 0 ? ((p.amount / revenueData.total) * 100).toFixed(1) : '0.0';
+        csvLines.push([p.method, p.amount.toFixed(2), p.count, `${pct}%`].join(','));
+      });
+    }
+
+    const csv = csvLines.join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

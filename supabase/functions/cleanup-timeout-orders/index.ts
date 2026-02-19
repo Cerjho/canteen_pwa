@@ -132,10 +132,11 @@ serve(async (req) => {
           }
         }
 
-        // Update transaction status
+        // Update transaction status to 'failed' (valid per CHECK constraint)
+        // Note: transactions table has no updated_at column
         await supabaseAdmin
           .from('transactions')
-          .update({ status: 'cancelled', updated_at: now })
+          .update({ status: 'failed' })
           .eq('order_id', order.id);
 
         cancelledOrders.push(order.id);

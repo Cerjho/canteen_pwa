@@ -329,14 +329,20 @@ serve(async (req) => {
           );
         }
 
-        // Update order to cancelled
+        // Update order to cancelled with payment_status
+        const updateData: Record<string, any> = { 
+          status: 'cancelled',
+          notes: reason ? `Cancelled: ${reason}` : 'Cancelled by staff/admin',
+          updated_at: new Date().toISOString()
+        };
+        // Set payment_status to refunded if refund will be applied
+        if (order.total_amount > 0) {
+          updateData.payment_status = 'refunded';
+        }
+
         const { error: updateError } = await supabaseAdmin
           .from('orders')
-          .update({ 
-            status: 'cancelled',
-            notes: reason ? `Cancelled: ${reason}` : 'Cancelled by staff/admin',
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('id', order_id);
 
         if (updateError) {
@@ -414,38 +420,70 @@ serve(async (req) => {
           }
 
           if (wallet) {
-            // Add refund to wallet
-            const { error: refundError } = await supabaseAdmin
+            // Add refund to wallet with optimistic locking
+            const previousBalance = wallet.balance || 0;
+            const { data: walletResult, error: refundError } = await supabaseAdmin
               .from('wallets')
               .update({
-                balance: (wallet.balance || 0) + order.total_amount,
+                balance: previousBalance + order.total_amount,
                 updated_at: new Date().toISOString()
               })
-              .eq('user_id', order.parent_id);
+              .eq('user_id', order.parent_id)
+              .eq('balance', previousBalance) // Optimistic lock: only update if balance hasn't changed
+              .select('balance')
+              .single();
 
-            if (!refundError) {
+            if (!refundError && walletResult) {
               refundApplied = true;
-              
-              // Determine refund description based on payment method
-              let refundDescription = `Refund for cancelled order #${order_id.slice(-6)}`;
-              if (order.payment_method === 'cash') {
-                refundDescription = `Credit for cancelled cash order #${order_id.slice(-6)}`;
-              } else if (order.payment_method === 'gcash') {
-                refundDescription = `Credit for cancelled GCash order #${order_id.slice(-6)}`;
-              }
 
-              // Record the refund transaction
+              // Record the refund in the transactions table (correct schema)
               await supabaseAdmin
-                .from('wallet_transactions')
+                .from('transactions')
                 .insert({
-                  wallet_id: wallet.id,
-                  user_id: order.parent_id,
+                  parent_id: order.parent_id,
+                  order_id: order_id,
                   type: 'refund',
                   amount: order.total_amount,
-                  description: refundDescription,
-                  reference_id: order_id,
-                  performed_by: user.id
+                  method: order.payment_method,
+                  status: 'completed',
+                  reference_id: `CANCEL-${order_id.substring(0, 8)}`
                 });
+            } else if (refundError) {
+              // Retry once with fresh balance if optimistic lock failed
+              const { data: freshWallet } = await supabaseAdmin
+                .from('wallets')
+                .select('balance')
+                .eq('user_id', order.parent_id)
+                .single();
+              
+              if (freshWallet) {
+                const { data: retryResult, error: retryError } = await supabaseAdmin
+                  .from('wallets')
+                  .update({
+                    balance: freshWallet.balance + order.total_amount,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('user_id', order.parent_id)
+                  .eq('balance', freshWallet.balance)
+                  .select('balance')
+                  .single();
+
+                if (!retryError && retryResult) {
+                  refundApplied = true;
+
+                  await supabaseAdmin
+                    .from('transactions')
+                    .insert({
+                      parent_id: order.parent_id,
+                      order_id: order_id,
+                      type: 'refund',
+                      amount: order.total_amount,
+                      method: order.payment_method,
+                      status: 'completed',
+                      reference_id: `CANCEL-${order_id.substring(0, 8)}`
+                    });
+                }
+              }
             }
           }
         }

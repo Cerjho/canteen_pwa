@@ -136,13 +136,18 @@ serve(async (req) => {
       }
     }
 
-    // Cancel the order
+    // Cancel the order with payment_status update
+    const cancelData: Record<string, any> = { 
+      status: 'cancelled',
+      updated_at: new Date().toISOString()
+    };
+    if (order.total_amount > 0) {
+      cancelData.payment_status = 'refunded';
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from('orders')
-      .update({ 
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      })
+      .update(cancelData)
       .eq('id', order_id)
       .eq('parent_id', user.id) // Double-check ownership
       .eq('status', 'pending'); // Only if still pending
@@ -225,40 +230,72 @@ serve(async (req) => {
       }
 
       if (wallet) {
-        // Add refund to wallet
-        const { error: refundError } = await supabaseAdmin
+        // Add refund to wallet with optimistic locking
+        const previousBalance = wallet.balance || 0;
+        const { data: walletResult, error: refundError } = await supabaseAdmin
           .from('wallets')
           .update({
-            balance: (wallet.balance || 0) + order.total_amount,
+            balance: previousBalance + order.total_amount,
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('balance', previousBalance) // Optimistic lock
+          .select('balance')
+          .single();
 
-        if (!refundError) {
+        if (!refundError && walletResult) {
           refundApplied = true;
-          
-          // Determine refund description based on payment method
-          let refundDescription = `Refund for cancelled order #${order_id.slice(-6)}`;
-          if (order.payment_method === 'cash') {
-            refundDescription = `Credit for cancelled cash order #${order_id.slice(-6)}`;
-          } else if (order.payment_method === 'gcash') {
-            refundDescription = `Credit for cancelled GCash order #${order_id.slice(-6)}`;
-          }
-          
           refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
 
-          // Record the refund transaction
+          // Record the refund in the transactions table (correct schema)
           await supabaseAdmin
-            .from('wallet_transactions')
+            .from('transactions')
             .insert({
-              wallet_id: wallet.id,
-              user_id: user.id,
+              parent_id: user.id,
+              order_id: order_id,
               type: 'refund',
               amount: order.total_amount,
-              description: refundDescription,
-              reference_id: order_id,
-              performed_by: user.id
+              method: order.payment_method,
+              status: 'completed',
+              reference_id: `CANCEL-${order_id.substring(0, 8)}`
             });
+        } else {
+          // Retry once with fresh balance if optimistic lock failed
+          const { data: freshWallet } = await supabaseAdmin
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (freshWallet) {
+            const { data: retryResult, error: retryError } = await supabaseAdmin
+              .from('wallets')
+              .update({
+                balance: freshWallet.balance + order.total_amount,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', user.id)
+              .eq('balance', freshWallet.balance)
+              .select('balance')
+              .single();
+
+            if (!retryError && retryResult) {
+              refundApplied = true;
+              refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
+
+              await supabaseAdmin
+                .from('transactions')
+                .insert({
+                  parent_id: user.id,
+                  order_id: order_id,
+                  type: 'refund',
+                  amount: order.total_amount,
+                  method: order.payment_method,
+                  status: 'completed',
+                  reference_id: `CANCEL-${order_id.substring(0, 8)}`
+                });
+            }
+          }
         }
       }
     }
