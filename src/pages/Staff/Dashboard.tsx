@@ -154,6 +154,29 @@ function groupOrdersByGrade(orders: StaffOrder[]): GradeGroup[] {
 type DateFilter = 'today' | 'future' | 'all';
 type ViewMode = 'flat' | 'grouped' | 'kitchen';
 
+// Meal period ordering for kitchen prep view
+const MEAL_PERIOD_ORDER: MealPeriod[] = ['morning_snack', 'lunch', 'afternoon_snack'];
+
+interface PrepItem {
+  name: string;
+  quantity: number;
+  image_url: string;
+  pendingQty: number;
+  preparingQty: number;
+}
+
+interface GradePrepGroup {
+  gradeLevel: string;
+  items: PrepItem[];
+  totalItems: number;
+}
+
+interface MealPrepGroup {
+  mealPeriod: MealPeriod;
+  grades: GradePrepGroup[];
+  totalItems: number;
+}
+
 // Touch tracking for swipe gestures
 interface TouchState {
   startX: number;
@@ -337,28 +360,6 @@ export default function StaffDashboard() {
 
   // Aggregate items to prepare (for kitchen view) - grouped by meal period and grade level
   // Uses the order's meal_period field (set by parent during ordering)
-  const MEAL_PERIOD_ORDER: MealPeriod[] = ['morning_snack', 'lunch', 'afternoon_snack'];
-
-  interface PrepItem {
-    name: string;
-    quantity: number;
-    image_url: string;
-    pendingQty: number;
-    preparingQty: number;
-  }
-
-  interface GradePrepGroup {
-    gradeLevel: string;
-    items: PrepItem[];
-    totalItems: number;
-  }
-
-  interface MealPrepGroup {
-    mealPeriod: MealPeriod;
-    grades: GradePrepGroup[];
-    totalItems: number;
-  }
-
   const prepByMealAndGrade = useMemo((): MealPrepGroup[] => {
     if (!orders) return [];
 
@@ -372,10 +373,10 @@ export default function StaffDashboard() {
         const gradeLevel = order.child?.grade_level || 'Unknown';
 
         if (!mealMap.has(mealPeriod)) mealMap.set(mealPeriod, new Map());
-        const gradeMap = mealMap.get(mealPeriod)!;
+        const gradeMap = mealMap.get(mealPeriod) ?? new Map<string, Map<string, PrepItem>>();
 
         if (!gradeMap.has(gradeLevel)) gradeMap.set(gradeLevel, new Map());
-        const itemMap = gradeMap.get(gradeLevel)!;
+        const itemMap = gradeMap.get(gradeLevel) ?? new Map<string, PrepItem>();
 
         order.items.forEach(item => {
           const existing = itemMap.get(item.product.name);
@@ -399,7 +400,7 @@ export default function StaffDashboard() {
     return MEAL_PERIOD_ORDER
       .filter(mp => mealMap.has(mp))
       .map(mp => {
-        const gradeMap = mealMap.get(mp)!;
+        const gradeMap = mealMap.get(mp) ?? new Map<string, Map<string, PrepItem>>();
         const grades: GradePrepGroup[] = Array.from(gradeMap.entries())
           .map(([gradeLevel, itemMap]) => {
             const items = Array.from(itemMap.values()).sort((a, b) => b.quantity - a.quantity);
