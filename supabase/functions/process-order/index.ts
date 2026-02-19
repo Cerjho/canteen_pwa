@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 // Helper to get today's date in Philippines timezone (UTC+8)
 function getTodayPhilippines(): string {
@@ -34,10 +30,11 @@ interface OrderRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Initialize Supabase client with service role for admin operations
@@ -93,9 +90,26 @@ serve(async (req) => {
       );
     }
 
+    // Only parents can place orders
+    const userRole = user.app_metadata?.role;
+    if (userRole !== 'parent') {
+      return new Response(
+        JSON.stringify({ error: 'FORBIDDEN', message: 'Only parents can place orders' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Parse and validate request body
     const body: OrderRequest = await req.json();
     const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
+
+    // Ensure parent_id matches authenticated user (prevent impersonation)
+    if (parent_id !== user.id) {
+      return new Response(
+        JSON.stringify({ error: 'FORBIDDEN', message: 'Cannot place orders on behalf of another user' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Validate request
     if (!parent_id || !student_id || !client_order_id || !items || items.length === 0) {
@@ -403,7 +417,20 @@ serve(async (req) => {
         );
       }
 
-      totalAmount += item.price_at_order * item.quantity;
+      // SECURITY: Validate client-provided price matches server price
+      if (Math.abs(item.price_at_order - product.price) > 0.01) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'PRICE_MISMATCH', 
+            message: `Price changed for '${product.name}'. Please refresh and try again.`,
+            product_id: item.product_id,
+            expected_price: product.price
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      totalAmount += product.price * item.quantity;
     }
 
     // If payment method is 'balance', validate sufficient funds

@@ -465,11 +465,14 @@ export function useCart() {
         await loadCart();
       }
     } else {
+      // Clamp quantity to reasonable max
+      const MAX_QUANTITY = 20;
+      const clampedQty = Math.min(quantity, MAX_QUANTITY);
       // Update quantity
       setItems((prevItems) =>
         prevItems.map((i) =>
           i.product_id === productId && i.student_id === studentId && i.scheduled_for === scheduledFor
-            ? { ...i, quantity } 
+            ? { ...i, quantity: clampedQty } 
             : i
         )
       );
@@ -477,7 +480,7 @@ export function useCart() {
       try {
         const { error } = await supabase
           .from('cart_items')
-          .update({ quantity })
+          .update({ quantity: clampedQty })
           .match({
             user_id: user.id,
             student_id: studentId,

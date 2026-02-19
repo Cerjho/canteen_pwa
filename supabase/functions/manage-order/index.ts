@@ -76,7 +76,7 @@ serve(async (req) => {
     }
 
     // Check if user is admin or staff
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (!['admin', 'staff'].includes(userRole)) {
       return new Response(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Admin or staff access required' }),

@@ -37,7 +37,7 @@ export default function StaffProfilePage() {
   });
 
   // Get user role
-  const userRole = user?.user_metadata?.role || 'staff';
+  const userRole = user?.app_metadata?.role || 'staff';
 
   // Fetch staff profile from user_profiles table
   const { data: profile, isLoading } = useQuery({

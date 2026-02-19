@@ -80,7 +80,7 @@ serve(async (req) => {
     }
 
     // Check if user is admin
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (userRole !== 'admin') {
       return new Response(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Admin access required' }),
@@ -304,17 +304,7 @@ serve(async (req) => {
           );
         }
 
-        // Soft delete - mark as unavailable and rename
-        const { error: deleteError } = await supabaseAdmin
-          .from('products')
-          .update({ 
-            available: false, 
-            name: supabaseAdmin.rpc('', {}), // Will use actual delete below
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', product_id);
-
-        // Actually delete if no orders reference it
+        // Check if safe to hard delete or must soft delete
         const { count: totalOrders } = await supabaseAdmin
           .from('order_items')
           .select('id', { count: 'exact', head: true })

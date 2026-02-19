@@ -59,3 +59,5 @@ public/workbox-*.js
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+.vercel
+.env*.local

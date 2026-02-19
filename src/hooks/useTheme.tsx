@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -27,27 +27,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return 'light';
   });
 
-  // Utility to update manifest and meta theme-color
-  const updateThemeColors = (theme: Theme) => {
-    // Update manifest
-    const manifestEl = document.querySelector('link[rel="manifest"]');
-    if (manifestEl) {
-      fetch(manifestEl.getAttribute('href') || '/manifest.webmanifest')
-        .then(res => res.json())
-        .then(manifest => {
-          manifest.background_color = theme === 'dark' ? '#18181b' : '#EEF2FF';
-          manifest.theme_color = theme === 'dark' ? '#18181b' : '#EEF2FF';
-          const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          manifestEl.setAttribute('href', url);
-        });
-    }
-    // Update meta theme-color
-    const metaTheme = document.querySelector('meta[name="theme-color"]');
-    if (metaTheme) {
-      metaTheme.setAttribute('content', theme === 'dark' ? '#18181b' : '#EEF2FF');
-    }
-  };
+  // Track blob URL for cleanup
+  const blobUrlRef = useRef('');
 
   useEffect(() => {
     // Apply theme to document
@@ -59,8 +40,32 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     // Save to localStorage
     localStorage.setItem(THEME_STORAGE_KEY, theme);
+
     // Update manifest and meta theme-color
-    updateThemeColors(theme);
+    // Revoke previous blob URL to prevent memory leak
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = '';
+    }
+    // Update manifest
+    const manifestEl = document.querySelector('link[rel="manifest"]');
+    if (manifestEl) {
+      fetch(manifestEl.getAttribute('href') || '/manifest.webmanifest')
+        .then(res => res.json())
+        .then(manifest => {
+          manifest.background_color = theme === 'dark' ? '#18181b' : '#EEF2FF';
+          manifest.theme_color = theme === 'dark' ? '#18181b' : '#EEF2FF';
+          const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          blobUrlRef.current = url;
+          manifestEl.setAttribute('href', url);
+        });
+    }
+    // Update meta theme-color
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', theme === 'dark' ? '#18181b' : '#EEF2FF');
+    }
   }, [theme]);
 
   const toggleTheme = () => {

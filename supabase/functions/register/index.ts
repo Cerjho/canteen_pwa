@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface RegisterRequest {
   invitation_code: string;
@@ -40,10 +36,11 @@ function validatePassword(password: string): { valid: boolean; error?: string } 
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Initialize Supabase client with service role for admin operations
@@ -141,15 +138,8 @@ serve(async (req) => {
       );
     }
 
-    // Check if email already exists
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const emailExists = existingUsers?.users?.some(u => u.email === invitation.email);
-    if (emailExists) {
-      return new Response(
-        JSON.stringify({ error: 'EMAIL_EXISTS', message: 'An account with this email already exists.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Check if email already exists (efficient: try to create, catch conflict)
+    // Removed: listUsers() which loaded ALL users into memory
 
     // Sanitize input
     const sanitizedFirstName = sanitizeString(first_name, 50);
@@ -161,8 +151,10 @@ serve(async (req) => {
       email: invitation.email,
       password: password,
       email_confirm: true, // Auto-confirm since they have invitation
-      user_metadata: {
+      app_metadata: {
         role: invitation.role,
+      },
+      user_metadata: {
         first_name: sanitizedFirstName,
         last_name: sanitizedLastName,
       },
@@ -170,6 +162,14 @@ serve(async (req) => {
 
     if (createUserError || !newUser.user) {
       console.error('Failed to create user:', createUserError);
+      // Supabase returns specific message for duplicate emails
+      if (createUserError?.message?.includes('already been registered') || 
+          createUserError?.message?.includes('already exists')) {
+        return new Response(
+          JSON.stringify({ error: 'EMAIL_EXISTS', message: 'An account with this email already exists.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       return new Response(
         JSON.stringify({ error: 'SERVER_ERROR', message: 'Failed to create account. Please try again.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

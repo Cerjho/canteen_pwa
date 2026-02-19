@@ -76,8 +76,8 @@ function App() {
   const location = useLocation();
   const { settings, isLoading: settingsLoading, refetch: refetchSettings } = useSystemSettings();
   
-  // Get user role from metadata
-  const userRole: UserRole = user?.user_metadata?.role || 'parent';
+  // Get user role from app_metadata (server-only, tamper-proof)
+  const userRole: UserRole = user?.app_metadata?.role || 'parent';
   
   // Check if current path is admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -177,6 +177,9 @@ function App() {
 
         {/* Default redirect based on role */}
         <Route path="/" element={<Navigate to={user ? getDefaultRoute(userRole) : "/login"} />} />
+        
+        {/* 404 fallback */}
+        <Route path="*" element={<Navigate to={user ? getDefaultRoute(userRole) : "/login"} />} />
       </Routes>
       
       {/* Bottom Navigation - only show when logged in and not on admin routes */}

@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface UpdateDietaryRequest {
   child_id: string;
@@ -20,10 +16,11 @@ function sanitizeString(str: string | undefined, maxLength: number = 500): strin
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Get auth token from request

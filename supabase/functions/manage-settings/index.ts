@@ -3,17 +3,16 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+type SettingsAction = 'get' | 'update' | 'get-all' | 'check-maintenance' | 'archive-orders' | 'reset-stock';
 
 interface SettingsRequest {
-  action: 'get' | 'update' | 'get-all' | 'check-maintenance';
+  action: SettingsAction;
   key?: string;
   value?: unknown;
   settings?: Record<string, unknown>;
+  days?: number;
 }
 
 // Valid setting keys and their validators
@@ -38,10 +37,11 @@ const SETTING_VALIDATORS: Record<string, (value: unknown) => boolean> = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     console.log('manage-settings: Starting request');
@@ -69,6 +69,15 @@ serve(async (req) => {
     
     const { action } = body;
     console.log('manage-settings: Action:', action);
+
+    // Validate action upfront
+    const validActions: SettingsAction[] = ['get', 'update', 'get-all', 'check-maintenance', 'archive-orders', 'reset-stock'];
+    if (!validActions.includes(action)) {
+      return new Response(
+        JSON.stringify({ error: true, message: `Invalid action. Must be: ${validActions.join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // check-maintenance doesn't require auth (used by app to check status)
     if (action === 'check-maintenance') {
@@ -109,16 +118,9 @@ serve(async (req) => {
     
     console.log('manage-settings: User authenticated:', user.id);
 
-    // Verify admin role
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    console.log('manage-settings: Profile:', profile, 'Error:', profileError?.message);
-
-    if (profile?.role !== 'admin') {
+    // Verify admin role from app_metadata (tamper-proof, server-only)
+    const userRole = user.app_metadata?.role;
+    if (userRole !== 'admin') {
       return new Response(
         JSON.stringify({ error: true, message: 'Admin access required' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -228,7 +230,7 @@ serve(async (req) => {
           if (error) {
             console.error('Update error for', key, ':', error);
             return new Response(
-              JSON.stringify({ error: true, message: `Failed to update ${key}: ${error.message}` }),
+              JSON.stringify({ error: true, message: `Failed to update ${key}` }),
               { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }

@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface TopUpRequest {
   user_id: string;
@@ -16,9 +12,11 @@ interface TopUpRequest {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -47,7 +45,7 @@ serve(async (req) => {
     }
 
     // Check if user is admin
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (userRole !== 'admin') {
       return new Response(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Admin access required' }),
@@ -59,9 +57,16 @@ serve(async (req) => {
     const { user_id, amount, notes } = body;
 
     // Validate request
-    if (!user_id || !amount || amount <= 0) {
+    if (!user_id) {
       return new Response(
-        JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Invalid user_id or amount' }),
+        JSON.stringify({ error: 'VALIDATION_ERROR', message: 'user_id is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      return new Response(
+        JSON.stringify({ error: 'VALIDATION_ERROR', message: 'amount must be a positive number' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

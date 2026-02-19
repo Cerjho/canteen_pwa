@@ -33,7 +33,7 @@ export default function Login() {
         // Reset loading state before navigation
         setLoading(false);
         // Route based on user role
-        const role = data.user?.user_metadata?.role;
+        const role = data.user?.app_metadata?.role;
         if (role === 'admin') {
           navigate('/admin');
         } else if (role === 'staff') {

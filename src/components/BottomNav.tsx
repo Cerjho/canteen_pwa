@@ -7,8 +7,8 @@ export function BottomNav() {
   const { user } = useAuth();
   const activeOrderCount = useActiveOrderCount();
   
-  // Check user role from user metadata
-  const userRole = user?.user_metadata?.role;
+  // Check user role from app_metadata (server-only, tamper-proof)
+  const userRole = user?.app_metadata?.role;
   const isParent = userRole === 'parent' || !userRole;
   const isStaff = userRole === 'staff';
   const isAdmin = userRole === 'admin';

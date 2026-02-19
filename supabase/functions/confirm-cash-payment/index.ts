@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface ConfirmPaymentRequest {
   order_id: string;
@@ -15,9 +11,11 @@ interface ConfirmPaymentRequest {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -46,7 +44,7 @@ serve(async (req) => {
     }
 
     // Check if user is admin or staff
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (!['admin', 'staff'].includes(userRole)) {
       return new Response(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Staff or admin access required' }),
@@ -164,21 +162,23 @@ serve(async (req) => {
       );
     }
 
-    // Update order - confirm payment
-    const { error: updateError } = await supabaseAdmin
+    // Update order - confirm payment (with optimistic lock)
+    const { data: updatedOrder, error: updateError } = await supabaseAdmin
       .from('orders')
       .update({ 
         payment_status: 'paid',
         status: 'pending', // Now ready for preparation
         updated_at: new Date().toISOString()
       })
-      .eq('id', order_id);
+      .eq('id', order_id)
+      .eq('payment_status', 'awaiting_payment')
+      .select()
+      .single();
 
-    if (updateError) {
-      console.error('Payment confirmation error:', updateError);
+    if (updateError || !updatedOrder) {
       return new Response(
-        JSON.stringify({ error: 'UPDATE_FAILED', message: 'Failed to confirm payment' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'ALREADY_PAID', message: 'Payment was already confirmed by another request' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

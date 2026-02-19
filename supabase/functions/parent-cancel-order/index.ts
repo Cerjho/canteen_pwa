@@ -53,7 +53,7 @@ serve(async (req) => {
     }
 
     // Check if user is a parent
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (userRole !== 'parent') {
       return jsonResponse(
         { error: 'FORBIDDEN', message: 'Parent access required' },

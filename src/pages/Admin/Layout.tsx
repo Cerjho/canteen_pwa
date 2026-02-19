@@ -35,7 +35,7 @@ export default function AdminLayout() {
   const { user } = useAuth();
 
   // Check admin access
-  const userRole = user?.user_metadata?.role;
+  const userRole = user?.app_metadata?.role;
   if (userRole !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">

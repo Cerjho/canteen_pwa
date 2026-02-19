@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface StudentData {
   first_name: string;
@@ -69,10 +65,11 @@ function validateStudentData(data: StudentData): { valid: boolean; error?: strin
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Get auth token from request
@@ -105,7 +102,7 @@ serve(async (req) => {
     }
 
     // CRITICAL: Verify user is an admin - NEVER trust client claim
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (userRole !== 'admin') {
       console.log(`SECURITY: Non-admin user ${user.id} attempted student management`);
       return new Response(

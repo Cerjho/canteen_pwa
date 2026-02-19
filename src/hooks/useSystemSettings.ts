@@ -34,10 +34,17 @@ export function useSystemSettings() {
         return defaultSettings;
       }
       
+      const VALID_SETTINGS_KEYS = new Set([
+        'maintenance_mode', 'canteen_name', 'operating_hours',
+        'order_cutoff_time', 'allow_future_orders', 'max_future_days',
+        'low_stock_threshold', 'auto_complete_orders', 'notification_email'
+      ]);
       const parsed = { ...defaultSettings };
       data?.forEach(setting => {
         try {
-          (parsed as Record<string, unknown>)[setting.key] = setting.value;
+          if (VALID_SETTINGS_KEYS.has(setting.key)) {
+            (parsed as Record<string, unknown>)[setting.key] = setting.value;
+          }
         } catch {
           // Skip invalid settings
         }

@@ -33,7 +33,7 @@ serve(async (req) => {
       return errorResponse('Unauthorized', 401, origin);
     }
 
-    if (requestingUser.user_metadata?.role !== 'admin') {
+    if (requestingUser.app_metadata?.role !== 'admin') {
       return errorResponse('Only admins can list staff', 403, origin);
     }
 
@@ -63,15 +63,15 @@ serve(async (req) => {
     // Filter staff and admin users
     const staffMembers = users
       .filter(user => 
-        user.user_metadata?.role === 'staff' || 
-        user.user_metadata?.role === 'admin'
+        user.app_metadata?.role === 'staff' || 
+        user.app_metadata?.role === 'admin'
       )
       .map(user => ({
         id: user.id,
         email: user.email,
         first_name: user.user_metadata?.first_name || '',
         last_name: user.user_metadata?.last_name || '',
-        role: user.user_metadata?.role,
+        role: user.app_metadata?.role,
         created_at: user.created_at,
       }));
 

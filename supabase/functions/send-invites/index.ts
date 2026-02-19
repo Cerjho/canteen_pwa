@@ -46,7 +46,7 @@ serve(async (req) => {
       return errorResponse('Unauthorized', 401, origin);
     }
 
-    if (requestingUser.user_metadata?.role !== 'admin') {
+    if (requestingUser.app_metadata?.role !== 'admin') {
       return errorResponse('Only admins can send invitations', 403, origin);
     }
 

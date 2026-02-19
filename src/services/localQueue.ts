@@ -134,11 +134,17 @@ function getBackoffDelay(retryCount: number): number {
   return delay + Math.random() * 1000;
 }
 
+// Concurrency guard to prevent double-processing
+let isProcessing = false;
+
 // Process queue when online
 export async function processQueue(): Promise<{ processed: number; failed: number }> {
-  if (!isOnline()) {
+  if (!isOnline() || isProcessing) {
     return { processed: 0, failed: 0 };
   }
+
+  isProcessing = true;
+  try {
 
   const orders = await getQueuedOrders();
   let processed = 0;
@@ -234,6 +240,9 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
   }
 
   return { processed, failed };
+  } finally {
+    isProcessing = false;
+  }
 }
 
 const MAX_RETRIES = 5;
@@ -243,6 +252,11 @@ async function moveToFailedQueue(order: QueuedOrder, reason: string): Promise<vo
   // Store failed orders in localStorage for now
   // In production, could use another IndexedDB store
   const failedOrders = JSON.parse(localStorage.getItem('failed-orders') || '[]');
+  // Limit failed queue to prevent unbounded localStorage growth
+  const MAX_FAILED_ORDERS = 20;
+  if (failedOrders.length >= MAX_FAILED_ORDERS) {
+    failedOrders.shift(); // Remove oldest
+  }
   failedOrders.push({
     ...order,
     failed_at: new Date().toISOString(),

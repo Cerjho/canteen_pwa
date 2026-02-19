@@ -189,8 +189,8 @@ export default function AdminDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Get user role from JWT metadata
-  const userRole = user?.user_metadata?.role as string | undefined;
+  // Get user role from app_metadata (server-only, tamper-proof)
+  const userRole = user?.app_metadata?.role as string | undefined;
   const isStaffOrAdmin = userRole === 'staff' || userRole === 'admin';
 
   // Save sound preference

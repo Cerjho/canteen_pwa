@@ -1,10 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface CreateUserRequest {
   email?: string; // Single email for create mode
@@ -18,10 +14,11 @@ interface CreateUserRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Verify the requesting user is an admin
@@ -54,7 +51,7 @@ serve(async (req) => {
       );
     }
 
-    if (requestingUser.user_metadata?.role !== 'admin') {
+    if (requestingUser.app_metadata?.role !== 'admin') {
       return new Response(
         JSON.stringify({ error: 'Only admins can create users' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -82,7 +79,13 @@ serve(async (req) => {
         );
       }
 
-      const defaultPassword = 'Welcome123!';
+      // Generate a unique random password per invited user
+      function generateSecurePassword(): string {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes).map(b => chars[b % chars.length]).join('');
+      }
       const results: { email: string; success: boolean; error?: string }[] = [];
 
       for (const inviteEmail of emailList) {
@@ -97,10 +100,12 @@ serve(async (req) => {
           // Create user with default password and needs_setup flag
           const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
             email: trimmedEmail,
-            password: defaultPassword,
+            password: generateSecurePassword(),
             email_confirm: true,
-            user_metadata: {
+            app_metadata: {
               role,
+            },
+            user_metadata: {
               needs_setup: true, // Flag to trigger onboarding
               first_name: '',
               last_name: '',
@@ -184,8 +189,10 @@ serve(async (req) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: {
+      app_metadata: {
         role,
+      },
+      user_metadata: {
         first_name: firstName,
         last_name: lastName,
       },

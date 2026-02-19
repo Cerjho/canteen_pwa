@@ -83,7 +83,7 @@ serve(async (req) => {
       );
     }
 
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (!['staff', 'admin'].includes(userRole)) {
       return jsonResponse(
         { error: 'FORBIDDEN', message: 'Staff or admin access required' },

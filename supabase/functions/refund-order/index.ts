@@ -3,11 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
 
 interface RefundRequest {
   order_id: string;
@@ -15,10 +11,11 @@ interface RefundRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  const preflightResponse = handleCorsPrefllight(req);
+  if (preflightResponse) return preflightResponse;
 
   try {
     // Get auth token from request
@@ -51,7 +48,7 @@ serve(async (req) => {
     }
 
     // Check if user is admin
-    const userRole = user.user_metadata?.role;
+    const userRole = user.app_metadata?.role;
     if (userRole !== 'admin') {
       return new Response(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Admin access required' }),
@@ -128,19 +125,22 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to cancelled
-    const { error: updateError } = await supabaseAdmin
+    // Update order status to cancelled (with optimistic lock to prevent double-refund)
+    const { data: updatedOrder, error: updateError } = await supabaseAdmin
       .from('orders')
       .update({ 
         status: 'cancelled',
         notes: order.notes ? `${order.notes}\n\nRefund reason: ${reason}` : `Refund reason: ${reason}`
       })
-      .eq('id', order_id);
+      .eq('id', order_id)
+      .neq('status', 'cancelled')
+      .select()
+      .single();
 
-    if (updateError) {
+    if (updateError || !updatedOrder) {
       return new Response(
-        JSON.stringify({ error: 'UPDATE_FAILED', message: 'Failed to update order status' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'ALREADY_REFUNDED', message: 'Order was already cancelled/refunded by another request' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
