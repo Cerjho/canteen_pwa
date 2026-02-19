@@ -191,6 +191,7 @@ export default function AdminUsers() {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

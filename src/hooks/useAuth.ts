@@ -67,6 +67,8 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     try {
+      // Brief delay for smoother UX transition
+      await new Promise((resolve) => setTimeout(resolve, 600));
       await supabase.auth.signOut();
     } catch (err) {
       console.error('Sign out error:', err);

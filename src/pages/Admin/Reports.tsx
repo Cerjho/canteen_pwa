@@ -134,7 +134,7 @@ export default function AdminReports() {
       // Fill in missing days
       const allDays = eachDayOfInterval({ start, end });
       const daily: RevenueData[] = allDays.map(day => {
-        const dayStr = format(day, 'yyyy-MM-dd');
+        const dayStr = day.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         const data = dailyMap.get(dayStr) || { revenue: 0, orders: 0 };
         return {
           date: dayStr,
@@ -182,16 +182,18 @@ export default function AdminReports() {
     queryFn: async () => {
       // Use Philippine timezone for date boundaries
       const todayStr = getTodayPH();
+      // Use PH timezone consistently for all date boundaries
+      const toDatePH = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const yesterday = subDays(new Date(), 1);
-      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+      const yesterdayStr = toDatePH(yesterday);
       
       // Week starts on MONDAY for Philippine business logic
       const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-      const thisWeekStartStr = format(thisWeekStart, 'yyyy-MM-dd');
+      const thisWeekStartStr = toDatePH(thisWeekStart);
       const lastWeekStart = subDays(thisWeekStart, 7);
-      const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
+      const lastWeekStartStr = toDatePH(lastWeekStart);
       const lastWeekEnd = subDays(thisWeekStart, 1);
-      const lastWeekEndStr = format(lastWeekEnd, 'yyyy-MM-dd');
+      const lastWeekEndStr = toDatePH(lastWeekEnd);
 
       // Today's revenue: orders COMPLETED today (by completed_at)
       const { data: todayOrders } = await supabase
@@ -477,7 +479,7 @@ export default function AdminReports() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{tx.type}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {tx.parent.first_name} {tx.parent.last_name} • {format(new Date(tx.created_at), 'MMM d, h:mm a')}
+                      {tx.parent?.first_name || 'Unknown'} {tx.parent?.last_name || ''} • {format(new Date(tx.created_at), 'MMM d, h:mm a')}
                     </p>
                   </div>
                   <p className={`font-semibold ${

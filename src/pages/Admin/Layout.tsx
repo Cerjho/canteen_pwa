@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Package, 
@@ -23,10 +23,10 @@ const navItems = [
   { to: '/admin/weekly-menu', icon: Calendar, label: 'Weekly Menu' },
   { to: '/admin/students', icon: GraduationCap, label: 'Students' },
   { to: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
-  { to: '/admin/users', icon: Users, label: 'Users' },
+  { to: '/admin/users', icon: Users, label: 'Users', adminOnly: true },
   { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
-  { to: '/admin/audit-logs', icon: History, label: 'Audit Logs' },
-  { to: '/admin/settings', icon: Settings, label: 'Settings' },
+  { to: '/admin/audit-logs', icon: History, label: 'Audit Logs', adminOnly: true },
+  { to: '/admin/settings', icon: Settings, label: 'Settings', adminOnly: true },
   { to: '/admin/profile', icon: User, label: 'My Profile' },
 ];
 
@@ -36,7 +36,7 @@ export default function AdminLayout() {
 
   // Check admin access
   const userRole = user?.app_metadata?.role;
-  if (userRole !== 'admin') {
+  if (userRole !== 'admin' && userRole !== 'staff') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
@@ -91,7 +91,9 @@ export default function AdminLayout() {
         </div>
 
         <nav className="p-4 space-y-1">
-          {navItems.map((item) => (
+          {navItems
+            .filter(item => !item.adminOnly || userRole === 'admin')
+            .map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -112,13 +114,13 @@ export default function AdminLayout() {
         </nav>
 
         <div className="absolute bottom-4 left-4 right-4">
-          <a
-            href="/menu"
+          <Link
+            to="/menu"
             className="flex items-center gap-2 px-3 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
             <ChevronLeft size={20} />
             View as Parent
-          </a>
+          </Link>
         </div>
       </aside>
 

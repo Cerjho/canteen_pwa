@@ -24,6 +24,8 @@ interface AuditLog {
   entity_id: string;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
+  ip_address?: string;
+  user_agent?: string;
   created_at: string;
 }
 

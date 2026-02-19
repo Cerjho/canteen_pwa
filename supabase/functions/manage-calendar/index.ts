@@ -17,7 +17,10 @@ interface ManageCalendarRequest {
   action: Action;
   id?: string;
   date?: string; // ISO date string YYYY-MM-DD
+  name?: string;
   description?: string;
+  is_recurring?: boolean;
+  reason?: string;
   acts_as_day?: number; // 0-6, what day of week the makeup day acts as
   year?: number;
   month?: number;
@@ -66,7 +69,7 @@ serve(async (req) => {
     }
 
     const body: ManageCalendarRequest = await req.json();
-    const { action, id, date, description, acts_as_day, year, month } = body;
+    const { action, id, date, name, description, is_recurring, reason, acts_as_day, year, month } = body;
 
     // Validate action
     const validActions: Action[] = ['add-holiday', 'remove-holiday', 'add-makeup', 'remove-makeup', 'list-holidays', 'list-makeup'];
@@ -150,7 +153,13 @@ serve(async (req) => {
 
         const { data: newHoliday, error: insertError } = await supabaseAdmin
           .from('holidays')
-          .insert({ date, description: sanitizedDescription })
+          .insert({
+            name: sanitizedName,
+            date,
+            description: sanitizedDescription,
+            is_recurring: is_recurring || false,
+            created_by: user.id
+          })
           .select()
           .single();
 
@@ -239,12 +248,13 @@ serve(async (req) => {
           );
         }
 
-        // Sanitize description
-        const sanitizedDescription = description?.trim().slice(0, 255) || null;
+        // Sanitize name and reason
+        const sanitizedMakeupName = (name || 'Make-up Class').trim().slice(0, 100);
+        const sanitizedReason = (reason || description)?.trim().slice(0, 255) || null;
 
         // Check if already exists
         const { data: existing } = await supabaseAdmin
-          .from('makeup_class_days')
+          .from('makeup_days')
           .select('id')
           .eq('date', date)
           .single();
@@ -257,8 +267,13 @@ serve(async (req) => {
         }
 
         const { data: newMakeup, error: insertError } = await supabaseAdmin
-          .from('makeup_class_days')
-          .insert({ date, acts_as_day, description: sanitizedDescription })
+          .from('makeup_days')
+          .insert({
+            date,
+            name: sanitizedMakeupName,
+            reason: sanitizedReason,
+            created_by: user.id
+          })
           .select()
           .single();
 
@@ -287,7 +302,7 @@ serve(async (req) => {
           );
         }
 
-        let query = supabaseAdmin.from('makeup_class_days').delete();
+        let query = supabaseAdmin.from('makeup_days').delete();
         
         if (id) {
           query = query.eq('id', id);
@@ -344,7 +359,7 @@ serve(async (req) => {
       }
 
       case 'list-makeup': {
-        let query = supabaseAdmin.from('makeup_class_days').select('*').order('date', { ascending: true });
+        let query = supabaseAdmin.from('makeup_days').select('*').order('date', { ascending: true });
         
         if (year) {
           const startDate = `${year}-01-01`;

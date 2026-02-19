@@ -424,8 +424,10 @@ export default function AdminWeeklyMenu() {
     mutationFn: async (holiday: { name: string; date: string; description?: string; is_recurring?: boolean }) => {
       return callManageCalendar({
         action: 'add-holiday',
+        name: holiday.name,
         date: holiday.date,
-        description: holiday.name + (holiday.description ? `: ${holiday.description}` : '')
+        description: holiday.description || '',
+        is_recurring: holiday.is_recurring || false
       });
     },
     onSuccess: () => {
@@ -461,9 +463,10 @@ export default function AdminWeeklyMenu() {
       
       return callManageCalendar({
         action: 'add-makeup',
+        name: makeupDay.name,
         date: makeupDay.date,
-        acts_as_day: actsAsDay,
-        description: makeupDay.name + (makeupDay.reason ? `: ${makeupDay.reason}` : '')
+        reason: makeupDay.reason || '',
+        acts_as_day: actsAsDay
       });
     },
     onSuccess: () => {

@@ -28,7 +28,7 @@ interface Student {
   grade_level: string;
   section?: string;
   dietary_restrictions?: string;
-  parent_id?: string;
+  is_active?: boolean;
   parent?: {
     first_name: string;
     last_name: string;

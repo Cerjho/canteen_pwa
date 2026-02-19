@@ -25,8 +25,8 @@ interface OrderWithDetails {
   notes?: string;
   created_at: string;
   completed_at?: string;
-  child: { first_name: string; last_name: string; grade_level: string; section?: string };
-  parent: { first_name: string; last_name: string; phone_number?: string; email: string };
+  child: { first_name: string; last_name: string; grade_level: string; section?: string } | null;
+  parent: { first_name: string; last_name: string; phone_number?: string; email: string } | null;
   items: Array<{
     id: string;
     quantity: number;
@@ -35,7 +35,7 @@ interface OrderWithDetails {
   }>;
 }
 
-const STATUS_OPTIONS: OrderStatus[] = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
+const STATUS_OPTIONS: OrderStatus[] = ['awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
 export default function AdminOrders() {
   const queryClient = useQueryClient();
@@ -236,7 +236,7 @@ export default function AdminOrders() {
         o.status,
         o.total_amount,
         o.payment_method
-      ].join(','))
+      ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -453,7 +453,7 @@ export default function AdminOrders() {
               </div>
               <p className="text-gray-600 dark:text-gray-400">
                 Refund <span className="font-semibold">₱{refundOrder.total_amount.toFixed(2)}</span> to{' '}
-                <span className="font-semibold">{refundOrder.parent.first_name} {refundOrder.parent.last_name}</span>?
+                <span className="font-semibold">{refundOrder.parent?.first_name || 'Unknown'} {refundOrder.parent?.last_name || 'User'}</span>?
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 The order will be cancelled and the amount will be added back to the parent's balance.
@@ -501,22 +501,22 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Child</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {order.child.first_name} {order.child.last_name}
+                  {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Grade</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {order.child.grade_level} {order.child.section && `- ${order.child.section}`}
+                  {order.child?.grade_level || '-'} {order.child?.section && `- ${order.child.section}`}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Parent</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {order.parent.first_name} {order.parent.last_name}
+                  {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                 </span>
               </div>
-              {order.parent.phone_number && (
+              {order.parent?.phone_number && (
                 <div className="flex justify-between">
                   <span className="text-gray-500 dark:text-gray-400">Phone</span>
                   <span className="font-medium text-gray-900 dark:text-gray-100">{order.parent.phone_number}</span>
