@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Minus, CreditCard, Wallet, Banknote, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check } from 'lucide-react';
 import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
+import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod } from '../types';
 
 type PaymentMethod = 'cash' | 'gcash' | 'balance';
 
@@ -11,7 +12,7 @@ interface CartDrawerProps {
   items: CartItem[];
   itemsByStudent: Record<string, { student_name: string; items: CartItem[] }>;
   itemsByDateAndStudent?: DateCartGroup[];
-  onUpdateQuantity: (productId: string, studentId: string, scheduledFor: string, quantity: number) => void;
+  onUpdateQuantity: (productId: string, studentId: string, scheduledFor: string, quantity: number, mealPeriod?: MealPeriod) => void;
   onCheckout: (paymentMethod: PaymentMethod, notes: string, selectedDates?: string[]) => Promise<void>;
   onClearDate?: (dateStr: string) => Promise<void>;
   onCopyDateItems?: (fromDate: string, toDate: string) => Promise<void>;
@@ -383,7 +384,7 @@ export function CartDrawer({
                               <div className="space-y-3 pl-2">
                                 {studentItems.map((item) => (
                                   <div
-                                    key={`${item.scheduled_for}-${item.student_id}-${item.product_id}`}
+                                    key={`${item.scheduled_for}-${item.student_id}-${item.product_id}-${item.meal_period}`}
                                     className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
                                   >
                                     <img
@@ -399,10 +400,15 @@ export function CartDrawer({
                                       <p className="text-gray-600 dark:text-gray-400 text-sm">
                                         ₱{item.price.toFixed(2)}
                                       </p>
+                                      {item.meal_period && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded mt-0.5">
+                                          {MEAL_PERIOD_ICONS[item.meal_period]} {MEAL_PERIOD_LABELS[item.meal_period]}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <button
-                                        onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity - 1)}
+                                        onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity - 1, item.meal_period)}
                                         className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                                         aria-label="Decrease quantity"
                                       >
@@ -412,7 +418,7 @@ export function CartDrawer({
                                         {item.quantity}
                                       </span>
                                       <button
-                                        onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity + 1)}
+                                        onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity + 1, item.meal_period)}
                                         className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                                         aria-label="Increase quantity"
                                       >

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createOrder } from '../services/orders';
 import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
-import type { PaymentMethod } from '../types';
+import type { PaymentMethod, MealPeriod } from '../types';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 
 // =====================================================
@@ -19,6 +19,7 @@ export interface CartItem {
   quantity: number;
   image_url: string;
   scheduled_for: string; // YYYY-MM-DD format
+  meal_period: MealPeriod;
 }
 
 interface CartItemDB {
@@ -28,6 +29,7 @@ interface CartItemDB {
   product_id: string;
   quantity: number;
   scheduled_for: string;
+  meal_period: MealPeriod;
   products: {
     id: string;
     name: string;
@@ -155,6 +157,7 @@ export function useCart() {
             product_id,
             quantity,
             scheduled_for,
+            meal_period,
             products (
               id,
               name,
@@ -192,7 +195,8 @@ export function useCart() {
             price: item.products.price,
             quantity: item.quantity,
             image_url: item.products.image_url || '',
-            scheduled_for: item.scheduled_for
+            scheduled_for: item.scheduled_for,
+            meal_period: item.meal_period || 'lunch'
           }));
         setItems(cartItems);
       }
@@ -305,7 +309,7 @@ export function useCart() {
   const summary = useMemo((): CartSummary => {
     const uniqueDates = new Set(items.map(i => i.scheduled_for));
     const uniqueStudents = new Set(items.map(i => i.student_id));
-    const orderCombinations = new Set(items.map(i => `${i.student_id}_${i.scheduled_for}`));
+    const orderCombinations = new Set(items.map(i => `${i.student_id}_${i.scheduled_for}_${i.meal_period}`));
     
     return {
       totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -376,14 +380,16 @@ export function useCart() {
       const existingItem = prevItems.find(
         (i) => i.product_id === item.product_id && 
                i.student_id === item.student_id && 
-               i.scheduled_for === item.scheduled_for
+               i.scheduled_for === item.scheduled_for &&
+               i.meal_period === item.meal_period
       );
       
       if (existingItem) {
         return prevItems.map((i) =>
           i.product_id === item.product_id && 
           i.student_id === item.student_id && 
-          i.scheduled_for === item.scheduled_for
+          i.scheduled_for === item.scheduled_for &&
+          i.meal_period === item.meal_period
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
@@ -401,7 +407,8 @@ export function useCart() {
           user_id: user.id,
           student_id: item.student_id,
           product_id: item.product_id,
-          scheduled_for: item.scheduled_for
+          scheduled_for: item.scheduled_for,
+          meal_period: item.meal_period
         })
         .maybeSingle();
 
@@ -419,7 +426,8 @@ export function useCart() {
             student_id: item.student_id,
             product_id: item.product_id,
             quantity: item.quantity,
-            scheduled_for: item.scheduled_for
+            scheduled_for: item.scheduled_for,
+            meal_period: item.meal_period
           });
         if (error) throw error;
       }
@@ -437,28 +445,36 @@ export function useCart() {
     productId: string, 
     studentId: string, 
     scheduledFor: string, 
-    quantity: number
+    quantity: number,
+    mealPeriod?: MealPeriod
   ) => {
     if (!user) return;
 
     setError(null);
 
+    const matchItem = (i: CartItem) => 
+      i.product_id === productId && 
+      i.student_id === studentId && 
+      i.scheduled_for === scheduledFor &&
+      (!mealPeriod || i.meal_period === mealPeriod);
+
+    const matchDb: Record<string, string> = {
+      user_id: user.id,
+      student_id: studentId,
+      product_id: productId,
+      scheduled_for: scheduledFor,
+    };
+    if (mealPeriod) matchDb.meal_period = mealPeriod;
+
     if (quantity <= 0) {
       // Remove item
-      setItems((prevItems) => prevItems.filter(
-        (i) => !(i.product_id === productId && i.student_id === studentId && i.scheduled_for === scheduledFor)
-      ));
+      setItems((prevItems) => prevItems.filter((i) => !matchItem(i)));
       
       try {
         const { error } = await supabase
           .from('cart_items')
           .delete()
-          .match({
-            user_id: user.id,
-            student_id: studentId,
-            product_id: productId,
-            scheduled_for: scheduledFor
-          });
+          .match(matchDb);
         if (error) throw error;
       } catch (err) {
         console.error('Failed to delete cart item:', err);
@@ -471,7 +487,7 @@ export function useCart() {
       // Update quantity
       setItems((prevItems) =>
         prevItems.map((i) =>
-          i.product_id === productId && i.student_id === studentId && i.scheduled_for === scheduledFor
+          matchItem(i)
             ? { ...i, quantity: clampedQty } 
             : i
         )
@@ -481,12 +497,7 @@ export function useCart() {
         const { error } = await supabase
           .from('cart_items')
           .update({ quantity: clampedQty })
-          .match({
-            user_id: user.id,
-            student_id: studentId,
-            product_id: productId,
-            scheduled_for: scheduledFor
-          });
+          .match(matchDb);
         if (error) throw error;
       } catch (err) {
         console.error('Failed to update cart item:', err);
@@ -596,7 +607,8 @@ export function useCart() {
         const existingIdx = result.findIndex(
           i => i.product_id === newItem.product_id && 
                i.student_id === newItem.student_id && 
-               i.scheduled_for === newItem.scheduled_for
+               i.scheduled_for === newItem.scheduled_for &&
+               i.meal_period === newItem.meal_period
         );
         
         if (existingIdx >= 0) {
@@ -622,7 +634,8 @@ export function useCart() {
             user_id: user.id,
             student_id: item.student_id,
             product_id: item.product_id,
-            scheduled_for: toDate
+            scheduled_for: toDate,
+            meal_period: item.meal_period
           })
           .maybeSingle();
 
@@ -639,7 +652,8 @@ export function useCart() {
               student_id: item.student_id,
               product_id: item.product_id,
               quantity: item.quantity,
-              scheduled_for: toDate
+              scheduled_for: toDate,
+              meal_period: item.meal_period
             });
         }
       }
@@ -683,7 +697,8 @@ export function useCart() {
         const existingIdx = result.findIndex(
           i => i.product_id === item.product_id && 
                i.student_id === item.student_id && 
-               i.scheduled_for === toDate
+               i.scheduled_for === toDate &&
+               i.meal_period === item.meal_period
         );
         
         if (existingIdx >= 0) {
@@ -713,7 +728,8 @@ export function useCart() {
             user_id: user.id,
             student_id: item.student_id,
             product_id: item.product_id,
-            scheduled_for: toDate
+            scheduled_for: toDate,
+            meal_period: item.meal_period
           })
           .maybeSingle();
 
@@ -730,7 +746,8 @@ export function useCart() {
               student_id: item.student_id,
               product_id: item.product_id,
               quantity: item.quantity,
-              scheduled_for: toDate
+              scheduled_for: toDate,
+              meal_period: item.meal_period
             });
         }
       }
@@ -767,15 +784,16 @@ export function useCart() {
       const currentPaymentMethod = paymentMethodRef.current;
       const currentNotes = notesRef.current;
 
-      // Group items by student AND scheduled_for date
-      const groups = new Map<string, { student_id: string; scheduled_for: string; items: CartItem[] }>();
+      // Group items by student AND scheduled_for date AND meal_period
+      const groups = new Map<string, { student_id: string; scheduled_for: string; meal_period: MealPeriod; items: CartItem[] }>();
       
       for (const item of currentItems) {
-        const key = `${item.student_id}_${item.scheduled_for}`;
+        const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
         if (!groups.has(key)) {
           groups.set(key, {
             student_id: item.student_id,
             scheduled_for: item.scheduled_for,
+            meal_period: item.meal_period,
             items: []
           });
         }
@@ -785,9 +803,9 @@ export function useCart() {
         }
       }
 
-      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; error?: string }> = [];
+      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; meal_period: MealPeriod; error?: string }> = [];
 
-      // Create order for each student+date combination
+      // Create order for each student+date+meal combination
       for (const group of groups.values()) {
         try {
           const orderData = {
@@ -801,20 +819,23 @@ export function useCart() {
             })),
             payment_method: method || currentPaymentMethod,
             notes: orderNotes || currentNotes,
-            scheduled_for: group.scheduled_for
+            scheduled_for: group.scheduled_for,
+            meal_period: group.meal_period
           };
 
           const result = await createOrder(orderData);
           results.push({ 
             order_id: result?.order_id, 
             student_id: group.student_id, 
-            scheduled_for: group.scheduled_for 
+            scheduled_for: group.scheduled_for,
+            meal_period: group.meal_period
           });
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : 'Failed to create order';
           results.push({ 
             student_id: group.student_id, 
             scheduled_for: group.scheduled_for,
+            meal_period: group.meal_period,
             error: errorMsg
           });
         }
@@ -828,12 +849,12 @@ export function useCart() {
 
       // Clear only successfully ordered items
       const successfulKeys = new Set(
-        results.filter(r => !r.error).map(r => `${r.student_id}_${r.scheduled_for}`)
+        results.filter(r => !r.error).map(r => `${r.student_id}_${r.scheduled_for}_${r.meal_period}`)
       );
       
       // Remove successful items from local state
       setItems(prev => prev.filter(item => {
-        const key = `${item.student_id}_${item.scheduled_for}`;
+        const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
         return !successfulKeys.has(key);
       }));
 

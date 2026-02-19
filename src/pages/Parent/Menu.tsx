@@ -17,7 +17,8 @@ import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
-import type { ProductCategory } from '../../types';
+import type { ProductCategory, MealPeriod } from '../../types';
+import { autoMealPeriod, MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -42,6 +43,7 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all' | 'favorites'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [snackPopup, setSnackPopup] = useState<{ productId: string } | null>(null);
   const { showToast } = useToast();
 
   // Cart hook now manages selectedStudentId
@@ -156,9 +158,43 @@ export default function Menu() {
     }
     
     const product = products?.find(p => p.id === productId);
+    if (!product) return;
+
+    // Auto-assign meal period for mains/drinks, prompt for snacks
+    const mealPeriod = autoMealPeriod(product.category as ProductCategory);
+    if (mealPeriod === null) {
+      // Snack — show popup to let parent choose morning or afternoon
+      setSnackPopup({ productId });
+      return;
+    }
+
     const selectedStudent = students?.find(s => s.id === selectedStudentId);
     const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
     
+    if (selectedStudent) {
+      addItem({
+        product_id: product.id,
+        student_id: selectedStudentId,
+        student_name: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
+        name: product.name,
+        price: product.price,
+        image_url: product.image_url,
+        quantity: 1,
+        scheduled_for: scheduledFor,
+        meal_period: mealPeriod
+      });
+      showToast(`${product.name} added for ${selectedStudent.first_name}`, 'success');
+    }
+  }, [selectedStudentId, students, products, addItem, showToast, effectiveDate]);
+
+  // Handle snack meal period selection from popup
+  const handleSnackMealSelect = useCallback((mealPeriod: MealPeriod) => {
+    if (!snackPopup || !selectedStudentId) return;
+
+    const product = products?.find(p => p.id === snackPopup.productId);
+    const selectedStudent = students?.find(s => s.id === selectedStudentId);
+    const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
+
     if (product && selectedStudent) {
       addItem({
         product_id: product.id,
@@ -168,11 +204,14 @@ export default function Menu() {
         price: product.price,
         image_url: product.image_url,
         quantity: 1,
-        scheduled_for: scheduledFor
+        scheduled_for: scheduledFor,
+        meal_period: mealPeriod
       });
-      showToast(`${product.name} added for ${selectedStudent.first_name}`, 'success');
+      showToast(`${product.name} added for ${selectedStudent.first_name} (${MEAL_PERIOD_LABELS[mealPeriod]})`, 'success');
     }
-  }, [selectedStudentId, students, products, addItem, showToast, effectiveDate]);
+
+    setSnackPopup(null);
+  }, [snackPopup, selectedStudentId, products, students, addItem, showToast, effectiveDate]);
 
   const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string, selectedDates?: string[]) => {
     if (items.length === 0) {
@@ -525,6 +564,54 @@ export default function Menu() {
           </div>
         )}
       </div>
+
+      {/* Snack Meal Period Popup */}
+      {snackPopup && (
+        <>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50"
+            onClick={() => setSnackPopup(null)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-xs w-full p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center">
+                When should this snack be served?
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                {products?.find(p => p.id === snackPopup.productId)?.name}
+              </p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleSnackMealSelect('morning_snack')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                >
+                  <span className="text-2xl">{MEAL_PERIOD_ICONS.morning_snack}</span>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">{MEAL_PERIOD_LABELS.morning_snack}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Before lunch break</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleSnackMealSelect('afternoon_snack')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/30 hover:bg-orange-100 dark:hover:bg-orange-900/50 transition-colors"
+                >
+                  <span className="text-2xl">{MEAL_PERIOD_ICONS.afternoon_snack}</span>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">{MEAL_PERIOD_LABELS.afternoon_snack}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">After lunch break</div>
+                  </div>
+                </button>
+              </div>
+              <button
+                onClick={() => setSnackPopup(null)}
+                className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 py-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <CartDrawer
         isOpen={cartOpen}

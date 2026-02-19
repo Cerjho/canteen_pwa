@@ -13,6 +13,7 @@ export interface CreateOrderRequest {
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  meal_period?: string;
 }
 
 export interface OrderError {

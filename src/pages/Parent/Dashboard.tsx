@@ -12,6 +12,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { PullToRefresh } from '../../components/PullToRefresh';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
+import type { MealPeriod } from '../../types';
 import { 
   Package, 
   Clock, 
@@ -55,6 +56,7 @@ interface Order {
   total_amount: number;
   created_at: string;
   scheduled_for: string;
+  meal_period?: MealPeriod;
   notes?: string;
   child: {
     id: string;
@@ -253,7 +255,8 @@ export default function ParentDashboard() {
         quantity: item.quantity,
         student_id: order.child.id,
         student_name: studentName,
-        scheduled_for: order.scheduled_for
+        scheduled_for: order.scheduled_for,
+        meal_period: order.meal_period || 'lunch'
       });
     });
     showToast('Items added to cart!', 'success');

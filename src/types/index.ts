@@ -66,6 +66,35 @@ export interface Product {
 
 export type ProductCategory = 'mains' | 'snacks' | 'drinks';
 
+// Meal period - determines when food is served
+export type MealPeriod = 'morning_snack' | 'lunch' | 'afternoon_snack';
+
+export const MEAL_PERIOD_LABELS: Record<MealPeriod, string> = {
+  morning_snack: 'Morning Snack',
+  lunch: 'Lunch',
+  afternoon_snack: 'Afternoon Snack',
+};
+
+export const MEAL_PERIOD_ICONS: Record<MealPeriod, string> = {
+  morning_snack: '🌅',
+  lunch: '☀️',
+  afternoon_snack: '🌆',
+};
+
+/**
+ * Auto-assign meal period based on product category:
+ * - mains → lunch (always)
+ * - drinks → afternoon_snack (always)
+ * - snacks → null (requires user selection via popup)
+ */
+export function autoMealPeriod(category: ProductCategory): MealPeriod | null {
+  switch (category) {
+    case 'mains': return 'lunch';
+    case 'drinks': return 'afternoon_snack';
+    case 'snacks': return null; // User must choose
+  }
+}
+
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment';
 
 export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymongo';
@@ -84,6 +113,7 @@ export interface Order {
   payment_due_at?: string;
   notes?: string;
   scheduled_for?: string;
+  meal_period?: MealPeriod;
   created_at: string;
   updated_at: string;
   completed_at?: string;
@@ -118,6 +148,7 @@ export interface CartItem {
   price: number;
   quantity: number;
   image_url: string;
+  meal_period?: MealPeriod;
 }
 
 // API types
@@ -133,6 +164,7 @@ export interface CreateOrderRequest {
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  meal_period?: MealPeriod;
 }
 
 export interface OrderWithDetails extends Order {
