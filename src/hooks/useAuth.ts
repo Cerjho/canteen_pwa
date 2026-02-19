@@ -10,17 +10,28 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true;
 
-    // Get initial session
+    // Get initial session, then refresh user from server for fresh app_metadata
     supabase.auth.getSession()
-      .then(({ data: { session }, error: sessionError }) => {
+      .then(async ({ data: { session }, error: sessionError }) => {
         if (!isMounted) return;
         
         if (sessionError) {
           console.error('Failed to get session:', sessionError);
           setError(sessionError);
+          setLoading(false);
+          return;
         }
-        setUser(session?.user ?? null);
-        setLoading(false);
+
+        if (session?.user) {
+          // Fetch fresh user data from server to get updated app_metadata (role)
+          const { data: { user: freshUser } } = await supabase.auth.getUser();
+          if (isMounted) {
+            setUser(freshUser ?? session.user);
+          }
+        } else {
+          setUser(null);
+        }
+        if (isMounted) setLoading(false);
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -29,12 +40,21 @@ export function useAuth() {
         setLoading(false);
       });
 
-    // Listen for auth changes
+    // Listen for auth changes - also fetch fresh user data on sign in
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+      
+      if (session?.user) {
+        // On sign-in or token refresh, get fresh user from server
+        const { data: { user: freshUser } } = await supabase.auth.getUser();
+        if (isMounted) {
+          setUser(freshUser ?? session.user);
+          setError(null);
+        }
+      } else {
+        setUser(null);
         setError(null);
       }
     });
