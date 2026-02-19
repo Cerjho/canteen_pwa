@@ -55,7 +55,6 @@ interface Order {
   total_amount: number;
   created_at: string;
   scheduled_for: string;
-  meal_period?: string;
   notes?: string;
   child: {
     id: string;
@@ -254,8 +253,7 @@ export default function ParentDashboard() {
         quantity: item.quantity,
         student_id: order.child.id,
         student_name: studentName,
-        scheduled_for: order.scheduled_for,
-        meal_period: (order.meal_period as import('../../types').MealPeriod) || 'lunch'
+        scheduled_for: order.scheduled_for
       });
     });
     showToast('Items added to cart!', 'success');

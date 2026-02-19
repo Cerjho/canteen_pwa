@@ -68,20 +68,6 @@ export type ProductCategory = 'mains' | 'snacks' | 'drinks';
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment';
 
-export type MealPeriod = 'morning_snack' | 'lunch' | 'afternoon_snack';
-
-export const MEAL_PERIOD_LABELS: Record<MealPeriod, string> = {
-  morning_snack: 'Morning Snack',
-  lunch: 'Lunch',
-  afternoon_snack: 'Afternoon Snack',
-};
-
-export const MEAL_PERIOD_ICONS: Record<MealPeriod, string> = {
-  morning_snack: '🌅',
-  lunch: '🍽️',
-  afternoon_snack: '🌆',
-};
-
 export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymongo';
 
 export type PaymentStatus = 'awaiting_payment' | 'paid' | 'timeout' | 'refunded';
@@ -98,7 +84,6 @@ export interface Order {
   payment_due_at?: string;
   notes?: string;
   scheduled_for?: string;
-  meal_period?: MealPeriod;
   created_at: string;
   updated_at: string;
   completed_at?: string;
@@ -148,7 +133,6 @@ export interface CreateOrderRequest {
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
-  meal_period?: MealPeriod;
 }
 
 export interface OrderWithDetails extends Order {
