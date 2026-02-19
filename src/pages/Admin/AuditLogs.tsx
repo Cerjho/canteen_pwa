@@ -262,7 +262,7 @@ export default function AdminAuditLogs() {
                     </div>
                     <div>
                       <label className="text-sm text-gray-500 dark:text-gray-400">Entity ID</label>
-                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{selectedLog.entity_id?.slice(0, 8)}...</p>
+                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{selectedLog.entity_id ? `${selectedLog.entity_id.slice(0, 8)}...` : 'N/A'}</p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-500 dark:text-gray-400">Timestamp</label>
@@ -270,7 +270,7 @@ export default function AdminAuditLogs() {
                     </div>
                     <div>
                       <label className="text-sm text-gray-500 dark:text-gray-400">User ID</label>
-                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{selectedLog.user_id?.slice(0, 8) || 'System'}...</p>
+                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{selectedLog.user_id ? `${selectedLog.user_id.slice(0, 8)}...` : 'System'}</p>
                     </div>
                   </div>
                 </div>

@@ -491,11 +491,11 @@ export default function AdminDashboard() {
         hourlyMap[i] = { hour: i, orders: 0, revenue: 0 };
       }
 
-      // Group orders by the LOCAL hour they were created
-      // getHours() already returns local time hour from Date object
+      // Group orders by the LOCAL hour they were created (Asia/Manila timezone)
       (orders || []).forEach(order => {
-        const localDate = new Date(order.created_at);
-        const localHour = localDate.getHours(); // This is already local time
+        const localHour = parseInt(
+          new Date(order.created_at).toLocaleString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', hour12: false })
+        );
         if (hourlyMap[localHour]) {
           hourlyMap[localHour].orders++;
           hourlyMap[localHour].revenue += order.total_amount ?? 0;

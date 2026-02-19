@@ -67,7 +67,7 @@ export default function AdminProducts() {
           body: JSON.stringify({
             action: editingProduct ? 'update' : 'create',
             product_id: editingProduct?.id,
-            ...product
+            data: product
           }),
         }
       );
@@ -146,7 +146,7 @@ export default function AdminProducts() {
           body: JSON.stringify({
             action: 'toggle-availability',
             product_id: id,
-            available
+            data: { available }
           }),
         }
       );
@@ -166,7 +166,7 @@ export default function AdminProducts() {
   // Filter products
   const filteredProducts = products?.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
     
     // Stock filter logic
@@ -398,7 +398,7 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
     price: product?.price || 0,
     category: product?.category || 'mains' as ProductCategory,
     image_url: product?.image_url || '',
-    stock_quantity: product?.stock_quantity || 100,
+    stock_quantity: product?.stock_quantity ?? 100,
     available: product?.available ?? true
   });
   const [imagePreview, setImagePreview] = useState<string | null>(product?.image_url || null);

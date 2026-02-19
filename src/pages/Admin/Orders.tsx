@@ -25,6 +25,7 @@ interface OrderWithDetails {
   notes?: string;
   created_at: string;
   completed_at?: string;
+  scheduled_for?: string;
   child: { first_name: string; last_name: string; grade_level: string; section?: string } | null;
   parent: { first_name: string; last_name: string; phone_number?: string; email: string } | null;
   items: Array<{
@@ -36,6 +37,16 @@ interface OrderWithDetails {
 }
 
 const STATUS_OPTIONS: OrderStatus[] = ['awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled'];
+
+// Valid status transitions (matches server-side logic)
+const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  awaiting_payment: ['cancelled'],
+  pending: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
 
 export default function AdminOrders() {
   const queryClient = useQueryClient();
@@ -348,7 +359,10 @@ export default function AdminOrders() {
                         #{order.id.substring(0, 8)}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {format(new Date(order.created_at), 'MMM d, h:mm a')}
+                        {order.scheduled_for || format(new Date(order.created_at), 'MMM d')}
+                      </p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                        {format(new Date(order.created_at), 'h:mm a')}
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -385,7 +399,8 @@ export default function AdminOrders() {
                         })}
                         className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${getStatusColor(order.status)}`}
                       >
-                        {STATUS_OPTIONS.map(status => (
+                        <option value={order.status}>{order.status}</option>
+                        {(VALID_TRANSITIONS[order.status] || []).map(status => (
                           <option key={status} value={status}>{status}</option>
                         ))}
                       </select>
@@ -574,7 +589,7 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Update Status</label>
               <div className="grid grid-cols-2 gap-2">
-                {STATUS_OPTIONS.filter(s => s !== order.status).map(status => (
+                {(VALID_TRANSITIONS[order.status] || []).filter(s => s !== order.status).map(status => (
                   <button
                     key={status}
                     onClick={() => onUpdateStatus(status)}

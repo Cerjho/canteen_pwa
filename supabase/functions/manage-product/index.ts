@@ -343,7 +343,9 @@ serve(async (req) => {
           );
         }
 
-        const newAvailability = !product.available;
+        // Use the explicitly requested availability if provided, otherwise toggle
+        const requestedAvailability = data?.available;
+        const newAvailability = requestedAvailability !== undefined ? requestedAvailability : !product.available;
 
         const { error: updateError } = await supabaseAdmin
           .from('products')

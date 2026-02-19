@@ -105,7 +105,7 @@ export interface Transaction {
   type: 'payment' | 'refund' | 'topup';
   amount: number;
   method: PaymentMethod;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'completed' | 'failed';
   reference_id?: string;
   created_at: string;
 }

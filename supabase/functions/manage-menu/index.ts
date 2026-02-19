@@ -170,7 +170,9 @@ serve(async (req) => {
         }
 
         // Calculate day_of_week from scheduled_date
-        const calculatedDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
+        const rawDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
+        // Clamp to 1-5 for DB CHECK constraint; weekend makeup days store as nearest weekday
+        const calculatedDayOfWeek = Math.min(rawDayOfWeek, 5);
 
         const { data: newSchedule, error: insertError } = await supabaseAdmin
           .from('menu_schedules')
@@ -233,7 +235,9 @@ serve(async (req) => {
         }
 
         // Calculate day_of_week from scheduled_date
-        const calculatedDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
+        const rawDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
+        // Clamp to 1-5 for DB CHECK constraint; weekend makeup days store as nearest weekday
+        const calculatedDayOfWeek = Math.min(rawDayOfWeek, 5);
 
         const schedules = newProductIds.map(pid => ({
           product_id: pid,
@@ -377,8 +381,8 @@ serve(async (req) => {
           .delete()
           .eq('scheduled_date', to_date);
 
-        // Calculate day_of_week for target date
-        const toDayOfWeek = getDayOfWeek(to_date);
+        // Calculate day_of_week for target date (clamp to 1-5 for DB constraint)
+        const toDayOfWeek = Math.min(getDayOfWeek(to_date), 5);
 
         // Copy items
         const newItems = sourceMenu.map(item => ({
@@ -487,8 +491,8 @@ serve(async (req) => {
             .delete()
             .eq('scheduled_date', targetDate);
 
-          // Calculate day_of_week
-          const targetDayOfWeek = getDayOfWeek(targetDate);
+          // Calculate day_of_week (clamp to 1-5 for DB constraint)
+          const targetDayOfWeek = Math.min(getDayOfWeek(targetDate), 5);
 
           const newItems = sourceMenu.map(item => ({
             product_id: item.product_id,
