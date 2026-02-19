@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Minus, CreditCard, Wallet, Banknote, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check } from 'lucide-react';
 import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
+import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../types';
+import type { MealPeriod } from '../types';
 
 type PaymentMethod = 'cash' | 'gcash' | 'balance';
 
@@ -11,7 +13,7 @@ interface CartDrawerProps {
   items: CartItem[];
   itemsByStudent: Record<string, { student_name: string; items: CartItem[] }>;
   itemsByDateAndStudent?: DateCartGroup[];
-  onUpdateQuantity: (productId: string, studentId: string, scheduledFor: string, quantity: number) => void;
+  onUpdateQuantity: (productId: string, studentId: string, scheduledFor: string, quantity: number, mealPeriod?: MealPeriod) => void;
   onCheckout: (paymentMethod: PaymentMethod, notes: string, selectedDates?: string[]) => Promise<void>;
   onClearDate?: (dateStr: string) => Promise<void>;
   onCopyDateItems?: (fromDate: string, toDate: string) => Promise<void>;
@@ -379,48 +381,72 @@ export function CartDrawer({
                                 </span>
                               </div>
                               
-                              {/* Student's items */}
+                              {/* Student's items grouped by meal period */}
                               <div className="space-y-3 pl-2">
-                                {studentItems.map((item) => (
-                                  <div
-                                    key={`${item.scheduled_for}-${item.student_id}-${item.product_id}`}
-                                    className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
-                                  >
-                                    <img
-                                      src={item.image_url}
-                                      alt={item.name}
-                                      className="w-14 h-14 object-cover rounded"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="%23999">?</text></svg>';
-                                      }}
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <h4 className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{item.name}</h4>
-                                      <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                        ₱{item.price.toFixed(2)}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity - 1)}
-                                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                                        aria-label="Decrease quantity"
-                                      >
-                                        <Minus size={16} className="text-gray-900 dark:text-gray-100" />
-                                      </button>
-                                      <span className="w-6 text-center font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                        {item.quantity}
-                                      </span>
-                                      <button
-                                        onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity + 1)}
-                                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                                        aria-label="Increase quantity"
-                                      >
-                                        <Plus size={16} className="text-gray-900 dark:text-gray-100" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
+                                {(() => {
+                                  // Group student items by meal_period
+                                  const mealOrder: MealPeriod[] = ['morning_snack', 'lunch', 'afternoon_snack'];
+                                  const byMeal = studentItems.reduce((acc, item) => {
+                                    const mp = item.meal_period || 'lunch';
+                                    if (!acc[mp]) acc[mp] = [];
+                                    acc[mp].push(item);
+                                    return acc;
+                                  }, {} as Record<string, CartItem[]>);
+
+                                  return mealOrder
+                                    .filter(mp => byMeal[mp]?.length)
+                                    .map(mp => (
+                                      <div key={mp} className="space-y-2">
+                                        {/* Meal period badge */}
+                                        <div className="flex items-center gap-1.5 px-2">
+                                          <span className="text-sm">{MEAL_PERIOD_ICONS[mp]}</span>
+                                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                            {MEAL_PERIOD_LABELS[mp]}
+                                          </span>
+                                        </div>
+                                        {byMeal[mp].map((item) => (
+                                          <div
+                                            key={`${item.scheduled_for}-${item.student_id}-${item.product_id}-${item.meal_period}`}
+                                            className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                                          >
+                                            <img
+                                              src={item.image_url}
+                                              alt={item.name}
+                                              className="w-14 h-14 object-cover rounded"
+                                              onError={(e) => {
+                                                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="%23999">?</text></svg>';
+                                              }}
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                              <h4 className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{item.name}</h4>
+                                              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                                ₱{item.price.toFixed(2)}
+                                              </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button
+                                                onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity - 1, item.meal_period)}
+                                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                                                aria-label="Decrease quantity"
+                                              >
+                                                <Minus size={16} className="text-gray-900 dark:text-gray-100" />
+                                              </button>
+                                              <span className="w-6 text-center font-medium text-gray-900 dark:text-gray-100 text-sm">
+                                                {item.quantity}
+                                              </span>
+                                              <button
+                                                onClick={() => onUpdateQuantity(item.product_id, item.student_id, item.scheduled_for, item.quantity + 1, item.meal_period)}
+                                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                                                aria-label="Increase quantity"
+                                              >
+                                                <Plus size={16} className="text-gray-900 dark:text-gray-100" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ));
+                                })()}
                               </div>
                             </div>
                           );

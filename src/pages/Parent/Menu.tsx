@@ -17,7 +17,8 @@ import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
-import type { ProductCategory } from '../../types';
+import type { ProductCategory, MealPeriod } from '../../types';
+import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -41,6 +42,7 @@ export default function Menu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all' | 'favorites'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMealPeriod, setSelectedMealPeriod] = useState<MealPeriod>('lunch');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { showToast } = useToast();
 
@@ -168,11 +170,12 @@ export default function Menu() {
         price: product.price,
         image_url: product.image_url,
         quantity: 1,
-        scheduled_for: scheduledFor
+        scheduled_for: scheduledFor,
+        meal_period: selectedMealPeriod
       });
-      showToast(`${product.name} added for ${selectedStudent.first_name}`, 'success');
+      showToast(`${product.name} added for ${selectedStudent.first_name} (${MEAL_PERIOD_LABELS[selectedMealPeriod]})`, 'success');
     }
-  }, [selectedStudentId, students, products, addItem, showToast, effectiveDate]);
+  }, [selectedStudentId, students, products, addItem, showToast, effectiveDate, selectedMealPeriod]);
 
   const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string, selectedDates?: string[]) => {
     if (items.length === 0) {
@@ -430,6 +433,31 @@ export default function Menu() {
           selectedChildId={selectedStudentId}
           onSelect={setSelectedStudentId}
         />
+
+        {/* Meal Period Selector */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              🍽️ Meal Period
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(['morning_snack', 'lunch', 'afternoon_snack'] as MealPeriod[]).map((mp) => (
+              <button
+                key={mp}
+                onClick={() => setSelectedMealPeriod(mp)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  selectedMealPeriod === mp
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                <span className="block text-base mb-0.5">{MEAL_PERIOD_ICONS[mp]}</span>
+                <span className="block text-xs leading-tight">{MEAL_PERIOD_LABELS[mp]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Weekly Cart Summary - shows multi-day cart at a glance */}
         <WeeklyCartSummary

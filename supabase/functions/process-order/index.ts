@@ -27,6 +27,7 @@ interface OrderRequest {
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  meal_period?: string;
 }
 
 serve(async (req) => {
@@ -101,7 +102,7 @@ serve(async (req) => {
 
     // Parse and validate request body
     const body: OrderRequest = await req.json();
-    const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
+    const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for, meal_period } = body;
 
     // Ensure parent_id matches authenticated user (prevent impersonation)
     if (parent_id !== user.id) {
@@ -515,7 +516,8 @@ serve(async (req) => {
         total_amount: totalAmount,
         payment_method,
         notes: notes || null,
-        scheduled_for: scheduled_for || getTodayPhilippines()
+        scheduled_for: scheduled_for || getTodayPhilippines(),
+        meal_period: meal_period || 'lunch'
       })
       .select()
       .single();

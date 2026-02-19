@@ -162,6 +162,8 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_due_at TIMESTAMPTZ,
   notes TEXT,
   scheduled_for DATE DEFAULT CURRENT_DATE,
+  meal_period TEXT DEFAULT 'lunch'
+    CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ
@@ -301,10 +303,12 @@ CREATE TABLE IF NOT EXISTS cart_items (
   student_id UUID REFERENCES students(id) ON DELETE CASCADE,
   quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
   scheduled_for DATE NOT NULL DEFAULT CURRENT_DATE,
+  meal_period TEXT DEFAULT 'lunch'
+    CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT cart_items_user_student_product_date_key
-    UNIQUE (user_id, student_id, product_id, scheduled_for)
+  CONSTRAINT cart_items_user_student_product_date_meal_key
+    UNIQUE (user_id, student_id, product_id, scheduled_for, meal_period)
 );
 
 -- Cart state (selected student, notes, payment method per user)
