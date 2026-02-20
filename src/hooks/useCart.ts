@@ -813,13 +813,19 @@ export function useCart() {
 
       // For online payments, we can only process ONE checkout at a time
       // since the user will be redirected to PayMongo.
-      // If there are multiple groups and online payment, process the first one only.
+      // If there are multiple groups, process only the first one and keep the rest in cart.
       const groupsArray = Array.from(groups.values());
       
       if (isOnline && groupsArray.length > 1) {
-        throw new Error(
-          'Online payments can only process one order at a time. Please select items for a single student/date/meal, or use Cash or Balance for multiple orders.'
+        // Process only the first group; remaining items stay in cart
+        const firstGroup = groupsArray[0];
+        const firstDateLabel = formatDisplayDate(firstGroup.scheduled_for);
+        const firstStudentName = firstGroup.items[0]?.student_name || 'student';
+        console.info(
+          `Online payment: processing 1 of ${groupsArray.length} order groups (${firstStudentName}, ${firstDateLabel}). Remaining items stay in cart.`
         );
+        // Narrow to just the first group
+        groupsArray.length = 1;
       }
 
       // Create order for each student+date+meal combination

@@ -57,6 +57,21 @@ export function CartDrawer({
   // Get unique dates from items
   const uniqueDates = [...new Set(items.map(i => i.scheduled_for))].sort();
   const dateCount = uniqueDates.length;
+
+  // Count distinct order groups (student × date × meal_period)
+  const orderGroupCount = (() => {
+    const keys = new Set<string>();
+    const activeItems = selectedDates.size > 0
+      ? items.filter(i => selectedDates.has(i.scheduled_for))
+      : items;
+    for (const item of activeItems) {
+      keys.add(`${item.student_id}_${item.scheduled_for}_${item.meal_period}`);
+    }
+    return keys.size;
+  })();
+
+  const onlinePaymentMultiOrderWarning =
+    isOnlinePaymentMethod(paymentMethod) && orderGroupCount > 1;
   
   // Handle escape key to close drawer
   useEffect(() => {
@@ -561,6 +576,15 @@ export function CartDrawer({
                   maxLength={200}
                   aria-label="Special instructions for your order"
                 />
+              </div>
+            )}
+
+            {/* Online payment multi-order info */}
+            {onlinePaymentMultiOrderWarning && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg" role="status">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  <strong>Note:</strong> Online payment processes one order at a time. Only the first order group will be checked out now — remaining items stay in your cart for a follow-up checkout.
+                </p>
               </div>
             )}
 

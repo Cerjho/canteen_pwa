@@ -18,6 +18,7 @@ import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import type { ProductCategory, MealPeriod, PaymentMethod } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 import { autoMealPeriod, MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
@@ -259,7 +260,13 @@ export default function Menu() {
       });
     } catch (error) {
       console.error('Checkout error:', error);
-      showToast('Failed to place order. Please try again.', 'error');
+      // Show the actual error from the backend instead of a generic message
+      const msg = error instanceof Error
+        ? friendlyError(error.message, 'place your order')
+        : 'Something went wrong. Please try again.';
+      showToast(msg, 'error');
+      // Re-throw so CartDrawer can also display inline error
+      throw error;
     }
   }, [items, checkout, queryClient, navigate, showToast]);
 
