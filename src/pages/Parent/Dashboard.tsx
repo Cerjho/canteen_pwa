@@ -13,6 +13,7 @@ import { PullToRefresh } from '../../components/PullToRefresh';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import type { MealPeriod } from '../../types';
+import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 import { 
   Package, 
   Clock, 
@@ -551,6 +552,14 @@ export default function ParentDashboard() {
                           ₱{order.total_amount.toFixed(2)}
                         </span>
                       </div>
+
+                      {/* Meal Period Badge */}
+                      {order.meal_period && (
+                        <div className="inline-flex items-center gap-1 px-2.5 py-1 mb-3 rounded-full text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700">
+                          <span>{MEAL_PERIOD_ICONS[order.meal_period]}</span>
+                          <span>{MEAL_PERIOD_LABELS[order.meal_period]}</span>
+                        </div>
+                      )}
 
                       {/* Order Notes */}
                       {order.notes && (
