@@ -161,6 +161,18 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
         throw lastError;
       }
       
+      // Only retry errors that are likely transient (network/server issues)
+      const errMsg = lastError.message?.toLowerCase() || '';
+      const isRetryable = errMsg.includes('network') ||
+                         errMsg.includes('timeout') ||
+                         errMsg.includes('503') ||
+                         errMsg.includes('502') ||
+                         errMsg.includes('fetch') ||
+                         errMsg.includes('unable to connect');
+      if (!isRetryable) {
+        throw lastError;
+      }
+      
       await delay(RETRY_DELAY_MS * (attempt + 1));
     }
   }

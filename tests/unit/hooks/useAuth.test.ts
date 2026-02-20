@@ -7,12 +7,14 @@ const mockUnsubscribe = vi.fn();
 let authChangeCallback: ((event: string, session: { user: unknown; access_token: string } | null) => void) | null = null;
 const mockGetSession = vi.fn();
 const mockSignOut = vi.fn();
+const mockGetUser = vi.fn();
 
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
       signOut: () => mockSignOut(),
+      getUser: () => mockGetUser(),
       onAuthStateChange: (callback: (event: string, session: { user: unknown; access_token: string } | null) => void) => {
         authChangeCallback = callback;
         return {
@@ -43,10 +45,14 @@ describe('useAuth Hook', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     authChangeCallback = null;
+    // Default: getUser returns the same user as the session
+    mockGetUser.mockResolvedValue({ data: { user: mockUser } });
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.resetAllMocks();
   });
 
@@ -180,9 +186,14 @@ describe('useAuth Hook', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      await act(async () => {
-        await result.current.signOut();
+      // signOut has a 600ms delay before calling supabase.auth.signOut
+      const signOutPromise = act(async () => {
+        const p = result.current.signOut();
+        // Advance past the 600ms delay
+        await vi.advanceTimersByTimeAsync(700);
+        return p;
       });
+      await signOutPromise;
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
     });

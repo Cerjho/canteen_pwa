@@ -865,7 +865,8 @@ export function useCart() {
           .delete()
           .eq('user_id', user.id)
           .eq('student_id', result.student_id)
-          .eq('scheduled_for', result.scheduled_for);
+          .eq('scheduled_for', result.scheduled_for)
+          .eq('meal_period', result.meal_period);
       }
 
       // If all items were checked out, reset notes and payment method

@@ -5,13 +5,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockInvoke = vi.fn();
 const _mockSelect = vi.fn();
 const mockFrom = vi.fn();
+const mockGetSession = vi.fn();
+const mockRefreshSession = vi.fn();
 
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     functions: {
       invoke: (...args: unknown[]) => mockInvoke(...args)
     },
-    from: (...args: unknown[]) => mockFrom(...args)
+    from: (...args: unknown[]) => mockFrom(...args),
+    auth: {
+      getSession: () => mockGetSession(),
+      refreshSession: () => mockRefreshSession()
+    }
   }
 }));
 
@@ -28,6 +34,15 @@ describe('Orders Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (isOnline as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    // Provide a valid session so createOrder doesn't throw "Please sign in"
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-1' }, access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
+      error: null
+    });
+    mockRefreshSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-1' }, access_token: 'tok-new' } },
+      error: null
+    });
   });
 
   describe('createOrder', () => {

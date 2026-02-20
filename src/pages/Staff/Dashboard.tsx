@@ -13,6 +13,16 @@ import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+/** Escape HTML special characters to prevent XSS in printOrder */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Helper to format date in Philippine timezone (UTC+8)
@@ -244,6 +254,31 @@ export default function StaffDashboard() {
     refetchInterval: 10000 // Refetch every 10 seconds (faster for payment updates)
   });
 
+  // Separate query for completed orders today (needed for stats panel)
+  const { data: completedOrdersToday } = useQuery<StaffOrder[]>({
+    queryKey: ['staff-completed-orders-today'],
+    queryFn: async () => {
+      const todayStr = formatDateLocal(new Date());
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          child:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
+          parent:user_profiles(first_name, last_name, phone_number),
+          items:order_items(
+            *,
+            product:products(name, image_url, category)
+          )
+        `)
+        .eq('scheduled_for', todayStr)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 30000 // Refetch every 30 seconds (less urgent)
+  });
+
   // Filter orders by search query AND status filter
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
@@ -460,8 +495,13 @@ export default function StaffDashboard() {
   const orderStats = useMemo(() => {
     if (!orders) return null;
     
-    const todayOrders = orders.filter(o => isToday(new Date(o.created_at)));
-    const completedToday = todayOrders.filter(o => o.status === 'completed');
+    // Active orders from the main query (today's active)
+    const todayActiveOrders = orders.filter(o => isToday(new Date(o.created_at)));
+    // Completed orders from the separate query
+    const completedToday = completedOrdersToday || [];
+    
+    // Total today = active + completed
+    const totalTodayOrders = todayActiveOrders.length + completedToday.length;
     
     // Average preparation time (from pending to completed)
     const prepTimes: number[] = [];
@@ -482,21 +522,21 @@ export default function StaffDashboard() {
     const totalRevenue = completedToday.reduce((sum, o) => sum + o.total_amount, 0);
     
     // Orders by status
-    const pendingTooLong = todayOrders.filter(o => 
+    const pendingTooLong = todayActiveOrders.filter(o => 
       o.status === 'pending' && differenceInMinutes(new Date(), new Date(o.created_at)) > 15
     ).length;
     
     return {
-      totalOrders: todayOrders.length,
+      totalOrders: totalTodayOrders,
       completedOrders: completedToday.length,
       avgPrepTime,
       totalRevenue,
       pendingTooLong,
-      completionRate: todayOrders.length > 0 
-        ? Math.round((completedToday.length / todayOrders.length) * 100)
+      completionRate: totalTodayOrders > 0 
+        ? Math.round((completedToday.length / totalTodayOrders) * 100)
         : 0,
     };
-  }, [orders]);
+  }, [orders, completedOrdersToday]);
 
   // Swipe gesture handlers
   const handleTouchStart = useCallback((e: TouchEvent<HTMLDivElement>, orderId: string, status: string) => {
@@ -887,27 +927,27 @@ export default function StaffDashboard() {
             <div class="order-num">#${order.id.slice(-4).toUpperCase()}</div>
           </div>
           
-          <div class="student">${order.child?.first_name || 'Unknown'} ${order.child?.last_name || 'Student'}</div>
-          <div class="class">${order.child?.grade_level || '-'} - ${order.child?.section || '-'}</div>
+          <div class="student">${escapeHtml(order.child?.first_name || 'Unknown')} ${escapeHtml(order.child?.last_name || 'Student')}</div>
+          <div class="class">${escapeHtml(order.child?.grade_level || '-')} - ${escapeHtml(order.child?.section || '-')}</div>
           <div class="time">Ordered: ${format(new Date(order.created_at), 'h:mm a')} | ${format(new Date(order.created_at), 'MMM d')}</div>
           
           <div class="divider"></div>
           
           ${order.items.map(item => `
             <div class="item">
-              <span class="item-name">${item.product.name}</span>
+              <span class="item-name">${escapeHtml(item.product.name)}</span>
               <span class="item-qty">×${item.quantity}</span>
             </div>
           `).join('')}
           
           <div class="total">TOTAL: ₱${order.total_amount.toFixed(2)}</div>
           
-          ${order.notes ? `<div class="notes">📝 Customer: ${order.notes}</div>` : ''}
+          ${order.notes ? `<div class="notes">📝 Customer: ${escapeHtml(order.notes)}</div>` : ''}
           
           ${staffNotes.length > 0 ? `
             <div class="staff-notes">
               <strong>Staff Notes:</strong><br/>
-              ${staffNotes.join('<br/>')}
+              ${staffNotes.map(n => escapeHtml(n)).join('<br/>')}
             </div>
           ` : ''}
           

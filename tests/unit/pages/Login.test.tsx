@@ -141,7 +141,7 @@ describe('Login Page', () => {
     it('navigates to staff page for staff users', async () => {
       const user = userEvent.setup();
       mockSignInWithPassword.mockResolvedValue({
-        data: { user: { user_metadata: { role: 'staff' } } },
+        data: { user: { app_metadata: { role: 'staff' } } },
         error: null
       });
 
@@ -159,7 +159,7 @@ describe('Login Page', () => {
     it('navigates to admin page for admin users', async () => {
       const user = userEvent.setup();
       mockSignInWithPassword.mockResolvedValue({
-        data: { user: { user_metadata: { role: 'admin' } } },
+        data: { user: { app_metadata: { role: 'admin' } } },
         error: null
       });
 

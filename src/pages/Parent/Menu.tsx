@@ -143,7 +143,7 @@ export default function Menu() {
       const query = searchQuery.toLowerCase();
       result = result.filter(p => 
         p.name.toLowerCase().includes(query) ||
-        p.description.toLowerCase().includes(query)
+        (p.description?.toLowerCase().includes(query) ?? false)
       );
     }
     

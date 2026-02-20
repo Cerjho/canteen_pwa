@@ -7,11 +7,24 @@ import { ToastProvider } from '../../../../src/components/Toast';
 import AdminDashboard from '../../../../src/pages/Admin/Dashboard';
 
 // Mock the supabase client
+const mockGetSession = vi.fn();
+const mockGetUser = vi.fn();
+const mockSignOut = vi.fn();
+const mockUnsubscribeAuth = vi.fn();
+
 vi.mock('../../../../src/services/supabaseClient', () => ({
   supabase: {
     from: vi.fn(),
     channel: vi.fn(),
-    removeChannel: vi.fn()
+    removeChannel: vi.fn(),
+    auth: {
+      getSession: () => mockGetSession(),
+      getUser: () => mockGetUser(),
+      signOut: () => mockSignOut(),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: mockUnsubscribeAuth } }
+      })
+    }
   }
 }));
 
@@ -44,6 +57,11 @@ describe('Admin Dashboard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Auth mocks for useAuth hook used by AdminDashboard
+    mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'admin-1', app_metadata: { role: 'admin' } } } }, error: null });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-1', app_metadata: { role: 'admin' } } } });
+    mockSignOut.mockResolvedValue({ error: null });
     
     // Setup supabase mock with chainable methods
     const chainMock = {

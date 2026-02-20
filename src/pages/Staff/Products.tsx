@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Package, AlertTriangle, Check, X, RefreshCw } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
@@ -11,6 +11,52 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
+
+// Debounced stock input component to prevent API call on every keystroke
+function StockInput({ productId, initialValue, onUpdate }: {
+  productId: string;
+  initialValue: number;
+  onUpdate: (id: string, stock: number) => void;
+}) {
+  const [localValue, setLocalValue] = useState(String(initialValue));
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setLocalValue(raw);
+
+    // Clear any pending debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    // Debounce the API call by 600ms
+    debounceRef.current = setTimeout(() => {
+      const value = parseInt(raw) || 0;
+      onUpdate(productId, value);
+    }, 600);
+  }, [productId, onUpdate]);
+
+  const handleBlur = useCallback(() => {
+    // Ensure value is committed on blur even if debounce hasn't fired
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    const value = parseInt(localValue) || 0;
+    setLocalValue(String(value)); // Normalize display
+    onUpdate(productId, value);
+  }, [productId, localValue, onUpdate]);
+
+  return (
+    <input
+      type="number"
+      min="0"
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+    />
+  );
+}
 
 export default function StaffProducts() {
   const queryClient = useQueryClient();
@@ -93,6 +139,11 @@ export default function StaffProducts() {
     },
     onError: (error: Error) => showToast(error.message || 'Failed to update stock', 'error')
   });
+
+  // Stable callback for debounced stock input
+  const handleStockUpdate = useCallback((id: string, stock_quantity: number) => {
+    updateStock.mutate({ id, stock_quantity });
+  }, [updateStock]);
 
   // Mark all as available (via edge function)
   const markAllAvailable = useMutation({
@@ -266,18 +317,13 @@ export default function StaffProducts() {
                   
                   {/* Stock & Availability Controls */}
                   <div className="flex items-center gap-3 mt-3">
-                    {/* Stock Input */}
+                    {/* Stock Input (debounced) */}
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">Stock:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={product.stock_quantity ?? 0}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value) || 0;
-                          updateStock.mutate({ id: product.id, stock_quantity: value });
-                        }}
-                        className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      <StockInput
+                        productId={product.id}
+                        initialValue={product.stock_quantity ?? 0}
+                        onUpdate={handleStockUpdate}
                       />
                     </div>
                     
