@@ -4,7 +4,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { verifyWebhookSignature, resolvePaymentMethod, fromCentavos } from '../_shared/paymongo.ts';
+import { verifyWebhookSignature, resolvePaymentMethod, getCheckoutSession, fromCentavos } from '../_shared/paymongo.ts';
 
 serve(async (req) => {
   // Webhooks are always POST — no CORS needed (server-to-server)
@@ -28,7 +28,10 @@ serve(async (req) => {
 
     const event = JSON.parse(rawBody);
     const eventType = event?.data?.attributes?.type;
-    console.log('Webhook event received:', eventType, 'event_id:', event?.data?.id);
+    console.log('[webhook] Event received:', eventType, 'event_id:', event?.data?.id,
+      'raw_event_keys:', JSON.stringify(Object.keys(event || {})),
+      'data_keys:', JSON.stringify(Object.keys(event?.data || {})),
+      'attr_keys:', JSON.stringify(Object.keys(event?.data?.attributes || {})));
 
     // ── Supabase Admin client ──
     const supabaseAdmin = createClient(
@@ -41,6 +44,11 @@ serve(async (req) => {
       case 'checkout_session.payment.paid':
         await handlePaymentPaid(supabaseAdmin, event);
         break;
+      case 'payment.paid':
+        // PayMongo might send payment.paid instead of checkout_session.payment.paid
+        console.log('[webhook] Received payment.paid — routing to handlePaymentPaid');
+        await handlePaymentPaid(supabaseAdmin, event);
+        break;
       case 'payment.failed':
         await handlePaymentFailed(supabaseAdmin, event);
         break;
@@ -48,7 +56,9 @@ serve(async (req) => {
         await handlePaymentRefunded(supabaseAdmin, event);
         break;
       default:
-        console.log('Unhandled webhook event type:', eventType);
+        console.log('[webhook] Unhandled event type:', eventType,
+          'full_event_data_type:', (event as any)?.data?.type,
+          'data_attr_data_id:', (event as any)?.data?.attributes?.data?.id);
     }
 
     // Always return 200 to acknowledge receipt (prevent retries)
@@ -75,20 +85,106 @@ async function handlePaymentPaid(
   supabaseAdmin: ReturnType<typeof createClient>,
   event: Record<string, unknown>,
 ) {
-  const checkoutData = (event as any).data.attributes.data;
-  const metadata = checkoutData.attributes.metadata;
+  // ── Extract checkout data from the event ──
+  // PayMongo webhook structure: event.data.attributes.data = checkout session
+  let checkoutData = (event as any)?.data?.attributes?.data;
 
+  // ── Extract checkout ID from multiple possible paths ──
+  let checkoutId: string | undefined =
+    checkoutData?.id ||
+    checkoutData?.attributes?.id ||
+    (event as any)?.data?.attributes?.data?.id;
+
+  // Nuclear fallback: scan the entire event JSON for a checkout session ID (cs_...)
+  if (!checkoutId) {
+    try {
+      const eventStr = JSON.stringify(event);
+      const match = eventStr.match(/"(cs_[a-f0-9]{20,})"/);
+      if (match) {
+        checkoutId = match[1];
+        console.log('[webhook] Extracted checkoutId via regex scan:', checkoutId);
+      }
+    } catch { /* ignore stringify errors */ }
+  }
+
+  console.log('[webhook] handlePaymentPaid —',
+    'checkoutData exists:', !!checkoutData,
+    'checkoutId:', checkoutId,
+    'event.data.attributes keys:', JSON.stringify(Object.keys((event as any)?.data?.attributes || {})),
+    'checkoutData keys:', checkoutData ? JSON.stringify(Object.keys(checkoutData)) : 'null');
+
+  // Try multiple paths to find metadata
+  let metadata = checkoutData?.attributes?.metadata;
+
+  // Log what we found at the expected path
+  console.log('[webhook] metadata from event:', JSON.stringify(metadata));
+
+  // ── Fallback 1: PayMongo API lookup (needs checkoutId) ──
+  if (!metadata?.type && checkoutId) {
+    console.log('[webhook] Missing metadata.type, falling back to PayMongo API for checkout:', checkoutId);
+    try {
+      const freshCheckout = await getCheckoutSession(checkoutId);
+      metadata = freshCheckout?.attributes?.metadata;
+      console.log('[webhook] Metadata from API:', JSON.stringify(metadata),
+        'payments count:', freshCheckout?.attributes?.payments?.length || 0);
+
+      // Replace checkoutData with the full fresh API response
+      if (freshCheckout) {
+        checkoutData = freshCheckout;
+      }
+    } catch (apiErr) {
+      console.error('[webhook] PayMongo API fallback failed:', apiErr);
+    }
+  }
+
+  // ── Fallback 2: DB lookup by checkout ID ──
+  if (!metadata?.type && checkoutId) {
+    console.log('[webhook] Still no metadata, trying DB lookup for checkout:', checkoutId);
+
+    const { data: order } = await supabaseAdmin
+      .from('orders')
+      .select('id, parent_id')
+      .eq('paymongo_checkout_id', checkoutId)
+      .single();
+
+    if (order) {
+      metadata = { type: 'order', order_id: order.id, parent_id: order.parent_id };
+      console.log('[webhook] Matched order via DB:', order.id);
+    } else {
+      const { data: topup } = await supabaseAdmin
+        .from('topup_sessions')
+        .select('id, parent_id')
+        .eq('paymongo_checkout_id', checkoutId)
+        .single();
+
+      if (topup) {
+        metadata = { type: 'topup', topup_session_id: topup.id, parent_id: topup.parent_id };
+        console.log('[webhook] Matched topup via DB:', topup.id);
+      }
+    }
+  }
+
+  // ── Fallback 3: if STILL no metadata and no checkoutId, dump full event for diagnostics ──
   if (!metadata?.type) {
-    console.error('Missing metadata.type in webhook event');
+    console.error('[webhook] Could not resolve metadata.type.',
+      'checkoutId:', checkoutId,
+      'Full event (truncated):', JSON.stringify(event).substring(0, 2000));
     return;
   }
 
+  // ── Route to appropriate handler ──
+  // If checkoutData is null/undefined, use a safe empty object — handlers will use
+  // paymentId=null and paymentMethod='paymongo' which is acceptable.
+  const safeCheckout = checkoutData || { attributes: {} };
+
   if (metadata.type === 'order') {
-    await handleOrderPaymentPaid(supabaseAdmin, checkoutData, metadata);
+    console.log('[webhook] Routing to handleOrderPaymentPaid, metadata:', JSON.stringify(metadata));
+    await handleOrderPaymentPaid(supabaseAdmin, safeCheckout, metadata);
   } else if (metadata.type === 'topup') {
-    await handleTopupPaymentPaid(supabaseAdmin, checkoutData, metadata);
+    console.log('[webhook] Routing to handleTopupPaymentPaid, metadata:', JSON.stringify(metadata));
+    await handleTopupPaymentPaid(supabaseAdmin, safeCheckout, metadata);
   } else {
-    console.error('Unknown metadata type:', metadata.type);
+    console.error('[webhook] Unknown metadata type:', metadata.type);
   }
 }
 
@@ -232,46 +328,88 @@ async function handleTopupPaymentPaid(
 ) {
   const topupSessionId = metadata.topup_session_id;
   if (!topupSessionId) {
-    console.error('Missing topup_session_id in webhook metadata');
+    console.error('[webhook] Missing topup_session_id in webhook metadata:', JSON.stringify(metadata));
     return;
   }
 
-  const paymentId = checkout.attributes.payments?.[0]?.id || null;
-  const paymentMethod = resolvePaymentMethod(checkout.attributes.payments || []);
+  // Safe access — checkout may be a full object or an empty stub { attributes: {} }
+  const paymentId = checkout?.attributes?.payments?.[0]?.id || null;
+  const paymentMethod = resolvePaymentMethod(checkout?.attributes?.payments || []);
 
-  console.log('Processing topup payment:', { topupSessionId, paymentId, paymentMethod });
+  console.log('[webhook] handleTopupPaymentPaid:', {
+    topupSessionId, paymentId, paymentMethod,
+    paymentsCount: checkout?.attributes?.payments?.length || 0,
+    checkoutId: checkout?.id || 'unknown',
+  });
 
   // Idempotency: check if already paid
   const { data: topupSession, error: topupError } = await supabaseAdmin
     .from('topup_sessions')
-    .select('id, parent_id, amount, status')
+    .select('id, parent_id, amount, status, paymongo_checkout_id')
     .eq('id', topupSessionId)
     .single();
 
   if (topupError || !topupSession) {
-    console.error('Topup session not found:', topupSessionId);
+    console.error('[webhook] Topup session not found:', topupSessionId, topupError?.message);
     return;
   }
 
+  console.log('[webhook] Topup session found:', {
+    id: topupSession.id, status: topupSession.status,
+    amount: topupSession.amount, parent_id: topupSession.parent_id,
+  });
+
   if (topupSession.status === 'paid') {
-    console.log('Topup already paid (idempotent):', topupSessionId);
+    console.log('[webhook] Topup already paid (idempotent):', topupSessionId);
     return;
+  }
+
+  // If no paymentId from event data, try to get it from PayMongo API
+  let finalPaymentId = paymentId;
+  let finalPaymentMethod = paymentMethod;
+  if (!finalPaymentId && topupSession.paymongo_checkout_id) {
+    try {
+      const apiCheckout = await getCheckoutSession(topupSession.paymongo_checkout_id);
+      const apiPayments = apiCheckout?.attributes?.payments;
+      if (apiPayments?.length) {
+        finalPaymentId = apiPayments[0].id;
+        finalPaymentMethod = resolvePaymentMethod(apiPayments);
+        console.log('[webhook] Got payment details from API:', finalPaymentId, finalPaymentMethod);
+      }
+    } catch (e) {
+      console.warn('[webhook] Could not fetch payment details from API:', e);
+    }
   }
 
   // Update topup session
-  const { error: updateError } = await supabaseAdmin
+  const { error: updateError, count: updateCount } = await supabaseAdmin
     .from('topup_sessions')
     .update({
       status: 'paid',
-      payment_method: paymentMethod,
-      paymongo_payment_id: paymentId,
+      payment_method: finalPaymentMethod,
+      paymongo_payment_id: finalPaymentId,
       completed_at: new Date().toISOString(),
     })
     .eq('id', topupSessionId)
     .eq('status', 'pending'); // Optimistic lock
 
+  console.log('[webhook] Topup session update result — error:', updateError?.message || 'none', 'count:', updateCount);
+
   if (updateError) {
-    console.error('Failed to update topup session:', updateError);
+    console.error('[webhook] Failed to update topup session:', updateError);
+    return;
+  }
+
+  // Verify the update actually took effect
+  const { data: verifyTopup } = await supabaseAdmin
+    .from('topup_sessions')
+    .select('status')
+    .eq('id', topupSessionId)
+    .single();
+  console.log('[webhook] Topup status after update:', verifyTopup?.status);
+
+  if (verifyTopup?.status !== 'paid') {
+    console.error('[webhook] CRITICAL: Update returned no error but status is still:', verifyTopup?.status);
     return;
   }
 

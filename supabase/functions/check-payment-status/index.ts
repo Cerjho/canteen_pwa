@@ -196,10 +196,17 @@ serve(async (req) => {
 
       // ── Fallback: If still pending and has a PayMongo checkout, check PayMongo directly ──
       if (topup.status === 'pending' && topup.paymongo_checkout_id) {
+        console.log('[check-status] Topup is pending, checking PayMongo API for:', topup.paymongo_checkout_id);
         try {
           const checkout = await getCheckoutSession(topup.paymongo_checkout_id);
-          const payments = checkout.attributes?.payments;
+          const payments = checkout?.attributes?.payments;
           const firstPayment = payments?.[0];
+
+          console.log('[check-status] PayMongo checkout response:',
+            'status:', checkout?.attributes?.status,
+            'payments count:', payments?.length || 0,
+            'first payment status:', firstPayment?.attributes?.status,
+            'first payment id:', firstPayment?.id);
 
           if (firstPayment && firstPayment.attributes?.status === 'paid') {
             // Payment was completed but webhook didn't update the DB — self-heal
