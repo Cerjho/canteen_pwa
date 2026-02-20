@@ -175,18 +175,6 @@ interface PrepItem {
   preparingQty: number;
 }
 
-interface GradePrepGroup {
-  gradeLevel: string;
-  items: PrepItem[];
-  totalItems: number;
-}
-
-interface MealPrepGroup {
-  mealPeriod: MealPeriod;
-  grades: GradePrepGroup[];
-  totalItems: number;
-}
-
 // Touch tracking for swipe gestures
 interface TouchState {
   startX: number;
@@ -393,25 +381,35 @@ export default function StaffDashboard() {
     total: orders?.length || 0,
   }), [orders]);
 
-  // Aggregate items to prepare (for kitchen view) - grouped by meal period and grade level
-  // Uses the order's meal_period field (set by parent during ordering)
-  const prepByMealAndGrade = useMemo((): MealPrepGroup[] => {
+  // Kitchen prep grouped by GRADE first, then meal period within each grade
+  // Layout: Grade 1 → Morning: Turon 2, Banana Cue 3 | Lunch: Beef Tapa 3 | Afternoon: Turon 5
+  interface GradeMealPrepGroup {
+    gradeLevel: string;
+    meals: {
+      mealPeriod: MealPeriod;
+      items: PrepItem[];
+      totalItems: number;
+    }[];
+    totalItems: number;
+  }
+
+  const prepByGrade = useMemo((): GradeMealPrepGroup[] => {
     if (!orders) return [];
 
-    // Build nested map: meal_period → grade_level → product_name → PrepItem
-    const mealMap = new Map<MealPeriod, Map<string, Map<string, PrepItem>>>();
+    // Build nested map: grade_level → meal_period → product_name → PrepItem
+    const gradeMap = new Map<string, Map<MealPeriod, Map<string, PrepItem>>>();
 
     orders
       .filter(o => o.status === 'pending' || o.status === 'preparing')
       .forEach(order => {
-        const mealPeriod: MealPeriod = order.meal_period || 'lunch';
         const gradeLevel = order.child?.grade_level || 'Unknown';
-
-        if (!mealMap.has(mealPeriod)) mealMap.set(mealPeriod, new Map());
-        const gradeMap = mealMap.get(mealPeriod) ?? new Map<string, Map<string, PrepItem>>();
+        const mealPeriod: MealPeriod = order.meal_period || 'lunch';
 
         if (!gradeMap.has(gradeLevel)) gradeMap.set(gradeLevel, new Map());
-        const itemMap = gradeMap.get(gradeLevel) ?? new Map<string, PrepItem>();
+        const mealMap = gradeMap.get(gradeLevel)!;
+
+        if (!mealMap.has(mealPeriod)) mealMap.set(mealPeriod, new Map());
+        const itemMap = mealMap.get(mealPeriod)!;
 
         order.items.forEach(item => {
           const existing = itemMap.get(item.product.name);
@@ -431,34 +429,33 @@ export default function StaffDashboard() {
         });
       });
 
-    // Convert to sorted arrays
-    return MEAL_PERIOD_ORDER
-      .filter(mp => mealMap.has(mp))
-      .map(mp => {
-        const gradeMap = mealMap.get(mp) ?? new Map<string, Map<string, PrepItem>>();
-        const grades: GradePrepGroup[] = Array.from(gradeMap.entries())
-          .map(([gradeLevel, itemMap]) => {
-            const items = Array.from(itemMap.values()).sort((a, b) => b.quantity - a.quantity);
+    // Convert to sorted arrays: grades sorted by K-12 order, meals in period order
+    return Array.from(gradeMap.entries())
+      .map(([gradeLevel, mealMap]) => {
+        const meals = MEAL_PERIOD_ORDER
+          .filter(mp => mealMap.has(mp))
+          .map(mp => {
+            const items = Array.from(mealMap.get(mp)!.values()).sort((a, b) => b.quantity - a.quantity);
             return {
-              gradeLevel,
+              mealPeriod: mp,
               items,
               totalItems: items.reduce((sum, i) => sum + i.quantity, 0),
             };
-          })
-          .sort((a, b) => getGradeOrder(a.gradeLevel) - getGradeOrder(b.gradeLevel));
+          });
 
         return {
-          mealPeriod: mp,
-          grades,
-          totalItems: grades.reduce((sum, g) => sum + g.totalItems, 0),
+          gradeLevel,
+          meals,
+          totalItems: meals.reduce((sum, m) => sum + m.totalItems, 0),
         };
-      });
+      })
+      .sort((a, b) => getGradeOrder(a.gradeLevel) - getGradeOrder(b.gradeLevel));
   }, [orders]);
 
   // Flat itemsToPrep kept for total count in the header badge
   const itemsToPrep = useMemo(() => {
-    return prepByMealAndGrade.reduce((sum, m) => sum + m.totalItems, 0);
-  }, [prepByMealAndGrade]);
+    return prepByGrade.reduce((sum, g) => sum + g.totalItems, 0);
+  }, [prepByGrade]);
 
   // Peak hour detection - calculate orders per hour
   const peakHourStatus = useMemo(() => {
@@ -1141,40 +1138,58 @@ export default function StaffDashboard() {
             </div>
           </div>
 
-          {/* Items to Prep - Grouped by Meal Period and Grade */}
+          {/* Items to Prep - Grouped by Grade, then Meal Period inline */}
           <div className="mb-6">
-            <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <ChefHat size={24} /> Items to Prepare
+              <span className="text-sm font-normal text-gray-400">({itemsToPrep} total)</span>
             </h2>
-            {prepByMealAndGrade.map((mealGroup) => (
-              <div key={mealGroup.mealPeriod} className="mb-4">
-                <div className="flex items-center gap-2 mb-2 border-b border-gray-700 pb-1">
-                  <span className="text-lg">{MEAL_PERIOD_ICONS[mealGroup.mealPeriod]}</span>
-                  <span className="font-semibold text-lg">{MEAL_PERIOD_LABELS[mealGroup.mealPeriod]}</span>
-                  <span className="text-sm text-gray-400">({mealGroup.totalItems})</span>
-                </div>
-                {mealGroup.grades.map((gradeGroup) => (
-                  <div key={`${mealGroup.mealPeriod}-${gradeGroup.gradeLevel}`} className="ml-2 mb-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Users size={16} className="text-gray-400" />
-                      <span className="text-sm font-medium text-gray-300">{gradeGroup.gradeLevel}</span>
-                      <span className="text-xs text-gray-500">({gradeGroup.totalItems})</span>
+            {prepByGrade.length === 0 ? (
+              <div className="text-center text-gray-500 py-8 text-lg">No items to prepare right now</div>
+            ) : (
+              <div className="space-y-4">
+                {prepByGrade.map((gradeGroup) => (
+                  <div 
+                    key={gradeGroup.gradeLevel}
+                    className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden"
+                  >
+                    {/* Grade Header */}
+                    <div className="flex items-center gap-3 px-5 py-3 bg-gray-700/50 border-b border-gray-700">
+                      <Users size={20} className="text-blue-400" />
+                      <span className="text-lg font-bold">{gradeGroup.gradeLevel}</span>
+                      <span className="text-sm text-gray-400">({gradeGroup.totalItems} items)</span>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 ml-4">
-                      {gradeGroup.items.map((item) => (
-                        <div 
-                          key={item.name}
-                          className="bg-gray-800 rounded-xl p-4 text-center border-2 border-gray-700"
-                        >
-                          <div className="text-4xl font-bold text-yellow-400">{item.quantity}×</div>
-                          <div className="text-sm mt-2 line-clamp-2">{item.name}</div>
+
+                    {/* Meal Period Rows */}
+                    <div className="divide-y divide-gray-700/50">
+                      {gradeGroup.meals.map((meal) => (
+                        <div key={`${gradeGroup.gradeLevel}-${meal.mealPeriod}`} className="px-5 py-3">
+                          <div className="flex items-start gap-3">
+                            {/* Meal label */}
+                            <div className="flex items-center gap-2 min-w-[140px] pt-0.5">
+                              <span className="text-lg">{MEAL_PERIOD_ICONS[meal.mealPeriod]}</span>
+                              <span className="text-sm font-semibold text-gray-300">{MEAL_PERIOD_LABELS[meal.mealPeriod]}</span>
+                            </div>
+                            {/* Items inline */}
+                            <div className="flex flex-wrap gap-2 flex-1">
+                              {meal.items.map((item) => (
+                                <div 
+                                  key={item.name}
+                                  className="inline-flex items-center gap-2 bg-gray-700/80 rounded-lg px-3 py-2 border border-gray-600"
+                                >
+                                  <span className="text-xl font-bold text-yellow-400">{item.quantity}×</span>
+                                  <span className="text-sm">{item.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
-            ))}
+            )}
           </div>
 
           {/* Active Orders Grid - Large Cards */}
@@ -1390,8 +1405,8 @@ export default function StaffDashboard() {
           </button>
         </div>
 
-        {/* Kitchen Prep Summary - Grouped by Meal Period and Grade Level */}
-        {prepByMealAndGrade.length > 0 && (
+        {/* Kitchen Prep Summary - Grouped by Grade Level, then Meal Period */}
+        {prepByGrade.length > 0 && (
           <details className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg border border-amber-200 dark:border-amber-800 overflow-hidden">
             <summary className="px-4 py-3 cursor-pointer hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1405,68 +1420,58 @@ export default function StaffDashboard() {
               </div>
               <span className="text-xs text-amber-600 dark:text-amber-400">Click to expand</span>
             </summary>
-            <div className="px-4 pb-4 pt-2 space-y-4">
-              {prepByMealAndGrade.map((mealGroup) => (
-                <div key={mealGroup.mealPeriod} className="space-y-2">
-                  {/* Meal Period Header */}
-                  <div className="flex items-center gap-2 border-b border-amber-200 dark:border-amber-700 pb-2">
-                    <span className="text-lg">{MEAL_PERIOD_ICONS[mealGroup.mealPeriod]}</span>
-                    <span className="font-semibold text-amber-800 dark:text-amber-300">
-                      {MEAL_PERIOD_LABELS[mealGroup.mealPeriod]}
+            <div className="px-4 pb-4 pt-2 space-y-3">
+              {prepByGrade.map((gradeGroup) => (
+                <div key={gradeGroup.gradeLevel} className="bg-white dark:bg-gray-800 rounded-lg border border-amber-200/50 dark:border-gray-700 overflow-hidden">
+                  {/* Grade Header */}
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-100/50 dark:bg-gray-700/50 border-b border-amber-200/30 dark:border-gray-700">
+                    <Users size={16} className="text-amber-600 dark:text-amber-400" />
+                    <span className="font-semibold text-sm text-amber-800 dark:text-amber-300">
+                      {gradeGroup.gradeLevel}
                     </span>
-                    <span className="text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
-                      {mealGroup.totalItems} items
+                    <span className="text-[10px] bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                      {gradeGroup.totalItems} items
                     </span>
                   </div>
 
-                  {/* Grade Groups */}
-                  {mealGroup.grades.map((gradeGroup) => (
-                    <div key={`${mealGroup.mealPeriod}-${gradeGroup.gradeLevel}`} className="ml-2">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Users size={14} className="text-gray-500 dark:text-gray-400" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {gradeGroup.gradeLevel}
-                        </span>
-                        <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded">
-                          {gradeGroup.totalItems}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 ml-5">
-                        {gradeGroup.items.map((item) => (
-                          <div 
-                            key={item.name}
-                            className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm flex flex-col items-center text-center"
-                          >
-                            {item.image_url && (
-                              <img 
-                                src={item.image_url} 
-                                alt={item.name}
-                                className="w-12 h-12 rounded-lg object-cover mb-2"
-                              />
-                            )}
-                            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                              {item.quantity}×
-                            </span>
-                            <span className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                              {item.name}
-                            </span>
-                            <div className="flex gap-1 mt-1">
-                              {item.pendingQty > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                                  {item.pendingQty} pending
-                                </span>
+                  {/* Meal Period Rows */}
+                  <div className="divide-y divide-amber-100 dark:divide-gray-700/50">
+                    {gradeGroup.meals.map((meal) => (
+                      <div key={`${gradeGroup.gradeLevel}-${meal.mealPeriod}`} className="px-4 py-2.5 flex items-start gap-3">
+                        {/* Meal label */}
+                        <div className="flex items-center gap-1.5 min-w-[120px] pt-0.5">
+                          <span>{MEAL_PERIOD_ICONS[meal.mealPeriod]}</span>
+                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                            {MEAL_PERIOD_LABELS[meal.mealPeriod]}
+                          </span>
+                        </div>
+                        {/* Items inline with chips */}
+                        <div className="flex flex-wrap gap-1.5 flex-1">
+                          {meal.items.map((item) => (
+                            <div 
+                              key={item.name}
+                              className="inline-flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700 rounded-md px-2.5 py-1 border border-gray-200 dark:border-gray-600"
+                            >
+                              {item.image_url && (
+                                <img 
+                                  src={item.image_url} 
+                                  alt={item.name}
+                                  className="w-5 h-5 rounded object-cover"
+                                />
                               )}
+                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name}</span>
+                              <span className="text-xs font-bold text-amber-600 dark:text-yellow-400">{item.quantity}</span>
                               {item.preparingQty > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400 rounded">
+                                <span className="text-[9px] px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400 rounded">
                                   {item.preparingQty} prep
                                 </span>
                               )}
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
