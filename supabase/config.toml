@@ -94,3 +94,35 @@ verify_jwt = true
 [functions.notify]
 enabled = true
 verify_jwt = true
+
+[functions.create-checkout]
+enabled = true
+verify_jwt = true
+
+[functions.create-topup-checkout]
+enabled = true
+verify_jwt = true
+
+[functions.retry-checkout]
+enabled = true
+verify_jwt = true
+
+[functions.check-payment-status]
+enabled = true
+verify_jwt = true
+
+[functions.confirm-cash-payment]
+enabled = true
+verify_jwt = true
+
+[functions.admin-topup]
+enabled = true
+verify_jwt = true
+
+[functions.cleanup-timeout-orders]
+enabled = true
+verify_jwt = false
+
+[functions.paymongo-webhook]
+enabled = true
+verify_jwt = false
