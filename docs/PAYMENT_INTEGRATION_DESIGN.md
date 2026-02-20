@@ -1,8 +1,8 @@
-# Payment Integration Design: GCash, PayMaya & Cards via PayMongo
+﻿# Payment Integration Design: GCash, PayMaya & Cards via PayMongo
 
 ## Executive Summary
 
-This document is the comprehensive plan for integrating **real electronic payments** (GCash, PayMaya, credit/debit cards) and **self-service wallet top-ups** into the Canteen PWA using **PayMongo** as the payment gateway — the leading Philippine payment processor that unifies GCash, PayMaya, and cards under one API.
+This document is the comprehensive plan for integrating **real electronic payments** (GCash, PayMaya, credit/debit cards) and **self-service wallet top-ups** into the Canteen PWA using **PayMongo** as the payment gateway â€” the leading Philippine payment processor that unifies GCash, PayMaya, and cards under one API.
 
 ---
 
@@ -34,31 +34,31 @@ This document is the comprehensive plan for integrating **real electronic paymen
 ### What's Working
 
 | Feature | Status | Details |
-|---------|--------|---------|
-| Cash payment | ✅ Full | 15-min timeout, staff confirmation, auto-cleanup |
-| Wallet balance payment | ✅ Full | Optimistic locking, rollback on failure |
-| Admin manual top-up | ✅ Full | Admin receives cash → adds balance |
-| Refund to wallet | ✅ Full | Stock + balance restoration |
-| Transaction history | ✅ Full | payment/refund/topup records |
+| --------- | -------- | --------- |
+| Cash payment | âœ… Full | 15-min timeout, staff confirmation, auto-cleanup |
+| Wallet balance payment | âœ… Full | Optimistic locking, rollback on failure |
+| Admin manual top-up | âœ… Full | Admin receives cash â†’ adds balance |
+| Refund to wallet | âœ… Full | Stock + balance restoration |
+| Transaction history | âœ… Full | payment/refund/topup records |
 
 ### What's Broken or Missing
 
 | Feature | Status | Problem |
-|---------|--------|---------|
-| GCash payment | ⚠️ **FAKE** | Frontend shows option, backend marks as `paid` immediately — **no money collected** |
-| PayMaya payment | ❌ Missing | Not in frontend, `'paymongo'` in DB but unused |
-| Card payment | ❌ Missing | No implementation |
-| Self-service top-up | ❌ Missing | Balance page shows disabled "Top Up" button with "Soon" badge |
-| GCash/card refunds | ❌ Missing | Only DB record created, no money returned via API |
-| PayMongo integration | ❌ Missing | No SDK, no API keys, no webhooks |
+| --------- | -------- | --------- |
+| GCash payment | âš ï¸ **FAKE** | Frontend shows option, backend marks as `paid` immediately â€” **no money collected** |
+| PayMaya payment | âŒ Missing | Not in frontend, `'paymongo'` in DB but unused |
+| Card payment | âŒ Missing | No implementation |
+| Self-service top-up | âŒ Missing | Balance page shows disabled "Top Up" button with "Soon" badge |
+| GCash/card refunds | âŒ Missing | Only DB record created, no money returned via API |
+| PayMongo integration | âŒ Missing | No SDK, no API keys, no webhooks |
 
 ### Database Already Supports
 
-- `payment_method IN ('cash', 'balance', 'gcash', 'paymongo')` ✅
-- `transactions.method IN ('cash', 'gcash', 'paymongo', 'balance')` ✅
-- `transactions.reference_id` for external IDs ✅
-- `payment_status` enum: `awaiting_payment | paid | timeout | refunded` ✅
-- `payment_due_at` timestamp for deadlines ✅
+- `payment_method IN ('cash', 'balance', 'gcash', 'paymongo')` âœ…
+- `transactions.method IN ('cash', 'gcash', 'paymongo', 'balance')` âœ…
+- `transactions.reference_id` for external IDs âœ…
+- `payment_status` enum: `awaiting_payment | paid | timeout | refunded` âœ…
+- `payment_due_at` timestamp for deadlines âœ…
 
 ---
 
@@ -66,19 +66,19 @@ This document is the comprehensive plan for integrating **real electronic paymen
 
 **PayMongo** (<https://paymongo.com>) is the recommended payment gateway because:
 
-1. **Philippine-focused**: Built for PHP (₱) transactions, BSP-licensed
+1. **Philippine-focused**: Built for PHP (â‚±) transactions, BSP-licensed
 2. **Unified API**: One integration covers GCash, PayMaya, credit/debit cards, grab_pay, and more
-3. **Checkout Sessions**: Hosted payment page — no PCI DSS scope for us (card details never touch our servers)
+3. **Checkout Sessions**: Hosted payment page â€” no PCI DSS scope for us (card details never touch our servers)
 4. **Webhooks**: Real-time payment confirmation
 5. **Refund API**: Programmatic refunds for cards; refund-to-source for e-wallets
 6. **Test Mode**: Full sandbox with test credentials
-7. **Pricing**: 2.5% + ₱15 for cards, 2.5% for e-wallets (GCash/PayMaya) — no monthly fee
+7. **Pricing**: 2.5% + â‚±15 for cards, 2.5% for e-wallets (GCash/PayMaya) â€” no monthly fee
 8. **Deno-compatible**: REST API works from Supabase Edge Functions (no SDK needed)
 
 ### PayMongo API Endpoints Used
 
 | Endpoint | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `POST /v1/checkout_sessions` | Create payment page (GCash, PayMaya, card) |
 | `GET /v1/checkout_sessions/:id` | Check payment status |
 | `POST /v1/refunds` | Refund a payment |
@@ -87,62 +87,62 @@ This document is the comprehensive plan for integrating **real electronic paymen
 
 ### PayMongo API Authentication
 
-```
+```text
 Authorization: Basic base64(SECRET_KEY + ":")
 ```
 
 All API calls from Edge Functions use the **Secret Key** (never exposed to client).
-The **Public Key** is only needed if using PayMongo.js for card tokenization (we won't — we use Checkout Sessions).
+The **Public Key** is only needed if using PayMongo.js for card tokenization (we won't â€” we use Checkout Sessions).
 
 ---
 
 ## 3. Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         PARENT (Browser/PWA)                         │
-│  1. Select GCash/PayMaya/Card → clicks "Pay"                       │
-│  2. Redirected to PayMongo Checkout page                            │
-│  3. Completes payment on PayMongo                                   │
-│  4. Redirected back to app (success/cancel URL)                     │
-│  5. App shows order confirmation                                    │
-└──────────────┬──────────────────────────┬───────────────────────────┘
-               │ Step 1                   │ Step 4
-               ▼                          ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                    SUPABASE EDGE FUNCTIONS                            │
-│                                                                      │
-│  create-checkout ─────► PayMongo API ──► Checkout Session created    │
-│       │                                                              │
-│       ▼                                                              │
-│  Order created with:                                                 │
-│    status = 'awaiting_payment'                                       │
-│    payment_status = 'awaiting_payment'                               │
-│    payment_due_at = now + 30 min                                     │
-│    paymongo_checkout_id = 'cs_...'                                   │
-│                                                                      │
-│  paymongo-webhook ◄───── PayMongo Webhook ──► Payment confirmed     │
-│       │                                                              │
-│       ▼                                                              │
-│  Order updated:                                                      │
-│    status = 'pending'                                                │
-│    payment_status = 'paid'                                           │
-│    paymongo_payment_id = 'pay_...'                                   │
-│                                                                      │
-│  create-topup-checkout ──► PayMongo API ──► Wallet top-up session   │
-│  paymongo-webhook ◄──────── Webhook ──────► Wallet balance credited │
-│                                                                      │
-│  create-refund ──────► PayMongo Refund API ──► Money returned       │
-└──────────────────────────────────────────────────────────────────────┘
-               │
-               ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                          PayMongo                                    │
-│  - Hosts checkout page (GCash, PayMaya, Card forms)                 │
-│  - Processes payments                                                │
-│  - Sends webhook events                                              │
-│  - Handles refunds                                                   │
-└──────────────────────────────────────────────────────────────────────┘
+```text
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                         PARENT (Browser/PWA)                         â”‚
+â”‚  1. Select GCash/PayMaya/Card â†’ clicks "Pay"                       â”‚
+â”‚  2. Redirected to PayMongo Checkout page                            â”‚
+â”‚  3. Completes payment on PayMongo                                   â”‚
+â”‚  4. Redirected back to app (success/cancel URL)                     â”‚
+â”‚  5. App shows order confirmation                                    â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+               â”‚ Step 1                   â”‚ Step 4
+               â–¼                          â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    SUPABASE EDGE FUNCTIONS                            â”‚
+â”‚                                                                      â”‚
+â”‚  create-checkout â”€â”€â”€â”€â”€â–º PayMongo API â”€â”€â–º Checkout Session created    â”‚
+â”‚       â”‚                                                              â”‚
+â”‚       â–¼                                                              â”‚
+â”‚  Order created with:                                                 â”‚
+â”‚    status = 'awaiting_payment'                                       â”‚
+â”‚    payment_status = 'awaiting_payment'                               â”‚
+â”‚    payment_due_at = now + 30 min                                     â”‚
+â”‚    paymongo_checkout_id = 'cs_...'                                   â”‚
+â”‚                                                                      â”‚
+â”‚  paymongo-webhook â—„â”€â”€â”€â”€â”€ PayMongo Webhook â”€â”€â–º Payment confirmed     â”‚
+â”‚       â”‚                                                              â”‚
+â”‚       â–¼                                                              â”‚
+â”‚  Order updated:                                                      â”‚
+â”‚    status = 'pending'                                                â”‚
+â”‚    payment_status = 'paid'                                           â”‚
+â”‚    paymongo_payment_id = 'pay_...'                                   â”‚
+â”‚                                                                      â”‚
+â”‚  create-topup-checkout â”€â”€â–º PayMongo API â”€â”€â–º Wallet top-up session   â”‚
+â”‚  paymongo-webhook â—„â”€â”€â”€â”€â”€â”€â”€â”€ Webhook â”€â”€â”€â”€â”€â”€â–º Wallet balance credited â”‚
+â”‚                                                                      â”‚
+â”‚  create-refund â”€â”€â”€â”€â”€â”€â–º PayMongo Refund API â”€â”€â–º Money returned       â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+               â”‚
+               â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                          PayMongo                                    â”‚
+â”‚  - Hosts checkout page (GCash, PayMaya, Card forms)                 â”‚
+â”‚  - Processes payments                                                â”‚
+â”‚  - Sends webhook events                                              â”‚
+â”‚  - Handles refunds                                                   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Key Principle: **Checkout Sessions (Server-Side)**
@@ -151,7 +151,7 @@ We use **PayMongo Checkout Sessions** exclusively. This means:
 
 - **No card numbers ever touch our frontend or backend** (PCI DSS out of scope)
 - **GCash/PayMaya** handled by PayMongo's redirect flow
-- Parent is redirected to PayMongo's hosted page → completes payment → redirected back
+- Parent is redirected to PayMongo's hosted page â†’ completes payment â†’ redirected back
 - We confirm payment **only** via webhook (never trust the redirect alone)
 
 ---
@@ -160,13 +160,13 @@ We use **PayMongo Checkout Sessions** exclusively. This means:
 
 ### Checkout Session Lifecycle
 
-```
-Created ──► [Parent redirects to checkout_url] ──► Payment Attempted
-                                                        │
-                                              ┌─────────┼──────────┐
-                                              ▼         ▼          ▼
+```text
+Created â”€â”€â–º [Parent redirects to checkout_url] â”€â”€â–º Payment Attempted
+                                                        â”‚
+                                              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                                              â–¼         â–¼          â–¼
                                            Paid     Failed     Expired
-                                              │                    │
+                                              â”‚                    â”‚
                                       Webhook fires         30-min timeout
                                     (payment.paid)         (our cleanup job)
 ```
@@ -174,7 +174,7 @@ Created ──► [Parent redirects to checkout_url] ──► Payment Attempted
 ### Key Objects
 
 | Object | Description | Our Use |
-|--------|-------------|---------|
+| -------- | ------------- | --------- |
 | `CheckoutSession` | A payment intent with a hosted URL | Created per order or top-up |
 | `Payment` | Actual money movement | Referenced after webhook confirms |
 | `Refund` | Money returned to customer | Created for cancellations |
@@ -450,7 +450,7 @@ function verifyWebhookSignature(
 **Handled Events**:
 
 | Event | Action |
-|-------|--------|
+| ------- | -------- |
 | `checkout_session.payment.paid` | Mark order as paid OR credit wallet for top-ups |
 | `payment.failed` | Mark order/topup as failed, restore stock |
 | `payment.refunded` | Confirm refund completed |
@@ -474,7 +474,7 @@ async function handleOrderPayment(orderId: string, checkout: any) {
   const paymentMethod = checkout.attributes.payments?.[0]?.attributes?.source?.type;
   // e.g., 'gcash', 'paymaya', 'card'
 
-  // Update order — idempotent (check current status first)
+  // Update order â€” idempotent (check current status first)
   const { data: order } = await supabaseAdmin
     .from('orders')
     .select('id, status, payment_status, parent_id, total_amount')
@@ -534,10 +534,10 @@ interface CreateTopupResponse {
 
 **Flow**:
 
-1. Validate parent auth, amount range (₱50 – ₱50,000)
+1. Validate parent auth, amount range (â‚±50 â€“ â‚±50,000)
 2. Create `topup_sessions` record
 3. Call PayMongo `POST /v1/checkout_sessions`:
-   - Single line item: "Wallet Top-Up ₱{amount}"
+   - Single line item: "Wallet Top-Up â‚±{amount}"
    - `metadata`: `{ topup_session_id, parent_id, type: "topup" }`
    - `success_url`: `{APP_URL}/balance?topup=success`
    - `cancel_url`: `{APP_URL}/balance?topup=cancelled`
@@ -550,7 +550,7 @@ The existing `process-order` function continues to handle `cash` and `balance` p
 
 **Modification**: Remove the current GCash stub that marks orders as `paid` immediately. Instead:
 
-- If `payment_method` is `gcash`, `paymaya`, or `card` → return error: "Use create-checkout endpoint for online payments"
+- If `payment_method` is `gcash`, `paymaya`, or `card` â†’ return error: "Use create-checkout endpoint for online payments"
 - Only `cash` and `balance` remain in `process-order`
 
 ### 6.5 Updates to Existing `refund-order`
@@ -592,7 +592,7 @@ if (['gcash', 'paymaya', 'card', 'paymongo'].includes(order.payment_method)) {
 
 ### 6.6 Updates to `cleanup-timeout-orders`
 
-Already handles `awaiting_payment` orders. No changes needed — it will automatically clean up expired online payment orders that weren't paid within 30 minutes.
+Already handles `awaiting_payment` orders. No changes needed â€” it will automatically clean up expired online payment orders that weren't paid within 30 minutes.
 
 ### 6.7 `check-payment-status` (NEW, optional)
 
@@ -609,7 +609,7 @@ Already handles `awaiting_payment` orders. No changes needed — it will automat
 }
 ```
 
-Simple DB lookup — no PayMongo API call. The webhook updates the DB; this just reads it.
+Simple DB lookup â€” no PayMongo API call. The webhook updates the DB; this just reads it.
 
 ---
 
@@ -624,15 +624,15 @@ Replace current 3-option selector with expanded options:
 export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymaya' | 'card';
 
 // Grouped for UI:
-// ┌─────────────────────────────────────┐
-// │ 💵 Cash — Pay at the canteen        │
-// │ 👛 Wallet Balance — ₱1,250.00       │
-// ├─────────────────────────────────────┤
-// │     ── Pay Online ──                │
-// │ 📱 GCash                            │
-// │ 📱 PayMaya                          │
-// │ 💳 Credit/Debit Card               │
-// └─────────────────────────────────────┘
+// â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+// â”‚ ðŸ’µ Cash â€” Pay at the canteen        â”‚
+// â”‚ ðŸ‘› Wallet Balance â€” â‚±1,250.00       â”‚
+// â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+// â”‚     â”€â”€ Pay Online â”€â”€                â”‚
+// â”‚ ðŸ“± GCash                            â”‚
+// â”‚ ðŸ“± PayMaya                          â”‚
+// â”‚ ðŸ’³ Credit/Debit Card               â”‚
+// â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Component**: `PaymentMethodSelector.tsx`
@@ -645,41 +645,41 @@ export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymaya' | 'card';
 
 ### 7.2 Checkout Flow (Frontend)
 
-```
+```text
 Parent taps "Place Order"
-         │
-         ▼
+         â”‚
+         â–¼
    payment_method?
-     │         │
+     â”‚         â”‚
   cash/balance  gcash/paymaya/card
-     │              │
-     ▼              ▼
+     â”‚              â”‚
+     â–¼              â–¼
   Call             Call
   process-order   create-checkout
-     │              │
-     ▼              ▼
+     â”‚              â”‚
+     â–¼              â–¼
   Order            Receive
   confirmed        checkout_url
-                    │
-                    ▼
+                    â”‚
+                    â–¼
               window.location.href = checkout_url
               (redirect to PayMongo)
-                    │
-                    ▼
+                    â”‚
+                    â–¼
               Parent pays on PayMongo page
-                    │
-                ┌───┴────┐
-                ▼        ▼
+                    â”‚
+                â”Œâ”€â”€â”€â”´â”€â”€â”€â”€â”
+                â–¼        â–¼
            Success    Cancel
-                │        │
-                ▼        ▼
+                â”‚        â”‚
+                â–¼        â–¼
           Redirect    Redirect
           /order-     /order-
           confirm     confirm
           ?payment=   ?payment=
           success     cancelled
-                │        │
-                ▼        ▼
+                â”‚        â”‚
+                â–¼        â–¼
            Poll for    Show
            payment     retry/
            status      cancel
@@ -695,42 +695,42 @@ Parent taps "Place Order"
 2. **`?payment=cancelled`**: Show "Payment was cancelled" with options to retry or cancel order
 3. **Normal flow** (cash/balance): Keep existing behavior
 
-### 7.4 Balance Page — Self-Service Top-Up
+### 7.4 Balance Page â€” Self-Service Top-Up
 
-`src/pages/Parent/Balance.tsx` — Enable the "Top Up" button:
+`src/pages/Parent/Balance.tsx` â€” Enable the "Top Up" button:
 
-```
+```text
 Parent taps "Top Up"
-       │
-       ▼
+       â”‚
+       â–¼
   TopUpModal opens
-  ┌──────────────────────────┐
-  │  Top Up Wallet           │
-  │                          │
-  │  Amount: [₱_________]   │
-  │                          │
-  │  Quick amounts:          │
-  │  [₱100] [₱200] [₱500]  │
-  │  [₱1000] [₱2000]       │
-  │                          │
-  │  Pay via:                │
-  │  ○ GCash                 │
-  │  ○ PayMaya               │
-  │  ○ Credit/Debit Card     │
-  │                          │
-  │  [Proceed to Payment]    │
-  └──────────────────────────┘
-       │
-       ▼
+  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+  â”‚  Top Up Wallet           â”‚
+  â”‚                          â”‚
+  â”‚  Amount: [â‚±_________]   â”‚
+  â”‚                          â”‚
+  â”‚  Quick amounts:          â”‚
+  â”‚  [â‚±100] [â‚±200] [â‚±500]  â”‚
+  â”‚  [â‚±1000] [â‚±2000]       â”‚
+  â”‚                          â”‚
+  â”‚  Pay via:                â”‚
+  â”‚  â—‹ GCash                 â”‚
+  â”‚  â—‹ PayMaya               â”‚
+  â”‚  â—‹ Credit/Debit Card     â”‚
+  â”‚                          â”‚
+  â”‚  [Proceed to Payment]    â”‚
+  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+       â”‚
+       â–¼
   Call create-topup-checkout
-       │
-       ▼
+       â”‚
+       â–¼
   Redirect to PayMongo
-       │
-       ▼
+       â”‚
+       â–¼
   Return to /balance?topup=success
-       │
-       ▼
+       â”‚
+       â–¼
   Webhook credits wallet
   Balance page refreshes
 ```
@@ -738,7 +738,7 @@ Parent taps "Top Up"
 ### 7.5 New Components
 
 | Component | Purpose |
-|-----------|---------|
+| ----------- | --------- |
 | `TopUpModal.tsx` | Modal with amount selector + payment method for wallet top-ups |
 | `PaymentStatusPoller.tsx` | Polls payment status after PayMongo redirect, shows loading/success/failure |
 | `OnlinePaymentBadge.tsx` | Shows "Verifying..." / "Paid via GCash" badges on order cards |
@@ -747,7 +747,7 @@ Parent taps "Top Up"
 
 In `CartDrawer.tsx`:
 
-- When user selects gcash/paymaya/card → update "Place Order" button text to "Pay with GCash" / "Pay with PayMaya" / "Pay with Card"
+- When user selects gcash/paymaya/card â†’ update "Place Order" button text to "Pay with GCash" / "Pay with PayMaya" / "Pay with Card"
 - Add note: "You'll be redirected to complete payment"
 - On submit: call `create-checkout` instead of `process-order`
 
@@ -767,7 +767,7 @@ async function checkout() {
       });
       // Redirect to PayMongo
       window.location.href = data.checkout_url;
-      return; // Exit — page will redirect
+      return; // Exit â€” page will redirect
     } else {
       // Cash or balance: use existing process-order
       await createOrder(orderData);
@@ -784,7 +784,7 @@ async function checkout() {
 
 ### 8.1 Parent Pays for Order via GCash
 
-```
+```text
 1. Parent browses menu, adds items, opens cart
 2. Selects "GCash" payment method
 3. Taps "Pay with GCash" button
@@ -793,7 +793,7 @@ async function checkout() {
    a. Validates order (products, stock, prices, dates)
    b. Creates order: status='awaiting_payment', payment_status='awaiting_payment'
    c. Deducts stock (reserved)
-   d. Calls PayMongo API → creates Checkout Session
+   d. Calls PayMongo API â†’ creates Checkout Session
    e. Returns { order_id, checkout_url }
 6. Frontend redirects parent to checkout_url
 7. PayMongo shows GCash payment page
@@ -806,20 +806,20 @@ async function checkout() {
     b. Updates order: status='pending', payment_status='paid'
     c. Creates transaction record
 13. Frontend (OrderConfirmation) polls check-payment-status
-14. Sees payment_status='paid' → shows "Order Confirmed!"
+14. Sees payment_status='paid' â†’ shows "Order Confirmed!"
 15. Staff sees new pending order in dashboard
 ```
 
 ### 8.2 Parent Tops Up Wallet via PayMaya
 
-```
+```text
 1. Parent goes to Balance page, taps "Top Up"
-2. TopUpModal opens, parent enters ₱500, selects PayMaya
+2. TopUpModal opens, parent enters â‚±500, selects PayMaya
 3. Frontend calls create-topup-checkout edge function
 4. Edge function:
-   a. Validates amount (₱50–₱50,000)
+   a. Validates amount (â‚±50â€“â‚±50,000)
    b. Creates topup_sessions record
-   c. Calls PayMongo API → creates Checkout Session
+   c. Calls PayMongo API â†’ creates Checkout Session
    d. Returns { topup_session_id, checkout_url }
 5. Frontend redirects to checkout_url
 6. PayMongo shows PayMaya payment page
@@ -841,22 +841,22 @@ Same flow as GCash but:
 - `payment_method_types: ['card']` in checkout session
 - PayMongo shows card form (number, expiry, CVV)
 - Card details never touch our servers
-- Higher processing fee (2.5% + ₱15 vs 2.5% for e-wallets)
+- Higher processing fee (2.5% + â‚±15 vs 2.5% for e-wallets)
 
 ### 8.4 Payment Timeout (Abandoned)
 
-```
+```text
 1. Parent starts checkout but abandons (closes browser, etc.)
 2. Order sits with status='awaiting_payment' for 30 minutes
 3. cleanup-timeout-orders cron runs (every 5 min)
-4. Finds expired orders → cancels, restores stock
+4. Finds expired orders â†’ cancels, restores stock
 5. Sets payment_status='timeout'
 6. (Optional) PayMongo checkout session expires naturally after 24h
 ```
 
 ### 8.5 Admin Refunds a GCash Order
 
-```
+```text
 1. Admin selects a completed GCash order to refund
 2. Calls refund-order edge function
 3. Edge function:
@@ -923,7 +923,7 @@ async function verifySignature(
 
 Webhooks may be delivered multiple times. Every handler must be idempotent:
 
-- Check `payment_status` before updating — if already `'paid'`, skip
+- Check `payment_status` before updating â€” if already `'paid'`, skip
 - Use `paymongo_payment_id` as a unique reference
 
 ### 9.3 Webhook Registration
@@ -955,7 +955,7 @@ PayMongo retries failed webhooks (non-2xx response) with exponential backoff for
 
 ```typescript
 const TOPUP_PRESETS = [100, 200, 500, 1000, 2000, 5000];
-const MIN_TOPUP = 50;   // PayMongo minimum is ₱20, but we set ₱50 for practical reasons
+const MIN_TOPUP = 50;   // PayMongo minimum is â‚±20, but we set â‚±50 for practical reasons
 const MAX_TOPUP = 50000; // Safety limit
 ```
 
@@ -987,10 +987,10 @@ VALUES ('parent_uuid', 'topup', 500.00, 'gcash', 'completed', 'TOPUP-cs_xxx', 'p
 
 To prevent fraud/money laundering:
 
-```
-Daily limit: ₱10,000 per parent
-Weekly limit: ₱30,000 per parent
-Monthly limit: ₱100,000 per parent
+```text
+Daily limit: â‚±10,000 per parent
+Weekly limit: â‚±30,000 per parent
+Monthly limit: â‚±100,000 per parent
 ```
 
 ---
@@ -1000,12 +1000,12 @@ Monthly limit: ₱100,000 per parent
 ### 11.1 Refund Matrix
 
 | Original Payment | Refund Method | Automated? |
-|-----------------|---------------|------------|
-| Cash | Physical cash (manual) | No — admin marks transaction only |
-| Balance (wallet) | Credit back to wallet | Yes — already implemented |
-| GCash | PayMongo Refund → GCash | Yes — via PayMongo API |
-| PayMaya | PayMongo Refund → PayMaya | Yes — via PayMongo API |
-| Card | PayMongo Refund → Card | Yes — via PayMongo API |
+| ----------------- | --------------- | ------------ |
+| Cash | Physical cash (manual) | No â€” admin marks transaction only |
+| Balance (wallet) | Credit back to wallet | Yes â€” already implemented |
+| GCash | PayMongo Refund â†’ GCash | Yes â€” via PayMongo API |
+| PayMaya | PayMongo Refund â†’ PayMaya | Yes â€” via PayMongo API |
+| Card | PayMongo Refund â†’ Card | Yes â€” via PayMongo API |
 
 ### 11.2 PayMongo Refund API
 
@@ -1035,7 +1035,7 @@ async function createPayMongoRefund(paymentId: string, amountCentavos: number, r
 ### 11.3 Refund Timing
 
 | Method | Refund Speed |
-|--------|-------------|
+| -------- | ------------- |
 | GCash | Instant to 1 business day |
 | PayMaya | 1-3 business days |
 | Credit card | 5-10 business days |
@@ -1050,7 +1050,7 @@ PayMongo supports partial refunds. Useful for:
 - Removing a single item from a multi-item order
 - Admin-initiated partial refunds
 
-Not in MVP scope — full refunds only for now.
+Not in MVP scope â€” full refunds only for now.
 
 ---
 
@@ -1059,11 +1059,11 @@ Not in MVP scope — full refunds only for now.
 ### 12.1 Payment Failure Scenarios
 
 | Scenario | Handling |
-|----------|---------|
+| ---------- | --------- |
 | Parent closes browser mid-checkout | Order stays `awaiting_payment`, cleaned up after 30 min |
 | GCash insufficient balance | PayMongo shows error, parent can retry |
 | Card declined | PayMongo shows error, parent can retry with different card |
-| Network error after payment | Webhook still fires → order confirmed. Parent sees "Verifying..." then confirmed |
+| Network error after payment | Webhook still fires â†’ order confirmed. Parent sees "Verifying..." then confirmed |
 | Webhook delivery delayed | Frontend polls `check-payment-status` every 3s for 60s |
 | Webhook fails to arrive | Fallback: admin can manually verify via PayMongo dashboard + manual order confirmation |
 | PayMongo API down | Return friendly error: "Online payments temporarily unavailable. Please use Cash or Wallet Balance." |
@@ -1075,7 +1075,7 @@ Not in MVP scope — full refunds only for now.
 When an online payment order is created:
 
 1. Stock is **immediately reserved** (decremented)
-2. If payment never completes within 30 min → `cleanup-timeout-orders` restores stock
+2. If payment never completes within 30 min â†’ `cleanup-timeout-orders` restores stock
 3. This prevents stock from being permanently locked by abandoned checkouts
 
 ### 12.3 Race Condition: Webhook vs. Redirect
@@ -1124,7 +1124,7 @@ Using PayMongo Checkout Sessions means **card details never touch our servers**.
 ### 13.2 Secret Key Management
 
 | Secret | Location | Access |
-|--------|----------|--------|
+| -------- | ---------- | -------- |
 | `PAYMONGO_SECRET_KEY` | Supabase Edge Function secrets | Edge Functions only |
 | `PAYMONGO_PUBLIC_KEY` | Not needed (Checkout Sessions) | N/A |
 | `PAYMONGO_WEBHOOK_SECRET` | Supabase Edge Function secrets | Webhook function only |
@@ -1140,7 +1140,7 @@ supabase secrets set PAYMONGO_WEBHOOK_SECRET=whsk_test_xxxxx
 
 ### 13.3 Philippine Data Privacy Act (DPA) Compliance
 
-- **No card data stored** — tokenized by PayMongo
+- **No card data stored** â€” tokenized by PayMongo
 - **Transaction records** contain only reference IDs, not payment credentials
 - **Privacy policy** must be updated to disclose PayMongo as a payment processor
 - **Data sharing**: Only order amount, description, and metadata shared with PayMongo
@@ -1156,10 +1156,10 @@ Always validate amounts server-side:
 ```typescript
 // In create-checkout edge function
 const totalCentavos = Math.round(totalAmount * 100);
-if (totalCentavos < 2000) { // PayMongo minimum: ₱20
-  return error('Minimum order amount is ₱20 for online payment');
+if (totalCentavos < 2000) { // PayMongo minimum: â‚±20
+  return error('Minimum order amount is â‚±20 for online payment');
 }
-if (totalCentavos > 10000000) { // ₱100,000 safety limit
+if (totalCentavos > 10000000) { // â‚±100,000 safety limit
   return error('Order amount exceeds maximum');
 }
 ```
@@ -1175,7 +1175,7 @@ PayMongo provides complete test mode with test API keys (`sk_test_*`).
 **Test Cards**:
 
 | Card Number | Result |
-|------------|--------|
+| ------------ | -------- |
 | `4343 4343 4343 4345` | Successful payment |
 | `4444 4444 4444 4457` | Declined (generic) |
 | `4242 4242 4242 4242` | 3DSecure required |
@@ -1187,15 +1187,15 @@ PayMongo provides complete test mode with test API keys (`sk_test_*`).
 ### 14.2 Test Scenarios
 
 | # | Scenario | Expected |
-|---|----------|----------|
-| 1 | Create GCash checkout → complete payment | Order status changes to `pending`, `paid` |
-| 2 | Create GCash checkout → abandon payment | Order cancelled after 30 min, stock restored |
-| 3 | Create card checkout → use success test card | Payment confirmed via webhook |
-| 4 | Create card checkout → use decline test card | Payment failed, error shown |
+| --- | ---------- | ---------- |
+| 1 | Create GCash checkout â†’ complete payment | Order status changes to `pending`, `paid` |
+| 2 | Create GCash checkout â†’ abandon payment | Order cancelled after 30 min, stock restored |
+| 3 | Create card checkout â†’ use success test card | Payment confirmed via webhook |
+| 4 | Create card checkout â†’ use decline test card | Payment failed, error shown |
 | 5 | Webhook received for already-paid order | No duplicate processing (idempotent) |
 | 6 | Invalid webhook signature | Rejected with 401 |
 | 7 | Refund a GCash order | PayMongo refund API called, money returned |
-| 8 | Top up ₱500 via PayMaya | Wallet balance increases by ₱500 |
+| 8 | Top up â‚±500 via PayMaya | Wallet balance increases by â‚±500 |
 | 9 | Top up while offline | Online payment options disabled |
 | 10 | Concurrent stock reservation | Only available stock reserved |
 
@@ -1261,7 +1261,7 @@ describe('Payment E2E', () => {
 - [ ] Update `OrderConfirmation.tsx` with payment polling
 - [ ] Update `process-order` to reject gcash/paymaya/card (redirect to create-checkout)
 - [ ] Update `refund-order` with PayMongo refund API
-- [ ] E2E test: full order → pay → confirm flow
+- [ ] E2E test: full order â†’ pay â†’ confirm flow
 
 ### Phase 3: Wallet Top-Up (Week 3)
 
@@ -1269,7 +1269,7 @@ describe('Payment E2E', () => {
 - [ ] Add top-up handling to `paymongo-webhook`
 - [ ] Create `TopUpModal.tsx` component
 - [ ] Update `Balance.tsx` page (enable top-up button)
-- [ ] E2E test: top-up → pay → balance credited
+- [ ] E2E test: top-up â†’ pay â†’ balance credited
 
 ### Phase 4: Polish & Ship (Week 4)
 
@@ -1311,15 +1311,15 @@ supabase secrets set APP_URL="https://yourapp.vercel.app"
 
 1. **Sign up** at <https://dashboard.paymongo.com>
 2. **Verify business**: Submit documents (DTI/SEC registration, valid ID)
-3. **Get API keys**: Settings → API Keys
-4. **Create webhook**: Settings → Webhooks → Add endpoint
+3. **Get API keys**: Settings â†’ API Keys
+4. **Create webhook**: Settings â†’ Webhooks â†’ Add endpoint
    - URL: `https://{SUPABASE_PROJECT_REF}.supabase.co/functions/v1/paymongo-webhook`
    - Events: `checkout_session.payment.paid`, `payment.failed`, `payment.refunded`
 5. **Note webhook secret**: shown once after creation
 
 ### 16.3 Frontend Environment
 
-No frontend environment variables needed — all PayMongo interaction happens via Edge Functions. The frontend only receives the `checkout_url` and redirects the user.
+No frontend environment variables needed â€” all PayMongo interaction happens via Edge Functions. The frontend only receives the `checkout_url` and redirects the user.
 
 ---
 
@@ -1327,30 +1327,30 @@ No frontend environment variables needed — all PayMongo interaction happens vi
 
 ### 17.1 PayMongo Fees
 
-| Payment Method | Fee | Example (₱100 order) |
-|---------------|-----|----------------------|
-| GCash | 2.5% | ₱2.50 |
-| PayMaya | 2.5% | ₱2.50 |
-| Credit Card | 2.5% + ₱15 | ₱17.50 |
-| Debit Card | 2.5% + ₱15 | ₱17.50 |
+| Payment Method | Fee | Example (â‚±100 order) |
+| --------------- | ----- | ---------------------- |
+| GCash | 2.5% | â‚±2.50 |
+| PayMaya | 2.5% | â‚±2.50 |
+| Credit Card | 2.5% + â‚±15 | â‚±17.50 |
+| Debit Card | 2.5% + â‚±15 | â‚±17.50 |
 
 ### 17.2 Who Pays the Fee?
 
 **Recommended**: School/canteen absorbs the fee. This is simpler and more parent-friendly.
 
-**Alternative**: Pass fee to parent (add surcharge). Requires showing "Service fee: ₱2.50" in cart before payment. Note: card brand rules may prohibit surcharging in some cases.
+**Alternative**: Pass fee to parent (add surcharge). Requires showing "Service fee: â‚±2.50" in cart before payment. Note: card brand rules may prohibit surcharging in some cases.
 
 ### 17.3 Monthly Cost Estimate
 
 | Metric | Value | Fee Cost |
-|--------|-------|----------|
-| 150 daily orders × 22 school days | 3,300 orders/month | |
+| -------- | ------- | ---------- |
+| 150 daily orders Ã— 22 school days | 3,300 orders/month | |
 | 50% use online payments | 1,650 online orders | |
-| Average order: ₱75 | | |
+| Average order: â‚±75 | | |
 | 80% e-wallet, 20% card | | |
-| E-wallet fees: 1,320 × ₱1.88 | | ₱2,475 |
-| Card fees: 330 × ₱16.88 | | ₱5,569 |
-| **Total monthly** | | **≈ ₱8,044** |
+| E-wallet fees: 1,320 Ã— â‚±1.88 | | â‚±2,475 |
+| Card fees: 330 Ã— â‚±16.88 | | â‚±5,569 |
+| **Total monthly** | | **â‰ˆ â‚±8,044** |
 
 Plus wallet top-up fees (same rates).
 
@@ -1361,7 +1361,7 @@ Plus wallet top-up fees (same rates).
 ### New Files to Create
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `supabase/migrations/20260221_paymongo_integration.sql` | DB migration |
 | `supabase/functions/create-checkout/index.ts` | Order checkout session creation |
 | `supabase/functions/paymongo-webhook/index.ts` | Webhook receiver |
@@ -1378,7 +1378,7 @@ Plus wallet top-up fees (same rates).
 ### Files to Modify
 
 | File | Changes |
-|------|---------|
+| ------ | --------- |
 | `src/types/index.ts` | Add `'paymaya' \| 'card'` to `PaymentMethod`, add checkout types |
 | `src/components/PaymentMethodSelector.tsx` | Add PayMaya, Card options; group by online/offline |
 | `src/components/CartDrawer.tsx` | Handle online payment redirect flow |
@@ -1402,7 +1402,7 @@ Plus wallet top-up fees (same rates).
 
 ### Create Checkout Session
 
-```
+```text
 POST https://api.paymongo.com/v1/checkout_sessions
 Authorization: Basic base64(sk_key:)
 Content-Type: application/json
@@ -1419,7 +1419,7 @@ Content-Type: application/json
       "line_items": [
         {
           "name": "Chicken Adobo",
-          "amount": 7500,        // ₱75.00 in centavos
+          "amount": 7500,        // â‚±75.00 in centavos
           "currency": "PHP",
           "quantity": 1
         }
@@ -1436,7 +1436,7 @@ Content-Type: application/json
 
 ### Create Refund
 
-```
+```text
 POST https://api.paymongo.com/v1/refunds
 Authorization: Basic base64(sk_key:)
 Content-Type: application/json
@@ -1496,14 +1496,14 @@ Content-Type: application/json
 Keep messaging simple and Filipino-friendly:
 
 | Internal Term | Parent-Facing |
-|--------------|---------------|
+| -------------- | --------------- |
 | Checkout Session | "Redirecting to payment..." |
 | `awaiting_payment` | "Waiting for your payment" |
 | Webhook confirmed | "Payment received!" |
 | Payment timeout | "Payment expired. Please try again." |
 | Refund processing | "Your refund is being processed (1-10 business days)" |
 | Wallet top-up | "Load your wallet" |
-| PayMongo | Not shown to parents — they see "GCash", "PayMaya", or "Card" |
+| PayMongo | Not shown to parents â€” they see "GCash", "PayMaya", or "Card" |
 
 ---
 
@@ -1513,7 +1513,7 @@ Keep messaging simple and Filipino-friendly:
 A: Phase 1 creates one checkout session per order (per student per date). If the cart has items for 2 students, two separate payment flows occur. Future: batch multiple orders into one checkout session with combined line items.
 
 **Q: What if the parent uses GCash but has insufficient GCash balance?**
-A: PayMongo handles this — shows error on their checkout page. Parent can switch to PayMaya or Card on the same page.
+A: PayMongo handles this â€” shows error on their checkout page. Parent can switch to PayMaya or Card on the same page.
 
 **Q: Can parents save their card for future payments?**
 A: Not in MVP. PayMongo supports tokenization for saved cards, but this adds PCI DSS scope considerations. Planned for a future phase.

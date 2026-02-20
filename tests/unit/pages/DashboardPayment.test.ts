@@ -147,12 +147,13 @@ describe('Dashboard Payment Status Display', () => {
       );
 
       expect(awaitingOrder).toBeDefined();
-      expect(awaitingOrder!.payment_method).toBe('gcash');
+      const order = awaitingOrder as typeof orders[number];
+      expect(order.payment_method).toBe('gcash');
 
       const statusMsg = getStatusMessage(
         'awaiting_payment',
         undefined,
-        awaitingOrder!.payment_method
+        order.payment_method
       );
       expect(statusMsg).toBe('Verifying payment...');
     });

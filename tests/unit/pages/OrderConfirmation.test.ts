@@ -221,7 +221,7 @@ describe('Online Payment Checkout Flow', () => {
     });
 
     it('sets verifying when payment=success', () => {
-      const paymentResult = 'success';
+      const paymentResult: string = 'success';
       let status: 'idle' | 'verifying' | 'confirmed' | 'failed' | 'cancelled' = 'idle';
 
       if (paymentResult === 'cancelled') {
