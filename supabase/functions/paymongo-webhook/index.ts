@@ -251,22 +251,41 @@ async function handleTopupPaymentPaid(
       .eq('balance', previousBalance); // Optimistic lock
 
     if (walletError) {
-      // Retry with fresh balance
-      const { data: freshWallet } = await supabaseAdmin
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', topupSession.parent_id)
-        .single();
-
-      if (freshWallet) {
-        await supabaseAdmin
+      // Retry with fresh balance (up to 2 more attempts)
+      let retrySuccess = false;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const { data: freshWallet } = await supabaseAdmin
           .from('wallets')
-          .update({
-            balance: freshWallet.balance + topupSession.amount,
-            updated_at: new Date().toISOString(),
-          })
+          .select('balance')
           .eq('user_id', topupSession.parent_id)
-          .eq('balance', freshWallet.balance);
+          .single();
+
+        if (freshWallet) {
+          const { error: retryError } = await supabaseAdmin
+            .from('wallets')
+            .update({
+              balance: freshWallet.balance + topupSession.amount,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', topupSession.parent_id)
+            .eq('balance', freshWallet.balance);
+
+          if (!retryError) {
+            retrySuccess = true;
+            break;
+          }
+        }
+        // Small delay between retries
+        await new Promise(r => setTimeout(r, 200 * attempt));
+      }
+
+      if (!retrySuccess) {
+        console.error('CRITICAL: Failed to credit wallet after retries for topup:', topupSessionId, 'amount:', topupSession.amount, 'parent:', topupSession.parent_id);
+        // Mark topup session for manual review
+        await supabaseAdmin
+          .from('topup_sessions')
+          .update({ status: 'requires_review' })
+          .eq('id', topupSessionId);
       }
     }
   } else {
@@ -304,8 +323,56 @@ async function handlePaymentFailed(
   if (metadata.type === 'order' && metadata.order_id) {
     console.log('Payment failed for order:', metadata.order_id);
 
-    // Don't immediately cancel — let the timeout handler deal with it
-    // Just log for monitoring. Parent can retry from the app.
+    // Mark order as failed so parent sees it immediately instead of waiting for timeout
+    const { error: updateError } = await supabaseAdmin
+      .from('orders')
+      .update({
+        status: 'cancelled',
+        payment_status: 'failed',
+        updated_at: new Date().toISOString(),
+        notes: 'Payment failed via PayMongo',
+      })
+      .eq('id', metadata.order_id)
+      .eq('payment_status', 'awaiting_payment'); // Optimistic lock
+
+    if (!updateError) {
+      // Restore stock for the failed order
+      const { data: orderItems } = await supabaseAdmin
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('order_id', metadata.order_id);
+
+      if (orderItems) {
+        for (const item of orderItems) {
+          await supabaseAdmin.rpc('increment_stock', {
+            p_product_id: item.product_id,
+            p_quantity: item.quantity,
+          }).catch(async () => {
+            // Fallback: direct update if RPC doesn't exist
+            const { data: product } = await supabaseAdmin
+              .from('products')
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single();
+            if (product) {
+              await supabaseAdmin
+                .from('products')
+                .update({ stock_quantity: product.stock_quantity + item.quantity })
+                .eq('id', item.product_id);
+            }
+          });
+        }
+      }
+
+      // Update transaction to failed
+      await supabaseAdmin
+        .from('transactions')
+        .update({ status: 'failed' })
+        .eq('order_id', metadata.order_id)
+        .eq('status', 'pending');
+
+      console.log('Order cancelled due to payment failure:', metadata.order_id);
+    }
   } else if (metadata.type === 'topup' && metadata.topup_session_id) {
     console.log('Payment failed for topup:', metadata.topup_session_id);
 

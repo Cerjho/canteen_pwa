@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar, CalendarDays, Smartphone, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar, CalendarDays, Smartphone, Loader2, XCircle, RotateCcw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { isOnlinePaymentMethod, type PaymentMethod } from '../../types';
-import { checkPaymentStatus } from '../../services/payments';
+import { checkPaymentStatus, retryCheckout } from '../../services/payments';
 import { getPaymentMethodLabel } from '../../services/payments';
 
 interface OrderConfirmationState {
@@ -30,7 +30,25 @@ export default function OrderConfirmation() {
   const orderIdParam = searchParams.get('order_id');
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'confirmed' | 'failed' | 'cancelled'>('idle');
   const [pollCount, setPollCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const MAX_POLLS = 20; // 20 polls * 3s = 60 seconds max
+
+  // Retry payment handler for cancelled/failed payments
+  const handleRetryPayment = async () => {
+    if (!orderIdParam || isRetrying) return;
+    setIsRetrying(true);
+    setRetryError(null);
+    try {
+      const result = await retryCheckout(orderIdParam);
+      if (result.checkout_url) {
+        window.location.href = result.checkout_url;
+      }
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : 'Failed to retry payment. Please try ordering again.');
+      setIsRetrying(false);
+    }
+  };
 
   // Poll for payment verification when redirected back from PayMongo
   useEffect(() => {
@@ -119,10 +137,34 @@ export default function OrderConfirmation() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Payment Cancelled</h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Your payment was cancelled. The order is still pending and will be automatically cancelled if not paid within the deadline.
+              Your payment was cancelled. You can retry the payment or the order will be automatically cancelled if not paid within the deadline.
             </p>
+            {retryError && (
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4 text-sm text-red-700 dark:text-red-400">
+                {retryError}
+              </div>
+            )}
             <div className="space-y-3">
-              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+              {orderIdParam && (
+                <button
+                  onClick={handleRetryPayment}
+                  disabled={isRetrying}
+                  className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRetrying ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Redirecting to Payment...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={20} />
+                      Retry Payment
+                    </>
+                  )}
+                </button>
+              )}
+              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-3 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                 View Orders <ArrowRight size={20} />
               </Link>
               <Link to="/menu" className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
@@ -197,10 +239,34 @@ export default function OrderConfirmation() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Payment Failed</h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Your payment could not be processed. Please try again or use a different payment method.
+              Your payment could not be processed. Please retry or use a different payment method.
             </p>
+            {retryError && (
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4 text-sm text-red-700 dark:text-red-400">
+                {retryError}
+              </div>
+            )}
             <div className="space-y-3">
-              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+              {orderIdParam && (
+                <button
+                  onClick={handleRetryPayment}
+                  disabled={isRetrying}
+                  className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRetrying ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Redirecting to Payment...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={20} />
+                      Retry Payment
+                    </>
+                  )}
+                </button>
+              )}
+              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-3 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                 View Orders <ArrowRight size={20} />
               </Link>
               <Link to="/menu" className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors">

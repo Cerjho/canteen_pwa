@@ -1,5 +1,5 @@
 // Cleanup Timeout Orders Edge Function
-// Cancels cash orders that haven't been paid within the timeout period
+// Cancels orders (cash AND online) that haven't been paid within the timeout period
 // Can be called by: scheduled job, admin trigger, or automatic on order fetch
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -58,12 +58,12 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
 
-    // Find all expired cash orders
+    // Find ALL expired orders (cash AND online payment methods)
+    // Previously only cleaned up cash orders, causing stock leaks for abandoned online checkouts
     const { data: expiredOrders, error: fetchError } = await supabaseAdmin
       .from('orders')
-      .select('id, parent_id, total_amount, payment_due_at')
+      .select('id, parent_id, total_amount, payment_due_at, payment_method')
       .eq('payment_status', 'awaiting_payment')
-      .eq('payment_method', 'cash')
       .lt('payment_due_at', now);
 
     if (fetchError) {
@@ -140,19 +140,44 @@ serve(async (req) => {
           .eq('order_id', order.id);
 
         cancelledOrders.push(order.id);
-        console.log(`[CLEANUP] Cancelled order ${order.id} due to payment timeout`);
+        console.log(`[CLEANUP] Cancelled order ${order.id} (${order.payment_method || 'unknown'}) due to payment timeout`);
 
       } catch (err) {
         errors.push(`Order ${order.id}: ${err}`);
       }
     }
 
+    // ── Also clean up expired topup sessions ──
+    let expiredTopups = 0;
+    try {
+      const { data: expiredSessions } = await supabaseAdmin
+        .from('topup_sessions')
+        .select('id')
+        .eq('status', 'pending')
+        .lt('expires_at', now);
+
+      if (expiredSessions && expiredSessions.length > 0) {
+        for (const session of expiredSessions) {
+          await supabaseAdmin
+            .from('topup_sessions')
+            .update({ status: 'expired' })
+            .eq('id', session.id)
+            .eq('status', 'pending');
+        }
+        expiredTopups = expiredSessions.length;
+        console.log(`[CLEANUP] Expired ${expiredTopups} topup sessions`);
+      }
+    } catch (err) {
+      console.error('Failed to clean up topup sessions:', err);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Cancelled ${cancelledOrders.length} expired orders`,
+        message: `Cancelled ${cancelledOrders.length} expired orders, expired ${expiredTopups} topup sessions`,
         cancelled_count: cancelledOrders.length,
         cancelled_orders: cancelledOrders,
+        expired_topups: expiredTopups,
         errors: errors.length > 0 ? errors : undefined
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

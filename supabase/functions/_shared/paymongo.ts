@@ -246,14 +246,22 @@ export async function verifyWebhookSignature(
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  // Compare live or test signature
+  // Compare live or test signature using constant-time comparison
   const expected = parts['li'] || parts['te'];
   if (!expected) {
     console.error('No signature found in header');
     return false;
   }
 
-  return computed === expected;
+  // Constant-time comparison to prevent timing attacks
+  if (computed.length !== expected.length) return false;
+  const computedBuf = new TextEncoder().encode(computed);
+  const expectedBuf = new TextEncoder().encode(expected);
+  let mismatch = 0;
+  for (let i = 0; i < computedBuf.length; i++) {
+    mismatch |= computedBuf[i] ^ expectedBuf[i];
+  }
+  return mismatch === 0;
 }
 
 // ============================================

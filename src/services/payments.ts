@@ -162,6 +162,46 @@ export function getPaymentMethodLabel(method: PaymentMethod | string): string {
 }
 
 /**
+ * Retry payment for an existing order that was cancelled or still awaiting payment.
+ * Creates a new PayMongo checkout session for the same order.
+ */
+export async function retryCheckout(
+  orderId: string
+): Promise<CreateCheckoutResponse> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !sessionData.session) {
+    throw new Error('Please sign in again to retry payment');
+  }
+
+  // Refresh token if needed
+  const expiresAt = sessionData.session.expires_at;
+  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      throw new Error('Session expired. Please sign in again.');
+    }
+  }
+
+  const { data, error } = await supabase.functions.invoke('retry-checkout', {
+    body: { order_id: orderId },
+  });
+
+  if (error) {
+    let errorMessage = error.message;
+    if (data?.message) errorMessage = data.message;
+    else if (data?.error) errorMessage = data.error;
+    throw new Error(errorMessage);
+  }
+
+  if (data?.error) {
+    throw new Error(data.message || data.error);
+  }
+
+  return data as CreateCheckoutResponse;
+}
+
+/**
  * Get the checkout button text for a payment method
  */
 export function getCheckoutButtonText(method: PaymentMethod): string {
