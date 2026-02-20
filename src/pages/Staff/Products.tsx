@@ -212,15 +212,15 @@ export default function StaffProducts() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{products?.filter(p => p.available).length || 0}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Available</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">{unavailableCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Unavailable</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{lowStockCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Low Stock</div>
           </div>
@@ -289,7 +289,7 @@ export default function StaffProducts() {
           {filteredProducts?.map(product => (
             <div
               key={product.id}
-              className={`bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border-l-4 ${
+              className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border-l-4 ${
                 product.available ? 'border-green-500' : 'border-red-500'
               }`}
             >
@@ -312,7 +312,7 @@ export default function StaffProducts() {
                       <h3 className="font-semibold text-gray-900 dark:text-gray-100">{product.name}</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{product.category}</p>
                     </div>
-                    <span className="text-lg font-bold text-primary-600 dark:text-primary-400">₱{product.price.toFixed(2)}</span>
+                    <span className="text-lg font-bold text-primary-600 dark:text-primary-400">â‚±{product.price.toFixed(2)}</span>
                   </div>
                   
                   {/* Stock & Availability Controls */}

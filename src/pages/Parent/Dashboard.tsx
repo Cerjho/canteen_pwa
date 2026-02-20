@@ -379,9 +379,9 @@ export default function ParentDashboard() {
   const orders = activeTab === 'today' ? todayOrders : scheduledOrders;
 
   // Group orders by student + date for merged card display
-  const MEAL_PERIOD_SORT: Record<string, number> = { morning_snack: 0, lunch: 1, afternoon_snack: 2 };
   const groupedOrders = useMemo(() => {
     if (!orders) return [];
+    const mealSort: Record<string, number> = { morning_snack: 0, lunch: 1, afternoon_snack: 2 };
     const groups = new Map<string, {
       studentId: string;
       studentName: string;
@@ -403,15 +403,17 @@ export default function ParentDashboard() {
           totalAmount: 0,
         });
       }
-      const group = groups.get(key)!;
-      group.orders.push(order);
-      group.totalAmount += order.total_amount;
+      const group = groups.get(key);
+      if (group) {
+        group.orders.push(order);
+        group.totalAmount += order.total_amount;
+      }
     }
 
     // Sort orders within each group by meal period
     for (const group of groups.values()) {
       group.orders.sort((a, b) =>
-        (MEAL_PERIOD_SORT[a.meal_period || 'lunch'] ?? 1) - (MEAL_PERIOD_SORT[b.meal_period || 'lunch'] ?? 1)
+        (mealSort[a.meal_period || 'lunch'] ?? 1) - (mealSort[b.meal_period || 'lunch'] ?? 1)
       );
     }
 
@@ -436,13 +438,13 @@ export default function ParentDashboard() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-6">
             <button
               onClick={() => setActiveTab('today')}
-              className={`flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'today'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                  ? 'bg-primary-600 text-white shadow-md shadow-primary-200 dark:shadow-primary-900/30'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
               }`}
             >
               <Bell size={18} />
@@ -457,10 +459,10 @@ export default function ParentDashboard() {
             </button>
             <button
               onClick={() => setActiveTab('scheduled')}
-              className={`flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'scheduled'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                  ? 'bg-primary-600 text-white shadow-md shadow-primary-200 dark:shadow-primary-900/30'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
               }`}
             >
               <CalendarClock size={18} />
@@ -504,9 +506,9 @@ export default function ParentDashboard() {
                 return (
                   <div
                     key={`${group.studentId}_${group.scheduledFor}`}
-                    className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
+                    className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 overflow-hidden transition-all animate-fade-in ${
                       isFutureOrder ? 'border-amber-200 dark:border-amber-800' : overallStatus.color
-                    } ${hasReadyOrder ? 'animate-pulse-subtle ring-2 ring-green-400' : ''}`}
+                    } ${hasReadyOrder ? 'animate-pulse-subtle ring-2 ring-green-400 shadow-green-100 dark:shadow-green-900/20' : ''}`}
                   >
                     {/* Progress Bar */}
                     {!isFutureOrder && (
@@ -545,10 +547,10 @@ export default function ParentDashboard() {
 
                     {/* Ready Banner */}
                     {hasReadyOrder && (
-                      <div className="bg-green-500 text-white px-4 py-2 flex items-center justify-center gap-2">
-                        <Sparkles size={16} />
-                        <span className="font-medium">Order ready for pickup!</span>
-                        <Sparkles size={16} />
+                      <div className="bg-green-500 text-white px-4 py-2.5 flex items-center justify-center gap-2 font-medium">
+                        <Sparkles size={16} className="animate-bounce-gentle" />
+                        <span>Order ready for pickup!</span>
+                        <Sparkles size={16} className="animate-bounce-gentle" />
                       </div>
                     )}
 

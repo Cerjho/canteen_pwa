@@ -406,10 +406,10 @@ export default function StaffDashboard() {
         const mealPeriod: MealPeriod = order.meal_period || 'lunch';
 
         if (!gradeMap.has(gradeLevel)) gradeMap.set(gradeLevel, new Map());
-        const mealMap = gradeMap.get(gradeLevel)!;
+        const mealMap = gradeMap.get(gradeLevel) ?? new Map();
 
         if (!mealMap.has(mealPeriod)) mealMap.set(mealPeriod, new Map());
-        const itemMap = mealMap.get(mealPeriod)!;
+        const itemMap = mealMap.get(mealPeriod) ?? new Map();
 
         order.items.forEach(item => {
           const existing = itemMap.get(item.product.name);
@@ -435,7 +435,7 @@ export default function StaffDashboard() {
         const meals = MEAL_PERIOD_ORDER
           .filter(mp => mealMap.has(mp))
           .map(mp => {
-            const items = Array.from(mealMap.get(mp)!.values()).sort((a, b) => b.quantity - a.quantity);
+            const items = Array.from((mealMap.get(mp) ?? new Map()).values()).sort((a, b) => b.quantity - a.quantity);
             return {
               mealPeriod: mp,
               items,
@@ -1285,7 +1285,7 @@ export default function StaffDashboard() {
 
         {/* Stats Panel - Collapsible */}
         {showStatsPanel && orderStats && (
-          <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+          <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4 animate-slide-up">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-2">
                 <TrendingUp size={18} /> Today's Performance
@@ -1295,29 +1295,29 @@ export default function StaffDashboard() {
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
                 <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{orderStats.totalOrders}</div>
                 <div className="text-xs text-gray-500">Total Orders</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
                 <div className="text-2xl font-bold text-green-600">{orderStats.completedOrders}</div>
                 <div className="text-xs text-gray-500">Completed</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
                 <div className="text-2xl font-bold text-blue-600">{orderStats.completionRate}%</div>
                 <div className="text-xs text-gray-500">Completion Rate</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
                 <div className="text-2xl font-bold text-purple-600">{orderStats.avgPrepTime}m</div>
                 <div className="text-xs text-gray-500">Avg Prep Time</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
                 <div className={`text-2xl font-bold ${orderStats.pendingTooLong > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                   {orderStats.pendingTooLong}
                 </div>
                 <div className="text-xs text-gray-500">Delayed ({'>'}15m)</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
                 <div className="text-2xl font-bold text-primary-600">₱{orderStats.totalRevenue.toFixed(0)}</div>
                 <div className="text-xs text-gray-500">Revenue</div>
               </div>
@@ -1355,9 +1355,9 @@ export default function StaffDashboard() {
             <button
               key={key}
               onClick={() => setDateFilter(key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                 dateFilter === key
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-blue-900/30'
                   : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
               }`}
             >
@@ -1370,35 +1370,35 @@ export default function StaffDashboard() {
         <div className="grid grid-cols-5 gap-2 mb-4">
           <button 
             onClick={() => setStatusFilter('all')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm text-center transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary-500 shadow-primary-100 dark:shadow-primary-900/20' : 'hover:shadow-md'}`}
           >
             <div className="text-xl font-bold text-primary-600 dark:text-primary-400">{statusCounts.total}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">All</div>
           </button>
           <button 
             onClick={() => setStatusFilter('awaiting_payment')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm text-center transition-all ${statusFilter === 'awaiting_payment' ? 'ring-2 ring-orange-500 shadow-orange-100 dark:shadow-orange-900/20' : 'hover:shadow-md'}`}
           >
             <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{statusCounts.awaitingPayment}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Awaiting</div>
           </button>
           <button 
             onClick={() => setStatusFilter('pending')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-gray-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm text-center transition-all ${statusFilter === 'pending' ? 'ring-2 ring-gray-500 shadow-gray-100 dark:shadow-gray-900/20' : 'hover:shadow-md'}`}
           >
             <div className="text-xl font-bold text-gray-700 dark:text-gray-300">{statusCounts.pending}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
           </button>
           <button 
             onClick={() => setStatusFilter('preparing')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-yellow-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm text-center transition-all ${statusFilter === 'preparing' ? 'ring-2 ring-yellow-500 shadow-yellow-100 dark:shadow-yellow-900/20' : 'hover:shadow-md'}`}
           >
             <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{statusCounts.preparing}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Preparing</div>
           </button>
           <button 
             onClick={() => setStatusFilter('ready')}
-            className={`bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-green-500' : ''}`}
+            className={`bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm text-center transition-all ${statusFilter === 'ready' ? 'ring-2 ring-green-500 shadow-green-100 dark:shadow-green-900/20' : 'hover:shadow-md'}`}
           >
             <div className="text-xl font-bold text-green-600">{statusCounts.ready}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Ready</div>
@@ -1407,7 +1407,7 @@ export default function StaffDashboard() {
 
         {/* Kitchen Prep Summary - Grouped by Grade Level, then Meal Period */}
         {prepByGrade.length > 0 && (
-          <details className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg border border-amber-200 dark:border-amber-800 overflow-hidden">
+          <details className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
             <summary className="px-4 py-3 cursor-pointer hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ChefHat size={20} className="text-amber-600 dark:text-amber-400" />
@@ -1565,20 +1565,20 @@ export default function StaffDashboard() {
 
         {/* Batch Actions */}
         {selectedOrders.length > 0 && (
-          <div className="bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg p-3 mb-4 flex items-center justify-between">
+          <div className="bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-xl p-3 mb-4 flex items-center justify-between animate-slide-up">
             <span className="text-sm font-medium text-primary-700 dark:text-primary-400">
               {selectedOrders.length} order(s) selected
             </span>
             <div className="flex gap-2">
               <button
                 onClick={() => handleBatchStatusUpdate('preparing')}
-                className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-sm hover:bg-yellow-600"
+                className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors"
               >
                 Start All
               </button>
               <button
                 onClick={() => handleBatchStatusUpdate('ready')}
-                className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600"
+                className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
               >
                 Ready All
               </button>
@@ -1618,7 +1618,7 @@ export default function StaffDashboard() {
               const isFullySelected = isGradeFullySelected(group.gradeLevel);
               
               return (
-                <div key={group.gradeLevel} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+                <div key={group.gradeLevel} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                   {/* Grade Level Header */}
                   <div className="flex items-center gap-2 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                     {/* Select All Checkbox for Grade */}
@@ -2025,7 +2025,7 @@ export default function StaffDashboard() {
               return (
                 <div 
                   key={order.id}
-                  className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 border-2 transition-all ${getBorderClass()} ${
+                  className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border-2 transition-all ${getBorderClass()} ${
                     isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''
                   } ${isSwipingThis ? 'relative overflow-hidden' : ''}`}
                   style={{ 

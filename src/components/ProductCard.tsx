@@ -31,7 +31,7 @@ export function ProductCard({
   const imageSrc = imageError || !image_url ? DEFAULT_PRODUCT_IMAGE : image_url;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow relative">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md hover:scale-[1.02] transition-all duration-200 relative">
       {/* Favorite button */}
       {onToggleFavorite && (
         <button
@@ -66,7 +66,7 @@ export function ProductCard({
           <button
             onClick={() => onAddToCart(id)}
             disabled={!available}
-            className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg font-medium transition-colors"
           >
             {available ? 'Add' : 'Out of Stock'}
           </button>

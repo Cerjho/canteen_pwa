@@ -44,7 +44,7 @@ describe('Login Page', () => {
       renderLogin();
 
       expect(screen.getByRole('heading', { name: /School Canteen/i })).toBeInTheDocument();
-      expect(screen.getByText(/Login to order food/i)).toBeInTheDocument();
+      expect(screen.getByText(/Order food for your kids/i)).toBeInTheDocument();
     });
 
     it('renders email input', () => {
@@ -74,7 +74,7 @@ describe('Login Page', () => {
     it('renders registration info text', () => {
       renderLogin();
 
-      expect(screen.getByText(/contact your school admin/i)).toBeInTheDocument();
+      expect(screen.getByText(/Have an invitation code/i)).toBeInTheDocument();
     });
   });
 

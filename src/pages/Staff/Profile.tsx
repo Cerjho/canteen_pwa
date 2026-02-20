@@ -136,7 +136,7 @@ export default function StaffProfilePage() {
         <PageHeader title="Profile" subtitle="Your account settings" />
 
         {/* Profile Card */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
               <User size={40} className="text-primary-600 dark:text-primary-400" />
@@ -254,7 +254,7 @@ export default function StaffProfilePage() {
         </section>
 
         {/* Security Section */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Security</h3>
           <button
             onClick={() => setShowPasswordModal(true)}
@@ -274,7 +274,7 @@ export default function StaffProfilePage() {
         </section>
 
         {/* Settings Section */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Settings</h3>
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div className="flex items-center gap-3">
@@ -305,7 +305,7 @@ export default function StaffProfilePage() {
         </section>
 
         {/* App Info */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">About</h3>
           <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
             <p><strong>Canteen PWA</strong> - Staff Portal</p>
@@ -316,7 +316,7 @@ export default function StaffProfilePage() {
         {/* Logout Button */}
         <button
           onClick={() => setShowLogoutConfirm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg font-medium transition-colors bg-white dark:bg-gray-800 shadow"
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl font-medium transition-colors bg-white dark:bg-gray-800 shadow-sm"
         >
           <LogOut size={20} />
           Sign Out

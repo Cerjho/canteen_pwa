@@ -6,9 +6,31 @@
   * {
     @apply border-gray-200 dark:border-gray-700;
   }
-  
+
+  /* Smooth dark mode transitions */
+  html {
+    @apply scroll-smooth;
+  }
+
   body {
-    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans;
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased;
+  }
+
+  /* Better focus rings for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-gray-900;
+  }
+
+  /* Primary-colored text selection */
+  ::selection {
+    @apply bg-primary-200 dark:bg-primary-800 text-primary-900 dark:text-primary-100;
+  }
+}
+
+@layer components {
+  /* Reusable card pattern */
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700;
   }
 }
 
@@ -18,4 +40,29 @@
   }
 }
 
-/* Toast slide-in animation is now handled by Tailwind's animate-slide-in */
+/* Custom scrollbar (webkit) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: theme('colors.gray.300');
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: theme('colors.gray.600');
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.gray.400');
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.gray.500');
+}

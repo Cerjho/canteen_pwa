@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { 
@@ -246,7 +246,7 @@ export default function Profile() {
         <PageHeader title="Profile" subtitle="Manage your account" />
 
         {/* Account Info */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
@@ -339,7 +339,7 @@ export default function Profile() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                  ₱{profile?.balance?.toFixed(2) || '0.00'}
+                  â‚±{profile?.balance?.toFixed(2) || '0.00'}
                 </span>
                 <ChevronRight size={20} className="text-gray-400 dark:text-gray-500" />
               </div>
@@ -380,7 +380,7 @@ export default function Profile() {
         </section>
 
         {/* Students Section */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">My Students</h3>
             <button
@@ -457,7 +457,7 @@ export default function Profile() {
         </section>
 
         {/* Settings Section */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Settings</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between py-2">
@@ -490,7 +490,7 @@ export default function Profile() {
         </section>
 
         {/* App Info */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">About</h3>
           <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
             <p><strong>Canteen PWA</strong> - Parent Portal</p>
@@ -501,7 +501,7 @@ export default function Profile() {
         {/* Logout Button */}
         <button
           onClick={() => setShowLogoutConfirm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg font-medium transition-colors bg-white dark:bg-gray-800 shadow"
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl font-medium transition-colors bg-white dark:bg-gray-800 shadow-sm"
         >
           <LogOut size={20} />
           Sign Out
@@ -581,7 +581,7 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-gray-100">
           <Link2 size={24} className="text-primary-600 dark:text-primary-400" />
           Link Your Student
@@ -609,7 +609,7 @@ function LinkStudentModal({ onClose, onSubmit, isLoading }: LinkStudentModalProp
 
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
             <p className="text-sm text-amber-800 dark:text-amber-300">
-              💡 <strong>Don't have a Student ID?</strong><br />
+              ðŸ’¡ <strong>Don't have a Student ID?</strong><br />
               Contact the school administration to get your child's Student ID.
             </p>
           </div>
@@ -658,7 +658,7 @@ function EditDietaryModal({ student, onClose, onSubmit, isLoading }: EditDietary
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6">
         <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Edit Dietary Info</h2>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           For {student.first_name} {student.last_name}
