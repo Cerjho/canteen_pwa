@@ -182,7 +182,11 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
           
           // Then refresh in background for fresh app_metadata (role)
           try {
-            const { data: { user: freshUser }, error: userError } = await supabase.auth.getUser();
+            // IMPORTANT: Pass the access_token so getUser() bypasses the internal
+            // session lock. Without it, getUser() re-acquires the same lock that
+            // onAuthStateChange / _callRefreshToken may already hold, causing a
+            // deadlock that freezes the entire app.
+            const { data: { user: freshUser }, error: userError } = await supabase.auth.getUser(session.access_token);
             
             if (userError) {
               // Session exists but is invalid on server
@@ -233,7 +237,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         // For SIGNED_IN events, fetch fresh user data
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           try {
-            const { data: { user: freshUser }, error: userError } = await supabase.auth.getUser();
+            // IMPORTANT: Pass the access_token to bypass the internal session lock.
+            // This callback runs INSIDE the lock scope during token refresh;
+            // calling getUser() without the JWT would deadlock.
+            const { data: { user: freshUser }, error: userError } = await supabase.auth.getUser(session.access_token);
             
             if (userError) {
               console.warn('[Auth] Failed to get fresh user:', userError.message);

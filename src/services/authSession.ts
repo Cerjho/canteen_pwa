@@ -209,8 +209,10 @@ export async function refreshSession(): Promise<SessionResult> {
       return { session: null, user: null, error: null };
     }
 
-    // Validate session is still valid on server
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    // Validate session is still valid on server.
+    // IMPORTANT: Pass the access_token so getUser() bypasses the internal
+    // session lock to avoid deadlock when called during token refresh.
+    const { data: userData, error: userError } = await supabase.auth.getUser(sessionData.session.access_token);
     
     if (userError) {
       // Session exists locally but is invalid on server

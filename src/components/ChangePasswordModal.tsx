@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Key, Eye, EyeOff, X, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { getSession } from '../services/authSession';
 import { friendlyError } from '../utils/friendlyError';
 
 interface ChangePasswordModalProps {
@@ -106,8 +107,9 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
     setIsLoading(true);
 
     try {
-      // First verify current password by re-authenticating
-      const { data: { user } } = await supabase.auth.getUser();
+      // First verify current password by re-authenticating.
+      // Use cached session user to avoid lock contention with getUser().
+      const { user } = await getSession();
       if (!user?.email) {
         throw new Error('Unable to verify user');
       }
