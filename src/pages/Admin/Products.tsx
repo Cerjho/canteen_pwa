@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
@@ -20,6 +21,7 @@ export default function AdminProducts() {
   const [stockFilter, setStockFilter] = useState<'all' | 'low-stock' | 'out-of-stock'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
   // Initialize stock filter from URL params
   useEffect(() => {
@@ -185,10 +187,8 @@ export default function AdminProducts() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      deleteMutation.mutate(id);
-    }
+  const handleDelete = (id: string) => {
+    setDeleteConfirmId(id);
   };
 
   if (isLoading) {
@@ -378,6 +378,19 @@ export default function AdminProducts() {
           isLoading={saveMutation.isPending}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        title="Delete Product"
+        message="Are you sure you want to delete this product? This action cannot be undone."
+        confirmLabel="Delete"
+        type="danger"
+        onConfirm={() => {
+          if (deleteConfirmId) deleteMutation.mutate(deleteConfirmId);
+          setDeleteConfirmId(null);
+        }}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }

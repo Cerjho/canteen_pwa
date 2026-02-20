@@ -9,9 +9,11 @@ export function useFavorites() {
 
   // Load favorites from database on mount or user change
   useEffect(() => {
+    // Clear stale favorites immediately when user changes to prevent flash of old data
+    setFavorites([]);
+
     async function loadFavorites() {
       if (!user) {
-        setFavorites([]);
         setIsLoadingFavorites(false);
         return;
       }

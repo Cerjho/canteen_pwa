@@ -35,8 +35,8 @@ module.exports = {
           '50%': { opacity: '0.85' }
         },
         slideIn: {
-          '0%': { transform: 'translateY(-10px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' }
+          '0%': { opacity: '0', transform: 'translateX(100%)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' }
         },
         fadeIn: {
           '0%': { opacity: '0' },

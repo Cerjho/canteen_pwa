@@ -21,7 +21,7 @@ interface Transaction {
 export default function Balance() {
   const { user } = useAuth();
 
-  const { data: walletData, isLoading: loadingParent, refetch } = useQuery({
+  const { data: walletData, isLoading: loadingParent, isError: walletError, refetch } = useQuery({
     queryKey: ['parent-balance', user?.id],
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
@@ -38,7 +38,7 @@ export default function Balance() {
     enabled: !!user
   });
 
-  const { data: transactions, isLoading: loadingTx } = useQuery<Transaction[]>({
+  const { data: transactions, isLoading: loadingTx, isError: txError } = useQuery<Transaction[]>({
     queryKey: ['transactions', user?.id],
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
@@ -86,10 +86,17 @@ export default function Balance() {
   };
 
   const isLoading = loadingParent || loadingTx;
+  const isError = walletError || txError;
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
+        {isError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+            <span>Failed to load wallet data.</span>
+            <button onClick={() => refetch()} className="underline font-medium ml-2">Retry</button>
+          </div>
+        )}
         <div className="flex items-center justify-between mb-6">
           <PageHeader
             title="Balance"

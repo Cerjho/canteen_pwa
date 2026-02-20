@@ -243,29 +243,36 @@ export default function ParentDashboard() {
     }
   });
 
-  // Reorder functionality - fetches current prices to avoid stale pricing
+  // Reorder functionality - fetches current prices and checks availability
   const handleReorder = async (order: Order) => {
     const studentName = `${order.child.first_name} ${order.child.last_name}`;
     
-    // Fetch current prices for the products
+    // Fetch current prices and availability for the products
     const productIds = order.items.map(i => i.product_id);
     const { data: currentProducts } = await supabase
       .from('products')
-      .select('id, price')
+      .select('id, price, available, stock_quantity')
       .in('id', productIds);
     
-    const priceMap = new Map((currentProducts || []).map(p => [p.id, p.price as number]));
+    const productMap = new Map((currentProducts || []).map(p => [p.id, p]));
     let hasPriceChange = false;
+    let skippedCount = 0;
 
     order.items.forEach(item => {
-      const currentPrice = priceMap.get(item.product_id);
-      if (currentPrice !== undefined && currentPrice !== item.price_at_order) {
+      const product = productMap.get(item.product_id);
+      // Skip unavailable or out-of-stock products
+      if (!product || !product.available || (product.stock_quantity !== null && product.stock_quantity <= 0)) {
+        skippedCount++;
+        return;
+      }
+      const currentPrice = product.price as number;
+      if (currentPrice !== item.price_at_order) {
         hasPriceChange = true;
       }
       addItem({
         product_id: item.product_id,
         name: item.product.name,
-        price: currentPrice ?? item.price_at_order,
+        price: currentPrice,
         image_url: item.product.image_url,
         quantity: item.quantity,
         student_id: order.child.id,
@@ -274,11 +281,21 @@ export default function ParentDashboard() {
         meal_period: order.meal_period || 'lunch'
       });
     });
+
+    if (skippedCount === order.items.length) {
+      showToast('All items from this order are currently unavailable', 'error');
+      return;
+    }
+
+    const messages: string[] = [];
+    if (skippedCount > 0) messages.push(`${skippedCount} item(s) unavailable`);
+    if (hasPriceChange) messages.push('some prices changed');
+    
     showToast(
-      hasPriceChange 
-        ? 'Items added to cart — some prices have changed' 
+      messages.length > 0
+        ? `Items added to cart — ${messages.join(', ')}`
         : 'Items added to cart!',
-      hasPriceChange ? 'info' : 'success'
+      messages.length > 0 ? 'info' : 'success'
     );
     navigate('/menu');
   };
