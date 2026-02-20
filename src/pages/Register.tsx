@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, User, Phone, Loader2, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { friendlyError } from '../utils/friendlyError';
 
 interface InvitationData {
   email: string; // Masked email from server
@@ -59,7 +60,7 @@ export default function Register() {
       });
 
       if (verifyError) {
-        setError(verifyError.message || 'Verification failed. Please try again.');
+        setError(friendlyError(verifyError.message, 'verify your code'));
         setLoading(false);
         return;
       }
@@ -176,7 +177,7 @@ export default function Register() {
       });
 
       if (registerError) {
-        setError(registerError.message || 'Registration failed. Please try again.');
+        setError(friendlyError(registerError.message, 'complete registration'));
         setLoading(false);
         return;
       }

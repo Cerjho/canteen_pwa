@@ -9,6 +9,7 @@ import { useToast } from '../../components/Toast';
 import { SearchBar } from '../../components/SearchBar';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { playNotificationSound } from '../../utils/notificationSound';
+import { friendlyError } from '../../utils/friendlyError';
 import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
@@ -731,7 +732,7 @@ export default function StaffDashboard() {
       setShowPaymentDialog(null);
       refetch();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to confirm payment', 'error');
+      showToast(friendlyError(error instanceof Error ? error.message : '', 'confirm payment'), 'error');
     }
   };
 
@@ -771,7 +772,7 @@ export default function StaffDashboard() {
       setSelectedOrders(prev => prev.filter(id => id !== orderId));
       refetch();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to update order', 'error');
+      showToast(friendlyError(error instanceof Error ? error.message : '', 'update order'), 'error');
     }
   };
 
@@ -813,7 +814,7 @@ export default function StaffDashboard() {
       setSelectedOrders([]);
       refetch();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to update orders', 'error');
+      showToast(friendlyError(error instanceof Error ? error.message : '', 'update orders'), 'error');
     }
   }, [selectedOrders, refetch, showToast]);
 
@@ -853,7 +854,7 @@ export default function StaffDashboard() {
       setShowCancelDialog(null);
       refetch();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to cancel order', 'error');
+      showToast(friendlyError(error instanceof Error ? error.message : '', 'cancel order'), 'error');
     }
   };
 

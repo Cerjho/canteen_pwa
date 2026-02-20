@@ -15,6 +15,7 @@ import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { friendlyError } from '../../utils/friendlyError';
 
 interface SystemSetting {
   key: string;
@@ -122,7 +123,7 @@ export default function AdminSettings() {
       setHasChanges(false);
       showToast('Settings saved successfully', 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to save settings', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'save settings'), 'error')
   });
 
   // Archive old orders mutation
@@ -139,7 +140,7 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       showToast(`Archived ${data.archived || 0} old orders`, 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to archive orders', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'archive orders'), 'error')
   });
 
   // Reset stock mutation
@@ -157,7 +158,7 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] });
       showToast(`Reset stock for ${data.updated || 0} products`, 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to reset stock', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'reset stock'), 'error')
   });
 
   const handleChange = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {

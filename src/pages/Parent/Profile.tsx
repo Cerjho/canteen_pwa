@@ -28,6 +28,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { useTheme } from '../../hooks/useTheme';
 import type { Parent } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -169,7 +170,7 @@ export default function Profile() {
       showToast('Profile updated successfully', 'success');
     },
     onError: (error: Error) => {
-      showToast(error.message || 'Failed to update profile', 'error');
+      showToast(friendlyError(error.message, 'update your profile'), 'error');
     }
   });
 
@@ -181,7 +182,7 @@ export default function Profile() {
       setShowLinkStudent(false);
       showToast('Student linked successfully', 'success');
     },
-    onError: (error: Error) => showToast(error.message, 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'link student'), 'error')
   });
 
   // Unlink student mutation (via Edge Function)
@@ -194,7 +195,7 @@ export default function Profile() {
     },
     onError: (error: Error) => {
       setUnlinkingStudent(null);
-      showToast(error.message || 'Failed to unlink student', 'error');
+      showToast(friendlyError(error.message, 'unlink student'), 'error');
     }
   });
 
@@ -207,7 +208,7 @@ export default function Profile() {
       setEditingStudent(null);
       showToast('Info updated successfully', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update info', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update student info'), 'error')
   });
 
   const handleEditProfile = () => {

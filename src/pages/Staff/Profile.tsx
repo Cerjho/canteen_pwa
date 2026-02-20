@@ -9,6 +9,7 @@ import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { useTheme } from '../../hooks/useTheme';
+import { friendlyError } from '../../utils/friendlyError';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -102,7 +103,7 @@ export default function StaffProfilePage() {
       setIsEditing(false);
       showToast('Profile updated', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update profile', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update profile'), 'error')
   });
 
   const handleEdit = () => {

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOrderHistory, createOrder } from '../services/orders';
 import { useAuth } from './useAuth';
 import { useToast } from '../components/Toast';
+import { friendlyError } from '../utils/friendlyError';
 import type { OrderWithDetails } from '../types';
 
 export function useOrders() {
@@ -13,7 +14,7 @@ export function useOrders() {
     queryKey: ['orders', user?.id],
     queryFn: async () => {
       if (!user) {
-        throw new Error('User not authenticated');
+        throw new Error('Please sign in to view orders.');
       }
       return getOrderHistory(user.id);
     },
@@ -31,7 +32,7 @@ export function useOrders() {
       }
     },
     onError: (error: Error) => {
-      showToast(error.message || 'Failed to place order', 'error');
+      showToast(friendlyError(error.message, 'place your order'), 'error');
     }
   });
 

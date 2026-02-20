@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Key, Eye, EyeOff, X, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { friendlyError } from '../utils/friendlyError';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -138,7 +139,7 @@ export function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswo
         onSuccess?.();
       }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change password');
+      setError(friendlyError(err instanceof Error ? err.message : '', 'change your password'));
     } finally {
       setIsLoading(false);
     }

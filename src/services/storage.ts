@@ -42,7 +42,7 @@ export async function uploadProductImage(file: File, productId?: string): Promis
 
     if (uploadError) {
       console.error('Upload error:', uploadError);
-      return { success: false, error: uploadError.message };
+      return { success: false, error: 'Failed to upload image. Please try again.' };
     }
 
     // Get public URL

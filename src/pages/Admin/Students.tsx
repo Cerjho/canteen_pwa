@@ -19,6 +19,7 @@ import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { friendlyError } from '../../utils/friendlyError';
 
 interface Student {
   id: string;
@@ -96,7 +97,7 @@ export default function AdminStudents() {
       setShowAddModal(false);
       showToast('Student added successfully', 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to add student', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'add student'), 'error')
   });
 
   // Update student mutation (via Edge Function)
@@ -114,7 +115,7 @@ export default function AdminStudents() {
       setEditingStudent(null);
       showToast('Student updated successfully', 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to update student', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'update student'), 'error')
   });
 
   // Delete student mutation (via Edge Function)
@@ -130,7 +131,7 @@ export default function AdminStudents() {
       queryClient.invalidateQueries({ queryKey: ['admin-students'] });
       showToast('Student deleted successfully', 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to delete student. May have existing orders.', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'delete student'), 'error')
   });
 
   // Unlink student from parent (via Edge Function)
@@ -146,7 +147,7 @@ export default function AdminStudents() {
       queryClient.invalidateQueries({ queryKey: ['admin-students'] });
       showToast('Student unlinked from parent', 'success');
     },
-    onError: (err: Error) => showToast(err.message || 'Failed to unlink student', 'error')
+    onError: (err: Error) => showToast(friendlyError(err.message, 'unlink student'), 'error')
   });
 
   // Filter students

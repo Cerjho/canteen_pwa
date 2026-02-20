@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { friendlyError } from '../utils/friendlyError';
 import type { Student, Child } from '../types';
 
 // Re-export types for backward compatibility
@@ -81,16 +82,16 @@ export async function linkStudent(studentId: string): Promise<Student> {
 
   if (error) {
     // Handle network/infrastructure errors
-    throw new Error(error.message || 'Network error while linking student');
+    throw new Error(friendlyError(error.message, 'link this student'));
   }
   
   if (data?.error) {
     // Handle application-level errors
-    throw new Error(data.message || data.error || 'Failed to link student');
+    throw new Error(friendlyError(data.message || data.error, 'link this student'));
   }
 
   if (!data?.student) {
-    throw new Error('Invalid response: student data missing');
+    throw new Error('Could not retrieve student details. Please try again.');
   }
   
   return data.student;
@@ -108,12 +109,12 @@ export async function unlinkStudent(studentId: string): Promise<void> {
 
   if (error) {
     // Handle network/infrastructure errors
-    throw new Error(error.message || 'Network error while unlinking student');
+    throw new Error(friendlyError(error.message, 'unlink this student'));
   }
   
   if (data?.error) {
     // Handle application-level errors
-    throw new Error(data.message || data.error || 'Failed to unlink student');
+    throw new Error(friendlyError(data.message || data.error, 'unlink this student'));
   }
 }
 
@@ -124,11 +125,11 @@ export async function updateStudentDietary(studentId: string, dietaryRestriction
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to update dietary info');
+    throw new Error(friendlyError(error.message, 'update dietary info'));
   }
   
   if (data?.error) {
-    throw new Error(data.message || 'Failed to update dietary info');
+    throw new Error(friendlyError(data.message, 'update dietary info'));
   }
   
   return data.student;

@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, isOnlinePaymentMethod } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 import { 
   Package, 
   Clock, 
@@ -122,7 +123,7 @@ export default function ParentDashboard() {
   const { data: todayOrders, isLoading: loadingToday, refetch: refetchToday } = useQuery<Order[]>({
     queryKey: ['active-orders', user?.id, todayStr],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      if (!user) throw new Error('Please sign in to continue.');
       
       // Fetch active orders
       const { data: activeOrders, error: activeError } = await supabase
@@ -177,7 +178,7 @@ export default function ParentDashboard() {
   const { data: scheduledOrders, isLoading: loadingScheduled, refetch: refetchScheduled } = useQuery<Order[]>({
     queryKey: ['scheduled-orders', user?.id, todayStr],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      if (!user) throw new Error('Please sign in to continue.');
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -227,7 +228,7 @@ export default function ParentDashboard() {
       setShowCancelDialog(null);
     },
     onError: (error: Error) => {
-      showToast(error.message || 'Failed to cancel order', 'error');
+      showToast(friendlyError(error.message, 'cancel this order'), 'error');
     }
   });
 

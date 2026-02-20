@@ -25,6 +25,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
 import { useToast } from '../../components/Toast';
 import { useTheme } from '../../hooks/useTheme';
+import { friendlyError } from '../../utils/friendlyError';
 
 interface AdminProfileData {
   id: string;
@@ -143,8 +144,8 @@ export default function AdminProfile() {
       setIsEditing(false);
       showToast('Profile updated successfully', 'success');
     },
-    onError: () => {
-      showToast('Failed to update profile', 'error');
+    onError: (error: Error) => {
+      showToast(friendlyError(error.message, 'update profile'), 'error');
     }
   });
 

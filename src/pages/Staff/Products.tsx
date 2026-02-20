@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import type { Product, ProductCategory } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -106,7 +107,7 @@ export default function StaffProducts() {
       queryClient.invalidateQueries({ queryKey: ['staff-products'] });
       showToast(result.message || 'Product availability updated', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update product', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update product'), 'error')
   });
 
   // Update stock mutation (via edge function)
@@ -137,7 +138,7 @@ export default function StaffProducts() {
       queryClient.invalidateQueries({ queryKey: ['staff-products'] });
       showToast(result.message || 'Stock updated', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update stock', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update stock'), 'error')
   });
 
   // Stable callback for debounced stock input
@@ -171,7 +172,7 @@ export default function StaffProducts() {
       queryClient.invalidateQueries({ queryKey: ['staff-products'] });
       showToast(result.message || 'All products marked available', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update products', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update products'), 'error')
   });
 
   // Filter products

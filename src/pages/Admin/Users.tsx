@@ -26,6 +26,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supaba
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
+import { friendlyError } from '../../utils/friendlyError';
 
 interface Parent {
   id: string;
@@ -222,7 +223,7 @@ export default function AdminUsers() {
       setSelectedParent(null);
       showToast(`Balance updated: ₱${data.previous_balance.toFixed(2)} → ₱${data.new_balance.toFixed(2)}`, 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update balance', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update balance'), 'error')
   });
 
   // Create user mutation via edge function
@@ -285,7 +286,7 @@ export default function AdminUsers() {
 
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.error || `Failed to create user (${response.status})`);
+        throw new Error(result.error || 'Unable to create user. Please try again.');
       }
 
       return result;
@@ -308,14 +309,14 @@ export default function AdminUsers() {
         }
         if (failed > 0) {
           const firstError = result.results?.find((r: { success: boolean; error?: string }) => !r.success);
-          showToast(`${failed} failed: ${firstError?.error || 'Unknown error'}`, 'error');
+          showToast(`${failed} invitation(s) could not be sent. ${friendlyError(firstError?.error, 'send invitations')}`, 'error');
         }
       } else {
         showToast(`${variables.role === 'parent' ? 'Parent' : 'Staff member'} created successfully`, 'success');
       }
     },
     onError: (error: Error) => {
-      showToast(error.message, 'error');
+      showToast(friendlyError(error.message, 'create user'), 'error');
     }
   });
 

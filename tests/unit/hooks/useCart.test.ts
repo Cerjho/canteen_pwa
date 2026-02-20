@@ -449,7 +449,7 @@ describe('useCart Hook', () => {
         act(async () => {
           await result.current.checkout('cash', '');
         })
-      ).rejects.toThrow('Cart is empty');
+      ).rejects.toThrow('Your cart is empty.');
     });
 
     it('should use provided payment method', async () => {

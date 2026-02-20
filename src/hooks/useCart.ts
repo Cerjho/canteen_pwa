@@ -3,6 +3,7 @@ import { createOrder } from '../services/orders';
 import { createCheckout } from '../services/payments';
 import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
+import { friendlyError } from '../utils/friendlyError';
 import type { PaymentMethod, MealPeriod } from '../types';
 import { isOnlinePaymentMethod } from '../types';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
@@ -363,7 +364,7 @@ export function useCart() {
   // Add item to cart
   const addItem = useCallback(async (item: Omit<CartItem, 'id'>) => {
     if (!user || !item.student_id || !item.scheduled_for) {
-      setError('Missing required fields');
+      setError('Please select a student and date before adding items.');
       return;
     }
 
@@ -438,7 +439,7 @@ export function useCart() {
       // Revert optimistic update on error
       await loadCart();
       const message = err instanceof Error ? err.message : 'Failed to add item';
-      setError(message);
+      setError(friendlyError(message, 'add this item'));
     }
   }, [user, loadCart]);
 
@@ -663,7 +664,7 @@ export function useCart() {
       console.error('Failed to copy items:', err);
       await loadCart();
       const message = err instanceof Error ? err.message : 'Failed to copy items';
-      setError(message);
+      setError(friendlyError(message, 'copy items'));
     }
   }, [user, items, loadCart]);
 
@@ -768,7 +769,7 @@ export function useCart() {
     orderNotes?: string,
     selectedDates?: string[] // Optional: only checkout specific dates
   ) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user) throw new Error('Please sign in to continue.');
     
     setIsLoading(true);
     setError(null);
@@ -781,7 +782,7 @@ export function useCart() {
         currentItems = currentItems.filter(item => selectedDates.includes(item.scheduled_for));
       }
 
-      if (currentItems.length === 0) throw new Error('Cart is empty');
+      if (currentItems.length === 0) throw new Error('Your cart is empty.');
 
       const currentPaymentMethod = paymentMethodRef.current;
       const currentNotes = notesRef.current;
@@ -900,7 +901,7 @@ export function useCart() {
       // Check if any orders failed
       const failedOrders = results.filter(r => r.error);
       if (failedOrders.length > 0 && failedOrders.length === results.length) {
-        throw new Error(failedOrders[0].error || 'All orders failed');
+        throw new Error(friendlyError(failedOrders[0].error, 'place your order'));
       }
 
       // Clear only successfully ordered items
@@ -938,7 +939,7 @@ export function useCart() {
         failCount: failedOrders.length
       };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Checkout failed';
+      const errorMessage = err instanceof Error ? friendlyError(err.message, 'complete checkout') : 'Checkout failed. Please try again.';
       setError(errorMessage);
       throw err;
     } finally {

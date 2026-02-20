@@ -11,7 +11,7 @@ export function useStudents() {
     queryKey: ['students', user?.id],
     queryFn: async () => {
       if (!user) {
-        throw new Error('User not authenticated');
+        throw new Error('Please sign in to view students.');
       }
       return getStudents(user.id);
     },
@@ -29,7 +29,7 @@ export function useChildren() {
     queryKey: ['children', user?.id],
     queryFn: async () => {
       if (!user) {
-        throw new Error('User not authenticated');
+        throw new Error('Please sign in to view students.');
       }
       return getChildren(user.id);
     },

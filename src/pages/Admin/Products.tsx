@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { uploadProductImage, compressImage, deleteProductImage } from '../../services/storage';
 import type { Product, ProductCategory } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 
 const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
 
@@ -86,7 +87,7 @@ export default function AdminProducts() {
       setEditingProduct(null);
       showToast(editingProduct ? 'Product updated' : 'Product added', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to save product', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'save product'), 'error')
   });
 
   // Delete product mutation (via secure edge function)
@@ -124,7 +125,7 @@ export default function AdminProducts() {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] });
       showToast('Product deleted', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to delete product', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'delete product'), 'error')
   });
 
   // Toggle availability mutation (via secure edge function)
@@ -162,7 +163,7 @@ export default function AdminProducts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-products'] });
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update product', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update product'), 'error')
   });
 
   // Filter products
@@ -443,11 +444,11 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
         setImagePreview(result.url);
         showToast('Image uploaded successfully', 'success');
       } else {
-        setUploadError(result.error || 'Failed to upload image');
+        setUploadError(result.error || 'Failed to upload image. Please try again.');
         setImagePreview(product?.image_url || null);
       }
     } catch (error) {
-      setUploadError('Failed to upload image');
+      setUploadError('Failed to upload image. Please try a smaller file or different format.');
       setImagePreview(product?.image_url || null);
     } finally {
       setIsUploading(false);

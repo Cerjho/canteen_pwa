@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Wallet, Smartphone, CreditCard, Loader2 } from 'lucide-react';
 import { createTopupCheckout } from '../services/payments';
+import { friendlyError } from '../utils/friendlyError';
 
 interface TopUpModalProps {
   isOpen: boolean;
@@ -57,7 +58,7 @@ export default function TopUpModal({ isOpen, onClose }: TopUpModalProps) {
       // Redirect to PayMongo checkout page
       window.location.href = result.checkout_url;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create top-up session';
+      const message = friendlyError(err instanceof Error ? err.message : '', 'start your top-up');
       setError(message);
       setIsLoading(false);
     }

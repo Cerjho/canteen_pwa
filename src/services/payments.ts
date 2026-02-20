@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabaseClient';
+import { friendlyError } from '../utils/friendlyError';
 import type {
   CreateCheckoutResponse,
   CreateTopupCheckoutResponse,
@@ -53,7 +54,7 @@ async function extractEdgeFunctionError(error: Error & { context?: unknown }, da
     return 'Unable to connect to server. Please try again in a moment.';
   }
 
-  return error.message;
+  return friendlyError(error.message, 'process your request');
 }
 
 export interface CreateCheckoutRequest {
@@ -155,7 +156,8 @@ export async function checkPaymentStatus(
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to check payment status');
+    const errorMessage = await extractEdgeFunctionError(error, data);
+    throw new Error(friendlyError(errorMessage, 'check payment status'));
   }
 
   return data as PaymentStatusResponse;
@@ -172,7 +174,8 @@ export async function checkTopupStatus(
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to check top-up status');
+    const errorMessage = await extractEdgeFunctionError(error, data);
+    throw new Error(friendlyError(errorMessage, 'check top-up status'));
   }
 
   return data as PaymentStatusResponse;

@@ -4,6 +4,7 @@ import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod, type PaymentMethod, isOnlinePaymentMethod } from '../types';
 import { getCheckoutButtonText } from '../services/payments';
+import { friendlyError } from '../utils/friendlyError';
 
 type CartPaymentMethod = PaymentMethod;
 
@@ -157,7 +158,7 @@ export function CartDrawer({
       setPaymentMethod('cash');
       setSelectedDates(new Set());
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Checkout failed. Please try again.';
+      const errorMessage = friendlyError(error instanceof Error ? error.message : '', 'complete checkout');
       setCheckoutError(errorMessage);
       onError?.(error instanceof Error ? error : new Error(errorMessage));
       console.error('Checkout error:', error);

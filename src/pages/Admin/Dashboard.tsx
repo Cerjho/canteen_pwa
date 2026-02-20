@@ -39,6 +39,7 @@ import { useToast } from '../../components/Toast';
 import { useNavigate } from 'react-router-dom';
 import { playNotificationSound } from '../../utils/notificationSound';
 import { useAuth } from '../../hooks/useAuth';
+import { friendlyError } from '../../utils/friendlyError';
 
 // ==================== INTERFACES ====================
 interface DashboardStats {
@@ -258,7 +259,7 @@ export default function AdminDashboard() {
       // Check all query errors
       if (ordersResult.error) {
         console.error('Orders query error:', ordersResult.error);
-        throw new Error(`Failed to fetch orders: ${ordersResult.error.message}`);
+        throw new Error(friendlyError(ordersResult.error.message, 'load dashboard data'));
       }
       if (parentsResult.error) {
         console.error('Parents query error:', parentsResult.error);

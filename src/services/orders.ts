@@ -32,24 +32,24 @@ async function delay(ms: number): Promise<void> {
 export async function createOrder(orderData: CreateOrderRequest): Promise<{ order_id?: string; queued?: boolean }> {
   // Validate input
   if (!orderData.parent_id || !orderData.student_id) {
-    throw new Error('Parent ID and Student ID are required');
+    throw new Error('Please select a student before placing an order.');
   }
   if (!orderData.items || orderData.items.length === 0) {
-    throw new Error('At least one item is required');
+    throw new Error('Your cart is empty. Please add items before checking out.');
   }
   const validPaymentMethods = ['cash', 'balance', 'gcash', 'paymaya', 'card'];
   if (orderData.payment_method && !validPaymentMethods.includes(orderData.payment_method)) {
-    throw new Error(`Invalid payment method: ${orderData.payment_method}`);
+    throw new Error('Please select a valid payment method.');
   }
 
   // Online payment methods should use the create-checkout endpoint, not process-order
   const onlinePaymentMethods = ['gcash', 'paymaya', 'card'];
   if (orderData.payment_method && onlinePaymentMethods.includes(orderData.payment_method)) {
-    throw new Error('Online payments (GCash, PayMaya, Card) should use the createCheckout function from payments.ts');
+    throw new Error('Please use the online payment option for GCash, PayMaya, or Card.');
   }
   for (const item of orderData.items) {
     if (!item.product_id || item.quantity <= 0 || item.price_at_order < 0) {
-      throw new Error('Invalid order item: product_id required, quantity must be positive, price must be non-negative');
+      throw new Error('Some items in your cart are invalid. Please review and try again.');
     }
   }
 

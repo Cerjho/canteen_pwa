@@ -31,6 +31,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Product, ProductCategory } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 
 // Helper to format date in local timezone (avoids UTC shift issues)
 function formatDateLocal(date: Date): string {
@@ -287,7 +288,7 @@ export default function AdminWeeklyMenu() {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast('Product added to menu', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to add product', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'add product to menu'), 'error')
   });
 
   // Add multiple products at once for a specific date (via secure edge function)
@@ -305,7 +306,7 @@ export default function AdminWeeklyMenu() {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast(`Added ${productIds.length} items to menu`, 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to add products', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'add products to menu'), 'error')
   });
 
   // Remove from schedule (via secure edge function)
@@ -320,7 +321,7 @@ export default function AdminWeeklyMenu() {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast('Product removed from menu', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to remove product', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'remove product from menu'), 'error')
   });
 
   // Toggle item active status (via secure edge function)
@@ -336,7 +337,7 @@ export default function AdminWeeklyMenu() {
       queryClient.invalidateQueries({ queryKey: ['menu-schedules'] });
       showToast(isActive ? 'Item activated' : 'Item deactivated', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update item', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update menu item'), 'error')
   });
 
   // Copy menu to another day (via secure edge function)
@@ -360,7 +361,7 @@ export default function AdminWeeklyMenu() {
         showToast(`Menu copied to ${dayLabel}`, 'success');
       }
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to copy menu', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'copy menu'), 'error')
   });
 
   // Copy day to all weekdays (via secure edge function)
@@ -383,7 +384,7 @@ export default function AdminWeeklyMenu() {
         showToast('Menu copied to all weekdays', 'success');
       }
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to copy menu', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'copy menu to all days'), 'error')
   });
 
   // Clear day's menu (via secure edge function)
@@ -400,7 +401,7 @@ export default function AdminWeeklyMenu() {
       setShowClearConfirm(false);
       showToast('Day menu cleared', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to clear menu', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'clear day menu'), 'error')
   });
 
   // Clear entire week (via secure edge function)
@@ -416,7 +417,7 @@ export default function AdminWeeklyMenu() {
       setShowClearConfirm(false);
       showToast('Week menu cleared', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to clear menu', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'clear week menu'), 'error')
   });
 
   // Add holiday (via secure edge function)
@@ -435,7 +436,7 @@ export default function AdminWeeklyMenu() {
       setShowHolidayModal(false);
       showToast('Holiday added', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to add holiday', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'add holiday'), 'error')
   });
 
   // Remove holiday (via secure edge function)
@@ -450,7 +451,7 @@ export default function AdminWeeklyMenu() {
       queryClient.invalidateQueries({ queryKey: ['holidays'] });
       showToast('Holiday removed', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to remove holiday', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'remove holiday'), 'error')
   });
 
   // Add make-up day (via secure edge function)
@@ -475,7 +476,7 @@ export default function AdminWeeklyMenu() {
       setShowMakeupModal(false);
       showToast('Make-up day added', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to add make-up day', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'add make-up day'), 'error')
   });
 
   // Remove make-up day (via secure edge function)
@@ -491,7 +492,7 @@ export default function AdminWeeklyMenu() {
       queryClient.invalidateQueries({ queryKey: ['weekdays-with-status'] });
       showToast('Make-up day removed', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to remove make-up day', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'remove make-up day'), 'error')
   });
 
   // Computed values - filter by specific date

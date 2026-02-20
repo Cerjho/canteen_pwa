@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { isOnlinePaymentMethod, type PaymentMethod } from '../../types';
 import { checkPaymentStatus, retryCheckout } from '../../services/payments';
 import { getPaymentMethodLabel } from '../../services/payments';
+import { friendlyError } from '../../utils/friendlyError';
 
 interface OrderConfirmationState {
   orderId: string;
@@ -45,7 +46,7 @@ export default function OrderConfirmation() {
         window.location.href = result.checkout_url;
       }
     } catch (err) {
-      setRetryError(err instanceof Error ? err.message : 'Failed to retry payment. Please try ordering again.');
+      setRetryError(friendlyError(err instanceof Error ? err.message : '', 'retry payment'));
       setIsRetrying(false);
     }
   };

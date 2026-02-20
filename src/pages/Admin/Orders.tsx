@@ -16,6 +16,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { OrderStatus } from '../../types';
+import { friendlyError } from '../../utils/friendlyError';
 
 interface OrderWithDetails {
   id: string;
@@ -165,7 +166,7 @@ export default function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       showToast('Order status updated', 'success');
     },
-    onError: (error: Error) => showToast(error.message || 'Failed to update order', 'error')
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update order'), 'error')
   });
 
   // Refund order mutation
@@ -206,7 +207,7 @@ export default function AdminOrders() {
       showToast('Order refunded successfully. Balance has been restored.', 'success');
     },
     onError: (error: Error) => {
-      showToast(error.message || 'Failed to process refund', 'error');
+      showToast(friendlyError(error.message, 'process refund'), 'error');
     }
   });
 
