@@ -35,6 +35,7 @@ export interface PayMongoLineItem {
 export interface CheckoutSessionMetadata {
   type: 'order' | 'topup';
   order_id?: string;
+  payment_group_id?: string;
   parent_id: string;
   client_order_id?: string;
   topup_session_id?: string;

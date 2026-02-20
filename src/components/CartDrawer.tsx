@@ -70,9 +70,6 @@ export function CartDrawer({
     return keys.size;
   })();
 
-  const onlinePaymentMultiOrderWarning =
-    isOnlinePaymentMethod(paymentMethod) && orderGroupCount > 1;
-  
   // Handle escape key to close drawer
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -580,10 +577,10 @@ export function CartDrawer({
             )}
 
             {/* Online payment multi-order info */}
-            {onlinePaymentMultiOrderWarning && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg" role="status">
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  <strong>Note:</strong> Online payment processes one order at a time. Only the first order group will be checked out now — remaining items stay in your cart for a follow-up checkout.
+            {isOnlinePaymentMethod(paymentMethod) && orderGroupCount > 1 && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg" role="status">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <strong>Info:</strong> All {orderGroupCount} order groups will be combined into a single payment.
                 </p>
               </div>
             )}

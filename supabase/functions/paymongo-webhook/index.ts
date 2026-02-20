@@ -98,17 +98,49 @@ async function handleOrderPaymentPaid(
   metadata: any,
 ) {
   const orderId = metadata.order_id;
-  if (!orderId) {
-    console.error('Missing order_id in webhook metadata');
+  const paymentGroupId = metadata.payment_group_id;
+
+  if (!orderId && !paymentGroupId) {
+    console.error('Missing order_id and payment_group_id in webhook metadata');
     return;
   }
 
   const paymentId = checkout.attributes.payments?.[0]?.id || null;
   const paymentMethod = resolvePaymentMethod(checkout.attributes.payments || []);
 
-  console.log('Processing order payment:', { orderId, paymentId, paymentMethod });
+  // ── Batch payment: update all orders in the payment group ──
+  if (paymentGroupId) {
+    console.log('Processing batch payment:', { paymentGroupId, paymentId, paymentMethod });
 
-  // Idempotency: check if already paid
+    const { data: groupOrders, error: groupError } = await supabaseAdmin
+      .from('orders')
+      .select('id, status, payment_status, parent_id, total_amount, payment_method')
+      .eq('payment_group_id', paymentGroupId);
+
+    if (groupError || !groupOrders || groupOrders.length === 0) {
+      console.error('No orders found for payment_group_id:', paymentGroupId, groupError);
+      // Fall through to single-order handling if orderId is present
+      if (!orderId) return;
+    } else {
+      let confirmedCount = 0;
+      for (const order of groupOrders) {
+        if (order.payment_status === 'paid') {
+          console.log('Order already paid (idempotent):', order.id);
+          confirmedCount++;
+          continue;
+        }
+
+        await confirmOrderPayment(supabaseAdmin, order, paymentId, paymentMethod, checkout.id);
+        confirmedCount++;
+      }
+      console.log(`Batch payment confirmed: ${confirmedCount}/${groupOrders.length} orders for group ${paymentGroupId}`);
+      return;
+    }
+  }
+
+  // ── Single order payment (backwards compatible) ──
+  console.log('Processing single order payment:', { orderId, paymentId, paymentMethod });
+
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .select('id, status, payment_status, parent_id, total_amount, payment_method')
@@ -125,6 +157,21 @@ async function handleOrderPaymentPaid(
     return;
   }
 
+  await confirmOrderPayment(supabaseAdmin, order, paymentId, paymentMethod, checkout.id);
+  console.log('Order payment confirmed:', orderId);
+}
+
+/**
+ * Confirm payment for a single order: update status + transaction.
+ * Shared between single-order and batch-order flows.
+ */
+async function confirmOrderPayment(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  order: { id: string; parent_id: string; total_amount: number; payment_method: string },
+  paymentId: string | null,
+  paymentMethod: string,
+  checkoutId: string,
+) {
   // Update order to paid
   const { error: updateError } = await supabaseAdmin
     .from('orders')
@@ -132,23 +179,22 @@ async function handleOrderPaymentPaid(
       status: 'pending',
       payment_status: 'paid',
       paymongo_payment_id: paymentId,
-      payment_method: paymentMethod, // Update to actual method used
+      payment_method: paymentMethod,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', orderId)
+    .eq('id', order.id)
     .eq('payment_status', 'awaiting_payment'); // Optimistic lock
 
   if (updateError) {
-    console.error('Failed to update order:', updateError);
+    console.error('Failed to update order:', order.id, updateError);
     return;
   }
 
   // Update or create completed transaction
-  // First try to update the existing pending transaction
   const { data: existingTx } = await supabaseAdmin
     .from('transactions')
     .select('id')
-    .eq('order_id', orderId)
+    .eq('order_id', order.id)
     .eq('type', 'payment')
     .eq('status', 'pending')
     .single();
@@ -161,25 +207,22 @@ async function handleOrderPaymentPaid(
         method: paymentMethod,
         reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
         paymongo_payment_id: paymentId,
-        paymongo_checkout_id: checkout.id,
+        paymongo_checkout_id: checkoutId,
       })
       .eq('id', existingTx.id);
   } else {
-    // Create new transaction (shouldn't happen normally)
     await supabaseAdmin.from('transactions').insert({
       parent_id: order.parent_id,
-      order_id: orderId,
+      order_id: order.id,
       type: 'payment',
       amount: order.total_amount,
       method: paymentMethod,
       status: 'completed',
       reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
       paymongo_payment_id: paymentId,
-      paymongo_checkout_id: checkout.id,
+      paymongo_checkout_id: checkoutId,
     });
   }
-
-  console.log('Order payment confirmed:', orderId);
 }
 
 async function handleTopupPaymentPaid(

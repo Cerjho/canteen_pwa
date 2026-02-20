@@ -7,6 +7,7 @@ import { supabase } from './supabaseClient';
 import { friendlyError } from '../utils/friendlyError';
 import type {
   CreateCheckoutResponse,
+  BatchCheckoutResponse,
   CreateTopupCheckoutResponse,
   PaymentStatusResponse,
   PaymentMethod,
@@ -72,6 +73,25 @@ export interface CreateCheckoutRequest {
   meal_period?: string;
 }
 
+export interface BatchCheckoutOrderGroup {
+  student_id: string;
+  client_order_id: string;
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    price_at_order: number;
+  }>;
+  scheduled_for?: string;
+  meal_period?: string;
+}
+
+export interface CreateBatchCheckoutRequest {
+  parent_id: string;
+  orders: BatchCheckoutOrderGroup[];
+  payment_method: 'gcash' | 'paymaya' | 'card';
+  notes?: string;
+}
+
 export interface CreateTopupRequest {
   amount: number;
   payment_method?: 'gcash' | 'paymaya' | 'card';
@@ -114,6 +134,43 @@ export async function createCheckout(
   }
 
   return data as CreateCheckoutResponse;
+}
+
+/**
+ * Create a SINGLE PayMongo checkout session covering multiple orders.
+ * Saves on transaction fees by batching all order groups into one payment.
+ */
+export async function createBatchCheckout(
+  batchData: CreateBatchCheckoutRequest
+): Promise<BatchCheckoutResponse> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !sessionData.session) {
+    throw new Error('Please sign in again to place an order');
+  }
+
+  const expiresAt = sessionData.session.expires_at;
+  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      throw new Error('Session expired. Please sign in again.');
+    }
+  }
+
+  const { data, error } = await supabase.functions.invoke('create-batch-checkout', {
+    body: batchData,
+  });
+
+  if (error) {
+    const errorMessage = await extractEdgeFunctionError(error, data);
+    throw new Error(errorMessage);
+  }
+
+  if (data?.error) {
+    throw new Error(data.message || data.error);
+  }
+
+  return data as BatchCheckoutResponse;
 }
 
 /**

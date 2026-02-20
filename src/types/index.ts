@@ -162,6 +162,16 @@ export interface CreateCheckoutResponse {
   total_amount: number;
 }
 
+/** Response from the create-batch-checkout edge function */
+export interface BatchCheckoutResponse {
+  success: boolean;
+  payment_group_id: string;
+  order_ids: string[];
+  checkout_url: string;
+  payment_due_at: string;
+  total_amount: number;
+}
+
 /** Response from the create-topup-checkout edge function */
 export interface CreateTopupCheckoutResponse {
   success: boolean;
