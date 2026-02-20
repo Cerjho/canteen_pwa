@@ -657,16 +657,10 @@ export default function StaffDashboard() {
     };
   }, [refetch, showToast, soundEnabled]);
 
-  // Track order count for notifications
+  // Track order count for notifications (sound already played by realtime INSERT handler)
   useEffect(() => {
-    if (orders && orders.length > previousOrderCount.current && previousOrderCount.current > 0) {
-      // New orders came in
-      if (soundEnabled) {
-        playNotificationSound(0.5);
-      }
-    }
     previousOrderCount.current = orders?.length || 0;
-  }, [orders, soundEnabled]);
+  }, [orders]);
 
   // Real-time countdown timer for payment deadlines
   useEffect(() => {
@@ -1741,10 +1735,12 @@ export default function StaffDashboard() {
                                   <button
                                     onClick={() => {
                                       // Announce order ready
-                                      const msg = new SpeechSynthesisUtterance(
-                                        `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
-                                      );
-                                      window.speechSynthesis.speak(msg);
+                                      if ('speechSynthesis' in window) {
+                                        const msg = new SpeechSynthesisUtterance(
+                                          `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
+                                        );
+                                        window.speechSynthesis.speak(msg);
+                                      }
                                       showToast(`📢 Announced: Order #${order.id.slice(-4).toUpperCase()}`, 'success');
                                     }}
                                     className="p-1.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
@@ -2056,10 +2052,12 @@ export default function StaffDashboard() {
                       {order.status === 'ready' && (
                         <button
                           onClick={() => {
-                            const msg = new SpeechSynthesisUtterance(
-                              `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
-                            );
-                            window.speechSynthesis.speak(msg);
+                            if ('speechSynthesis' in window) {
+                              const msg = new SpeechSynthesisUtterance(
+                                `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
+                              );
+                              window.speechSynthesis.speak(msg);
+                            }
                             showToast(`📢 Announced: Order #${order.id.slice(-4).toUpperCase()}`, 'success');
                           }}
                           className="p-1.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900 transition-colors"

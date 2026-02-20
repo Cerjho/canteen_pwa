@@ -42,12 +42,6 @@ export function CartDrawer({
   const [showCopyModal, setShowCopyModal] = useState<string | null>(null);
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const canUseBalance = parentBalance >= total;
-  const studentCount = Object.keys(itemsByStudent).length;
-  
-  // Get unique dates from items
-  const uniqueDates = [...new Set(items.map(i => i.scheduled_for))].sort();
-  const dateCount = uniqueDates.length;
   
   // Calculate selected total if partial checkout
   const selectedTotal = selectedDates.size > 0
@@ -55,6 +49,13 @@ export function CartDrawer({
         .reduce((sum, item) => sum + item.price * item.quantity, 0)
     : total;
 
+  const canUseBalance = parentBalance >= selectedTotal;
+  const studentCount = Object.keys(itemsByStudent).length;
+  
+  // Get unique dates from items
+  const uniqueDates = [...new Set(items.map(i => i.scheduled_for))].sort();
+  const dateCount = uniqueDates.length;
+  
   // Handle escape key to close drawer
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -186,7 +187,7 @@ export function CartDrawer({
       disabled: !canUseBalance,
       description: canUseBalance 
         ? `Available: ₱${parentBalance.toFixed(2)}`
-        : `Need ₱${(total - parentBalance).toFixed(2)} more`
+        : `Need ₱${(selectedTotal - parentBalance).toFixed(2)} more`
     }
   ];
 

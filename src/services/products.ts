@@ -251,6 +251,12 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
       exactHolidayDates.add(h.date);
     }
   });
+
+  // Fetch makeup days so Saturdays that are makeup days are included
+  const { data: makeupDays } = await supabase
+    .from('makeup_days')
+    .select('date');
+  const makeupDaySet = new Set((makeupDays || []).map(m => m.date));
   
   const checkDate = new Date(today);
   while (dates.length < daysAhead) {
@@ -258,9 +264,13 @@ export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Dat
     const dateStr = formatDateLocal(checkDate);
     const monthDay = dateStr.slice(5); // MM-DD
     
-    // Skip weekends and holidays (both exact and recurring)
+    // Skip holidays (both exact and recurring)
     const isHoliday = exactHolidayDates.has(dateStr) || recurringMonthDays.has(monthDay);
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday) {
+    // Skip weekends unless it's a makeup Saturday
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isMakeupSaturday = dayOfWeek === 6 && makeupDaySet.has(dateStr);
+    
+    if (!isHoliday && (!isWeekend || isMakeupSaturday)) {
       dates.push(new Date(checkDate));
     }
     

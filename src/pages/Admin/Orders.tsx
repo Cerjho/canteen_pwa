@@ -445,12 +445,15 @@ export default function AdminOrders() {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onUpdateStatus={(status) => {
-            updateStatus.mutate({ orderId: selectedOrder.id, status });
-            setSelectedOrder(null);
+            updateStatus.mutate(
+              { orderId: selectedOrder.id, status },
+              { onSuccess: () => setSelectedOrder(null) }
+            );
           }}
           onRefund={() => {
+            const orderToRefund = selectedOrder;
             setSelectedOrder(null);
-            setRefundOrder(selectedOrder);
+            setRefundOrder(orderToRefund);
           }}
         />
       )}

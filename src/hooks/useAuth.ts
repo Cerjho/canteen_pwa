@@ -48,10 +48,18 @@ export function useAuth() {
       
       if (session?.user) {
         // On sign-in or token refresh, get fresh user from server
-        const { data: { user: freshUser } } = await supabase.auth.getUser();
-        if (isMounted) {
-          setUser(freshUser ?? session.user);
-          setError(null);
+        try {
+          const { data: { user: freshUser } } = await supabase.auth.getUser();
+          if (isMounted) {
+            setUser(freshUser ?? session.user);
+            setError(null);
+          }
+        } catch (err) {
+          console.error('Failed to refresh user:', err);
+          if (isMounted) {
+            setUser(session.user);
+            setError(null);
+          }
         }
       } else {
         setUser(null);

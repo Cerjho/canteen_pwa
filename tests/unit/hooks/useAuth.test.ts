@@ -115,14 +115,16 @@ describe('useAuth Hook', () => {
 
       expect(result.current.user).toBe(null);
 
-      // Simulate sign in
-      act(() => {
+      // Simulate sign in (callback is async due to getUser() call)
+      await act(async () => {
         if (authChangeCallback) {
-          authChangeCallback('SIGNED_IN', mockSession);
+          await authChangeCallback('SIGNED_IN', mockSession);
         }
       });
 
-      expect(result.current.user).toEqual(mockUser);
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
     });
 
     it('should update user on sign out', async () => {
@@ -137,13 +139,15 @@ describe('useAuth Hook', () => {
       });
 
       // Simulate sign out
-      act(() => {
+      await act(async () => {
         if (authChangeCallback) {
-          authChangeCallback('SIGNED_OUT', null);
+          await authChangeCallback('SIGNED_OUT', null);
         }
       });
 
-      expect(result.current.user).toBe(null);
+      await waitFor(() => {
+        expect(result.current.user).toBe(null);
+      });
     });
 
     it('should handle token refresh', async () => {
@@ -162,14 +166,16 @@ describe('useAuth Hook', () => {
         access_token: 'new-token'
       };
 
-      // Simulate token refresh
-      act(() => {
+      // Simulate token refresh (callback is async due to getUser() call)
+      await act(async () => {
         if (authChangeCallback) {
-          authChangeCallback('TOKEN_REFRESHED', newSession);
+          await authChangeCallback('TOKEN_REFRESHED', newSession);
         }
       });
 
-      expect(result.current.user).toEqual(mockUser);
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
     });
   });
 
@@ -187,13 +193,12 @@ describe('useAuth Hook', () => {
       });
 
       // signOut has a 600ms delay before calling supabase.auth.signOut
-      const signOutPromise = act(async () => {
+      await act(async () => {
         const p = result.current.signOut();
         // Advance past the 600ms delay
         await vi.advanceTimersByTimeAsync(700);
-        return p;
+        await p;
       });
-      await signOutPromise;
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
     });

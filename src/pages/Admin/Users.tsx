@@ -126,27 +126,35 @@ export default function AdminUsers() {
       
       const walletMap = new Map((wallets || []).map(w => [w.user_id, w.balance]));
       
-      // Get children and orders count for each parent
-      const enrichedParents = await Promise.all(
-        (profiles || []).map(async (profile) => {
-          const { count: childrenCount } = await supabase
-            .from('parent_students')
-            .select('*', { count: 'exact', head: true })
-            .eq('parent_id', profile.id);
+      // Batch fetch children counts and order counts (avoids N+1 queries)
+      const parentIds = (profiles || []).map(p => p.id);
 
-          const { count: ordersCount } = await supabase
-            .from('orders')
-            .select('*', { count: 'exact', head: true })
-            .eq('parent_id', profile.id);
+      const { data: childrenCounts } = await supabase
+        .from('parent_students')
+        .select('parent_id')
+        .in('parent_id', parentIds);
 
-          return {
-            ...profile,
-            balance: walletMap.get(profile.id) || 0,
-            children_count: childrenCount || 0,
-            orders_count: ordersCount || 0
-          };
-        })
-      );
+      const { data: ordersCounts } = await supabase
+        .from('orders')
+        .select('parent_id')
+        .in('parent_id', parentIds);
+
+      // Build count maps
+      const childrenCountMap = new Map<string, number>();
+      (childrenCounts || []).forEach(row => {
+        childrenCountMap.set(row.parent_id, (childrenCountMap.get(row.parent_id) || 0) + 1);
+      });
+      const ordersCountMap = new Map<string, number>();
+      (ordersCounts || []).forEach(row => {
+        ordersCountMap.set(row.parent_id, (ordersCountMap.get(row.parent_id) || 0) + 1);
+      });
+
+      const enrichedParents = (profiles || []).map((profile) => ({
+        ...profile,
+        balance: walletMap.get(profile.id) || 0,
+        children_count: childrenCountMap.get(profile.id) || 0,
+        orders_count: ordersCountMap.get(profile.id) || 0
+      }));
 
       return enrichedParents;
     }

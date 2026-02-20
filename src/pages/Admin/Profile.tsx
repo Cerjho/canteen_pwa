@@ -186,7 +186,9 @@ export default function AdminProfile() {
         ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
         : 'Administrator',
     email: profile?.email || user?.email || 'admin@canteen.app',
-    role: 'Administrator',
+    role: user?.app_metadata?.role
+      ? (user.app_metadata.role as string).charAt(0).toUpperCase() + (user.app_metadata.role as string).slice(1)
+      : 'Administrator',
     joinedDate: profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',

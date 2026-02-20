@@ -243,14 +243,29 @@ export default function ParentDashboard() {
     }
   });
 
-  // Reorder functionality - uses same scheduled date from original order
-  const handleReorder = (order: Order) => {
+  // Reorder functionality - fetches current prices to avoid stale pricing
+  const handleReorder = async (order: Order) => {
     const studentName = `${order.child.first_name} ${order.child.last_name}`;
+    
+    // Fetch current prices for the products
+    const productIds = order.items.map(i => i.product_id);
+    const { data: currentProducts } = await supabase
+      .from('products')
+      .select('id, price')
+      .in('id', productIds);
+    
+    const priceMap = new Map((currentProducts || []).map(p => [p.id, p.price as number]));
+    let hasPriceChange = false;
+
     order.items.forEach(item => {
+      const currentPrice = priceMap.get(item.product_id);
+      if (currentPrice !== undefined && currentPrice !== item.price_at_order) {
+        hasPriceChange = true;
+      }
       addItem({
         product_id: item.product_id,
         name: item.product.name,
-        price: item.price_at_order,
+        price: currentPrice ?? item.price_at_order,
         image_url: item.product.image_url,
         quantity: item.quantity,
         student_id: order.child.id,
@@ -259,7 +274,12 @@ export default function ParentDashboard() {
         meal_period: order.meal_period || 'lunch'
       });
     });
-    showToast('Items added to cart!', 'success');
+    showToast(
+      hasPriceChange 
+        ? 'Items added to cart — some prices have changed' 
+        : 'Items added to cart!',
+      hasPriceChange ? 'info' : 'success'
+    );
     navigate('/menu');
   };
 
@@ -552,8 +572,8 @@ export default function ParentDashboard() {
                           <span className="text-sm font-medium">Reorder</span>
                         </button>
                         
-                        {/* Cancel button - only for pending orders */}
-                        {order.status === 'pending' && (
+                        {/* Cancel button - for pending and awaiting_payment orders */}
+                        {(order.status === 'pending' || order.status === 'awaiting_payment') && (
                           <button
                             onClick={() => setShowCancelDialog(order.id)}
                             className="flex-1 flex items-center justify-center gap-2 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"

@@ -53,9 +53,10 @@ export function useFavorites() {
 
     // Persist to database
     try {
-      await supabase
+      const { error } = await supabase
         .from('favorites')
         .insert({ user_id: user.id, product_id: productId });
+      if (error) throw error;
     } catch (err) {
       console.error('Failed to save favorite:', err);
       // Revert on error
@@ -71,11 +72,12 @@ export function useFavorites() {
 
     // Delete from database
     try {
-      await supabase
+      const { error } = await supabase
         .from('favorites')
         .delete()
         .eq('user_id', user.id)
         .eq('product_id', productId);
+      if (error) throw error;
     } catch (err) {
       console.error('Failed to remove favorite:', err);
       // Revert on error

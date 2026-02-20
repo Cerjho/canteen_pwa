@@ -73,10 +73,8 @@ export interface CartSummary {
 // =====================================================
 
 function formatDateLocal(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // Use Asia/Manila timezone consistently with products service
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
 function getTodayLocal(): string {
@@ -421,13 +419,15 @@ export function useCart() {
       } else {
         const { error } = await supabase
           .from('cart_items')
-          .insert({
+          .upsert({
             user_id: user.id,
             student_id: item.student_id,
             product_id: item.product_id,
             quantity: item.quantity,
             scheduled_for: item.scheduled_for,
             meal_period: item.meal_period
+          }, {
+            onConflict: 'user_id,student_id,product_id,scheduled_for,meal_period'
           });
         if (error) throw error;
       }
