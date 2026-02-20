@@ -21,7 +21,7 @@ vi.mock('../../../src/services/supabaseClient', () => ({
 // Mock authSession module
 const mockEnsureValidSession = vi.fn();
 vi.mock('../../../src/services/authSession', () => ({
-  ensureValidSession: () => mockEnsureValidSession(),
+  ensureValidSession: (...args: unknown[]) => mockEnsureValidSession(...args),
 }));
 
 import {
