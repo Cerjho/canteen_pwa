@@ -29,7 +29,12 @@ vi.mock('../../../src/services/supabaseClient', () => ({
   }
 }));
 
-import { useAuth } from '../../../src/hooks/useAuth';
+import { useAuth, AuthProvider } from '../../../src/hooks/useAuth';
+import React from 'react';
+
+// Wrapper that provides AuthContext for renderHook calls
+const wrapper = ({ children }: { children: React.ReactNode }) =>
+  React.createElement(AuthProvider, null, children);
 
 describe('useAuth Hook', () => {
   const mockUser = {
@@ -45,7 +50,6 @@ describe('useAuth Hook', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
     authChangeCallback = null;
     // Default: getUser returns the same user as the session
     mockGetUser.mockResolvedValue({ data: { user: mockUser } });
@@ -62,7 +66,7 @@ describe('useAuth Hook', () => {
         data: { session: null }
       });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.user).toBe(null);
@@ -77,7 +81,7 @@ describe('useAuth Hook', () => {
         data: { session: mockSession }
       });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -91,7 +95,7 @@ describe('useAuth Hook', () => {
         data: { session: null }
       });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -107,7 +111,7 @@ describe('useAuth Hook', () => {
         data: { session: null }
       });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -132,7 +136,7 @@ describe('useAuth Hook', () => {
         data: { session: mockSession }
       });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.user).toEqual(mockUser);
@@ -155,7 +159,7 @@ describe('useAuth Hook', () => {
         data: { session: mockSession }
       });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.user).toEqual(mockUser);
@@ -186,18 +190,15 @@ describe('useAuth Hook', () => {
       });
       mockSignOut.mockResolvedValue({ error: null });
 
-      const { result } = renderHook(() => useAuth());
+      const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
       });
 
-      // signOut has a 600ms delay before calling supabase.auth.signOut
+      // signOut has a 600ms internal delay — call and await it
       await act(async () => {
-        const p = result.current.signOut();
-        // Advance past the 600ms delay
-        await vi.advanceTimersByTimeAsync(700);
-        await p;
+        await result.current.signOut();
       });
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
@@ -210,7 +211,7 @@ describe('useAuth Hook', () => {
         data: { session: null }
       });
 
-      const { unmount } = renderHook(() => useAuth());
+      const { unmount } = renderHook(() => useAuth(), { wrapper });
 
       // Wait for hook to initialize
       await waitFor(() => {

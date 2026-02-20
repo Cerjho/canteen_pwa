@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../../../../src/components/Toast';
+import { AuthProvider } from '../../../../src/hooks/useAuth';
 import AdminDashboard from '../../../../src/pages/Admin/Dashboard';
 
 // Mock the supabase client
@@ -40,11 +41,13 @@ const renderAdminDashboard = () => {
   const queryClient = createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <ToastProvider>
-          <AdminDashboard />
-        </ToastProvider>
-      </MemoryRouter>
+      <AuthProvider>
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <ToastProvider>
+            <AdminDashboard />
+          </ToastProvider>
+        </MemoryRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

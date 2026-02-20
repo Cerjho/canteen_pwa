@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 
@@ -31,7 +32,18 @@ function getCachedUserFromStorage(): User | null {
   return null;
 }
 
-export function useAuth() {
+// ─── Context ────────────────────────────────────────────────────────
+interface AuthContextValue {
+  user: User | null;
+  loading: boolean;
+  error: Error | null;
+  signOut: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+// ─── Provider (mount ONCE near the root) ────────────────────────────
+export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -98,7 +110,7 @@ export function useAuth() {
         finishLoading();
       });
 
-    // Listen for auth changes
+    // Listen for auth changes (SINGLE listener for the whole app)
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -108,6 +120,7 @@ export function useAuth() {
         // Set session user immediately
         setUser(session.user);
         setError(null);
+        finishLoading(); // also resolve loading on auth events
         
         // Refresh in background for fresh metadata
         try {
@@ -121,6 +134,7 @@ export function useAuth() {
       } else {
         setUser(null);
         setError(null);
+        finishLoading();
       }
     });
 
@@ -142,5 +156,18 @@ export function useAuth() {
     }
   }, []);
 
-  return { user, loading, error, signOut };
+  return (
+    <AuthContext.Provider value={{ user, loading, error, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// ─── Hook (reads from context — no independent state) ───────────────
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within <AuthProvider>');
+  }
+  return context;
 }
