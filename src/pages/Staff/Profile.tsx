@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LogOut, User, Mail, Phone, Clock, Shield, Save, X, Key, ChevronRight, Edit2, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -74,13 +75,12 @@ export default function StaffProfilePage() {
   // Update profile mutation (via edge function)
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<StaffProfile>) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },

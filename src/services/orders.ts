@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { ensureValidSession } from './authSession';
 import { queueOrder, isOnline } from './localQueue';
 
 export interface CreateOrderRequest {
@@ -60,25 +61,8 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
     return { queued: true };
   }
 
-  // Ensure we have a valid session before making the request
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  
-  if (sessionError || !sessionData.session) {
-    throw new Error('Please sign in again to place an order');
-  }
-  
-  // Refresh token if it's about to expire (within 2 minutes)
-  const expiresAt = sessionData.session.expires_at;
-  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      throw new Error('Session expired. Please sign in again.');
-    }
-    // Use the refreshed session
-    if (!refreshData.session) {
-      throw new Error('Failed to refresh session. Please sign in again.');
-    }
-  }
+  // Ensure we have a valid session (auto-refreshes if needed)
+  await ensureValidSession();
 
   // Process order via Edge Function with retry logic
   let lastError: Error | null = null;

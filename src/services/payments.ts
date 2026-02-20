@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabaseClient';
+import { ensureValidSession } from './authSession';
 import { friendlyError } from '../utils/friendlyError';
 import type {
   CreateCheckoutResponse,
@@ -104,21 +105,8 @@ export interface CreateTopupRequest {
 export async function createCheckout(
   orderData: CreateCheckoutRequest
 ): Promise<CreateCheckoutResponse> {
-  // Ensure we have a valid session
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-  if (sessionError || !sessionData.session) {
-    throw new Error('Please sign in again to place an order');
-  }
-
-  // Refresh token if needed
-  const expiresAt = sessionData.session.expires_at;
-  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
-    const { error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      throw new Error('Session expired. Please sign in again.');
-    }
-  }
+  // Ensure we have a valid session (auto-refreshes if needed)
+  await ensureValidSession();
 
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: orderData,
@@ -143,19 +131,8 @@ export async function createCheckout(
 export async function createBatchCheckout(
   batchData: CreateBatchCheckoutRequest
 ): Promise<BatchCheckoutResponse> {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-  if (sessionError || !sessionData.session) {
-    throw new Error('Please sign in again to place an order');
-  }
-
-  const expiresAt = sessionData.session.expires_at;
-  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
-    const { error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      throw new Error('Session expired. Please sign in again.');
-    }
-  }
+  // Ensure we have a valid session (auto-refreshes if needed)
+  await ensureValidSession();
 
   const { data, error } = await supabase.functions.invoke('create-batch-checkout', {
     body: batchData,
@@ -180,11 +157,8 @@ export async function createBatchCheckout(
 export async function createTopupCheckout(
   topupData: CreateTopupRequest
 ): Promise<CreateTopupCheckoutResponse> {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-  if (sessionError || !sessionData.session) {
-    throw new Error('Please sign in again');
-  }
+  // Ensure we have a valid session (auto-refreshes if needed)
+  await ensureValidSession();
 
   const { data, error } = await supabase.functions.invoke('create-topup-checkout', {
     body: topupData,
@@ -265,20 +239,8 @@ export function getPaymentMethodLabel(method: PaymentMethod | string): string {
 export async function retryCheckout(
   orderId: string
 ): Promise<CreateCheckoutResponse> {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-  if (sessionError || !sessionData.session) {
-    throw new Error('Please sign in again to retry payment');
-  }
-
-  // Refresh token if needed
-  const expiresAt = sessionData.session.expires_at;
-  if (expiresAt && expiresAt * 1000 - Date.now() < 120000) {
-    const { error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      throw new Error('Session expired. Please sign in again.');
-    }
-  }
+  // Ensure we have a valid session (auto-refreshes if needed)
+  await ensureValidSession();
 
   const { data, error } = await supabase.functions.invoke('retry-checkout', {
     body: { order_id: orderId },

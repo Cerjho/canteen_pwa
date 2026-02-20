@@ -18,6 +18,12 @@ vi.mock('../../../src/services/supabaseClient', () => ({
   },
 }));
 
+// Mock authSession module
+const mockEnsureValidSession = vi.fn();
+vi.mock('../../../src/services/authSession', () => ({
+  ensureValidSession: () => mockEnsureValidSession(),
+}));
+
 import {
   createCheckout,
   createTopupCheckout,
@@ -41,6 +47,8 @@ describe('Payment Service', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock ensureValidSession to return a valid session by default
+    mockEnsureValidSession.mockResolvedValue(validSession.data.session);
     mockGetSession.mockResolvedValue(validSession);
     mockRefreshSession.mockResolvedValue({
       data: { session: validSession.data.session },
@@ -85,10 +93,7 @@ describe('Payment Service', () => {
     });
 
     it('throws error when session is missing', async () => {
-      mockGetSession.mockResolvedValue({
-        data: { session: null },
-        error: null,
-      });
+      mockEnsureValidSession.mockRejectedValue(new Error('Please sign in again'));
 
       await expect(createCheckout(mockOrderData)).rejects.toThrow(
         'Please sign in again'
@@ -97,32 +102,22 @@ describe('Payment Service', () => {
     });
 
     it('throws error when getSession returns error', async () => {
-      mockGetSession.mockResolvedValue({
-        data: { session: null },
-        error: { message: 'auth error' },
-      });
+      mockEnsureValidSession.mockRejectedValue(new Error('Please sign in again'));
 
       await expect(createCheckout(mockOrderData)).rejects.toThrow(
         'Please sign in again'
       );
     });
 
-    it('refreshes session when token is about to expire', async () => {
-      const nearExpirySession = {
-        data: {
-          session: {
-            user: { id: 'user-1' },
-            access_token: 'tok-old',
-            expires_at: Math.floor(Date.now() / 1000) + 60, // < 120s
-          },
-        },
-        error: null,
+    it('uses ensureValidSession which handles token refresh internally', async () => {
+      // ensureValidSession handles refresh internally, so we just verify it's called
+      // and the result allows the function to proceed
+      const refreshedSession = {
+        user: { id: 'user-1' },
+        access_token: 'tok-refreshed',
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
       };
-      mockGetSession.mockResolvedValue(nearExpirySession);
-      mockRefreshSession.mockResolvedValue({
-        data: { session: { ...nearExpirySession.data.session, access_token: 'tok-new' } },
-        error: null,
-      });
+      mockEnsureValidSession.mockResolvedValue(refreshedSession);
       mockInvoke.mockResolvedValue({
         data: {
           success: true,
@@ -136,26 +131,13 @@ describe('Payment Service', () => {
 
       await createCheckout(mockOrderData);
 
-      expect(mockRefreshSession).toHaveBeenCalled();
+      expect(mockEnsureValidSession).toHaveBeenCalled();
       expect(mockInvoke).toHaveBeenCalled();
     });
 
-    it('throws error when session refresh fails', async () => {
-      const nearExpirySession = {
-        data: {
-          session: {
-            user: { id: 'user-1' },
-            access_token: 'tok-old',
-            expires_at: Math.floor(Date.now() / 1000) + 60,
-          },
-        },
-        error: null,
-      };
-      mockGetSession.mockResolvedValue(nearExpirySession);
-      mockRefreshSession.mockResolvedValue({
-        data: { session: null },
-        error: { message: 'refresh failed' },
-      });
+    it('throws error when session validation fails', async () => {
+      // ensureValidSession throws when refresh fails
+      mockEnsureValidSession.mockRejectedValue(new Error('Session expired'));
 
       await expect(createCheckout(mockOrderData)).rejects.toThrow(
         'Session expired'
@@ -256,10 +238,7 @@ describe('Payment Service', () => {
     });
 
     it('throws error when not authenticated', async () => {
-      mockGetSession.mockResolvedValue({
-        data: { session: null },
-        error: null,
-      });
+      mockEnsureValidSession.mockRejectedValue(new Error('Please sign in again'));
 
       await expect(
         createTopupCheckout({ amount: 500, payment_method: 'gcash' })

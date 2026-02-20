@@ -5,9 +5,18 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { BrowserRouter } from 'react-router-dom';
 import Login from '../../../src/pages/Login';
+import type { UserRole } from '../../../src/hooks/useAuth';
 
-// Mock navigate
-const mockNavigate = vi.fn();
+// Use vi.hoisted to define mock state that can be accessed by hoisted vi.mock calls
+const { mockAuthState, mockNavigate, mockSignInWithPassword } = vi.hoisted(() => ({
+  mockAuthState: {
+    user: null as { id: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> } | null,
+    role: null as UserRole | null,
+  },
+  mockNavigate: vi.fn(),
+  mockSignInWithPassword: vi.fn(),
+}));
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
@@ -16,8 +25,17 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock supabase
-const mockSignInWithPassword = vi.fn();
+vi.mock('../../../src/hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: mockAuthState.user,
+    role: mockAuthState.role,
+    loading: false,
+    signingOut: false,
+    refreshAuth: vi.fn(),
+    onRoleChange: vi.fn(),
+  }),
+}));
+
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     auth: {
@@ -34,9 +52,27 @@ function renderLogin() {
   );
 }
 
+// Helper to re-render with updated auth state (simulating auth state change)
+function _rerenderWithAuth(
+  rerender: ReturnType<typeof render>['rerender'],
+  user: typeof mockAuthState.user,
+  role: UserRole | null
+) {
+  mockAuthState.user = user;
+  mockAuthState.role = role;
+  rerender(
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Login />
+    </BrowserRouter>
+  );
+}
+
 describe('Login Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset auth mock state
+    mockAuthState.user = null;
+    mockAuthState.role = null;
   });
 
   describe('Rendering', () => {
@@ -122,9 +158,11 @@ describe('Login Page', () => {
 
     it('navigates to menu for parent users', async () => {
       const user = userEvent.setup();
-      mockSignInWithPassword.mockResolvedValue({
-        data: { user: { user_metadata: { role: 'parent' } } },
-        error: null
+      // Mock implementation updates auth state when called, simulating onAuthStateChange
+      mockSignInWithPassword.mockImplementation(async () => {
+        mockAuthState.user = { id: '1', user_metadata: { role: 'parent' } };
+        mockAuthState.role = 'parent';
+        return { data: { user: mockAuthState.user }, error: null };
       });
 
       renderLogin();
@@ -134,15 +172,16 @@ describe('Login Page', () => {
       await user.click(screen.getByRole('button', { name: /login/i }));
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/menu');
+        expect(mockNavigate).toHaveBeenCalledWith('/menu', { replace: true });
       });
     });
 
     it('navigates to staff page for staff users', async () => {
       const user = userEvent.setup();
-      mockSignInWithPassword.mockResolvedValue({
-        data: { user: { app_metadata: { role: 'staff' } } },
-        error: null
+      mockSignInWithPassword.mockImplementation(async () => {
+        mockAuthState.user = { id: '1', app_metadata: { role: 'staff' } };
+        mockAuthState.role = 'staff';
+        return { data: { user: mockAuthState.user }, error: null };
       });
 
       renderLogin();
@@ -152,15 +191,16 @@ describe('Login Page', () => {
       await user.click(screen.getByRole('button', { name: /login/i }));
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/staff');
+        expect(mockNavigate).toHaveBeenCalledWith('/staff', { replace: true });
       });
     });
 
     it('navigates to admin page for admin users', async () => {
       const user = userEvent.setup();
-      mockSignInWithPassword.mockResolvedValue({
-        data: { user: { app_metadata: { role: 'admin' } } },
-        error: null
+      mockSignInWithPassword.mockImplementation(async () => {
+        mockAuthState.user = { id: '1', app_metadata: { role: 'admin' } };
+        mockAuthState.role = 'admin';
+        return { data: { user: mockAuthState.user }, error: null };
       });
 
       renderLogin();
@@ -170,7 +210,7 @@ describe('Login Page', () => {
       await user.click(screen.getByRole('button', { name: /login/i }));
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/admin');
+        expect(mockNavigate).toHaveBeenCalledWith('/admin', { replace: true });
       });
     });
   });

@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -52,18 +53,14 @@ export default function AdminProducts() {
   // Add/Update product mutation (via secure edge function)
   const saveMutation = useMutation({
     mutationFn: async (product: Partial<Product>) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-product`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -93,18 +90,14 @@ export default function AdminProducts() {
   // Delete product mutation (via secure edge function)
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-product`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -131,18 +124,14 @@ export default function AdminProducts() {
   // Toggle availability mutation (via secure edge function)
   const toggleAvailability = useMutation({
     mutationFn: async ({ id, available }: { id: string; available: boolean }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-product`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },

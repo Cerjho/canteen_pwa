@@ -1,9 +1,9 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
-import { useAuth } from './hooks/useAuth';
+import { useAuth, useRoleChangeRedirect, UserRole } from './hooks/useAuth';
 import { useSystemSettings } from './hooks/useSystemSettings';
-import type { UserRole } from './types';
+import { clearAuthStorage } from './services/authSession';
 // Parent pages
 import ParentMenu from './pages/Parent/Menu';
 import ParentDashboard from './pages/Parent/Dashboard';
@@ -73,15 +73,16 @@ function getDefaultRoute(role: UserRole): string {
 }
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, role: userRole, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const { settings, isLoading: settingsLoading, refetch: refetchSettings } = useSystemSettings();
-  
-  // Get user role from app_metadata (server-only, tamper-proof)
-  const userRole: UserRole = user?.app_metadata?.role || 'parent';
   
   // Check if current path is admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  // Auto-redirect on role change (e.g., admin changes user's role)
+  useRoleChangeRedirect(navigate);
 
   // Loading timeout — if stuck for 10s, show retry option (stale SW cache edge case)
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
@@ -112,9 +113,7 @@ function App() {
                   });
                 }
                 // Clear stale Supabase session from localStorage
-                Object.keys(localStorage).forEach(key => {
-                  if (key.startsWith('sb-')) localStorage.removeItem(key);
-                });
+                clearAuthStorage();
                 // Redirect to login with a clean slate
                 window.location.href = '/login';
               }}

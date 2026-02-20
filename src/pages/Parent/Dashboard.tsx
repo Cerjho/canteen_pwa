@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { useAuth } from '../../hooks/useAuth';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useCart } from '../../hooks/useCart';
@@ -203,13 +204,12 @@ export default function ParentDashboard() {
   // Cancel order mutation (via edge function)
   const cancelOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/parent-cancel-order`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },

@@ -23,6 +23,7 @@ import {
   Clock
 } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -165,14 +166,14 @@ export default function AdminUsers() {
   const { data: staffMembers, isLoading: staffLoading } = useQuery<StaffMember[]>({
     queryKey: ['admin-staff'],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = await ensureValidAccessToken();
       
       try {
         const response = await fetch(
           `${SUPABASE_URL}/functions/v1/list-staff`,
           {
             headers: {
-              Authorization: `Bearer ${session?.access_token}`,
+              Authorization: `Bearer ${accessToken}`,
               apikey: SUPABASE_ANON_KEY,
               'Content-Type': 'application/json',
             },
@@ -194,12 +195,12 @@ export default function AdminUsers() {
   // Top up balance mutation via edge function
   const topUpMutation = useMutation({
     mutationFn: async ({ parentId, amount }: { parentId: string; amount: number }) => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = await ensureValidAccessToken();
       
       const response = await fetch(`${SUPABASE_URL}/functions/v1/admin-topup`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'apikey': SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
@@ -229,11 +230,7 @@ export default function AdminUsers() {
   // Create user mutation via edge function
   const createUserMutation = useMutation({
     mutationFn: async (formData: CreateUserForm) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated. Please log in again.');
-      }
+      const accessToken = await ensureValidAccessToken();
 
       // For invite mode, use send-invites function
       if (formData.mode === 'invite') {
@@ -244,7 +241,7 @@ export default function AdminUsers() {
           {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${session.access_token}`,
+              Authorization: `Bearer ${accessToken}`,
               apikey: SUPABASE_ANON_KEY,
               'Content-Type': 'application/json',
             },

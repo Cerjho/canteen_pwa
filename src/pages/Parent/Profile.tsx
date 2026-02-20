@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { getStudents, linkStudent, unlinkStudent, updateStudent, Student } from '../../services/students';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
@@ -54,14 +55,13 @@ export default function Profile() {
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile', user?.id],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       // First try to get existing profile via edge function
       const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
@@ -76,7 +76,7 @@ export default function Profile() {
         const createResponse = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -140,13 +140,12 @@ export default function Profile() {
   // Update profile mutation (via edge function)
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { first_name: string; last_name: string; phone_number: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },

@@ -1,5 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { supabase } from './supabaseClient';
+import { getSession } from './authSession';
 
 interface QueuedOrder {
   id: string;
@@ -150,10 +151,10 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
   let processed = 0;
   let failed = 0;
   
-  // Get auth token from Supabase session
-  const { data: { session } } = await supabase.auth.getSession();
+  // Get auth token from centralized session manager
+  const { session, error: sessionError } = await getSession();
   
-  if (!session) {
+  if (sessionError || !session) {
     // console.warn('No active session, cannot process queue');
     return { processed: 0, failed: orders.length };
   }

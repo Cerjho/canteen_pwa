@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame } from 'lucide-react';
 import { format, differenceInMinutes, isToday } from 'date-fns';
 import { supabase } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -702,19 +703,14 @@ export default function StaffDashboard() {
         return;
       }
       
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        showToast('Please log in again', 'error');
-        return;
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/confirm-cash-payment`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -738,19 +734,14 @@ export default function StaffDashboard() {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        showToast('Please log in again', 'error');
-        return;
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-order`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -780,19 +771,14 @@ export default function StaffDashboard() {
     if (selectedOrders.length === 0) return;
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        showToast('Please log in again', 'error');
-        return;
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-order`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -820,19 +806,14 @@ export default function StaffDashboard() {
 
   const handleCancelOrder = async (orderId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        showToast('Please log in again', 'error');
-        return;
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-order`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },

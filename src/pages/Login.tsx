@@ -1,7 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { useAuth, UserRole } from '../hooks/useAuth';
+
+// Get default route based on role
+function getDefaultRoute(role: UserRole): string {
+  switch (role) {
+    case 'admin': return '/admin';
+    case 'staff': return '/staff';
+    default: return '/menu';
+  }
+}
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -10,41 +20,47 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { user, role } = useAuth();
+  const loginAttemptRef = useRef(false);
+
+  // Redirect when user becomes authenticated (from onAuthStateChange)
+  useEffect(() => {
+    if (user && loginAttemptRef.current) {
+      // User is now authenticated after login attempt
+      loginAttemptRef.current = false;
+      setLoading(false);
+      navigate(getDefaultRoute(role), { replace: true });
+    }
+  }, [user, role, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    loginAttemptRef.current = true;
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password
       });
 
-      if (error) {
+      if (signInError) {
+        loginAttemptRef.current = false;
         // Sanitize error message - don't expose internal details
-        const userFriendlyError = error.message?.includes('Invalid login')
+        const userFriendlyError = signInError.message?.includes('Invalid login')
           ? 'Invalid email or password'
-          : error.message?.includes('Email not confirmed')
+          : signInError.message?.includes('Email not confirmed')
           ? 'Please verify your email before logging in'
           : 'Login failed. Please try again.';
         setError(userFriendlyError);
         setLoading(false);
-      } else {
-        // Reset loading state before navigation
-        setLoading(false);
-        // Route based on user role
-        const role = data.user?.app_metadata?.role;
-        if (role === 'admin') {
-          navigate('/admin');
-        } else if (role === 'staff') {
-          navigate('/staff');
-        } else {
-          navigate('/menu');
-        }
       }
+      // On success, don't navigate here - let useEffect handle it
+      // when onAuthStateChange fires and updates the user state.
+      // This ensures auth state is fully synchronized before navigation.
     } catch (err) {
+      loginAttemptRef.current = false;
       setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }

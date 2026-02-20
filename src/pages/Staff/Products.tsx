@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Package, AlertTriangle, Check, X, RefreshCw } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -82,13 +83,12 @@ export default function StaffProducts() {
   // Toggle availability mutation (via edge function)
   const toggleAvailability = useMutation({
     mutationFn: async ({ id, available }: { id: string; available: boolean }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
@@ -113,13 +113,12 @@ export default function StaffProducts() {
   // Update stock mutation (via edge function)
   const updateStock = useMutation({
     mutationFn: async ({ id, stock_quantity }: { id: string; stock_quantity: number }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
@@ -149,13 +148,12 @@ export default function StaffProducts() {
   // Mark all as available (via edge function)
   const markAllAvailable = useMutation({
     mutationFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },

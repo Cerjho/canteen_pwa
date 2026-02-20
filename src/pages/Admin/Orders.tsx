@@ -11,6 +11,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -133,18 +134,14 @@ export default function AdminOrders() {
   // Update order status mutation (via secure edge function)
   const updateStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/manage-order`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
@@ -172,18 +169,14 @@ export default function AdminOrders() {
   // Refund order mutation
   const refundMutation = useMutation({
     mutationFn: async (order: OrderWithDetails) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
+      const accessToken = await ensureValidAccessToken();
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/refund-order`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             apikey: SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },

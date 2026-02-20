@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, isSameWeek, isToday } from 'date-fns';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
@@ -229,15 +230,14 @@ export default function AdminWeeklyMenu() {
 
   // Helper function to call manage-menu edge function
   const callManageMenu = async (body: Record<string, unknown>) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Not authenticated');
+    const accessToken = await ensureValidAccessToken();
 
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/manage-menu`,
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
@@ -252,15 +252,14 @@ export default function AdminWeeklyMenu() {
 
   // Helper function to call manage-calendar edge function
   const callManageCalendar = async (body: Record<string, unknown>) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Not authenticated');
+    const accessToken = await ensureValidAccessToken();
 
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/manage-calendar`,
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
