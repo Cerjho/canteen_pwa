@@ -11,6 +11,51 @@ import type {
   PaymentMethod,
 } from '../types';
 
+/**
+ * Extract a meaningful error message from a Supabase Edge Function error.
+ * The Supabase JS client wraps non-2xx responses in FunctionsHttpError,
+ * and the actual JSON body may be in `error.context` or in `data`.
+ */
+async function extractEdgeFunctionError(error: Error & { context?: unknown }, data: unknown): Promise<string> {
+  // 1. Check if data already has the error message (some Supabase client versions put it here)
+  const d = data as { message?: string; error?: string } | null;
+  if (d?.message) return d.message;
+  if (d?.error) return d.error;
+
+  // 2. Try to parse error.context (FunctionsHttpError wraps the Response here)
+  if (error.message === 'Edge Function returned a non-2xx status code' && error.context) {
+    try {
+      // context may be a Response-like object with .json()
+      const ctx = error.context as { json?: () => Promise<unknown> };
+      if (typeof ctx.json === 'function') {
+        const body = await ctx.json() as { message?: string; error?: string };
+        if (body?.message) return body.message;
+        if (body?.error) return body.error;
+      }
+    } catch {
+      // ignore parse failures
+    }
+    try {
+      // context may be a plain object
+      const ctx = error.context as { message?: string; error?: string };
+      if (ctx?.message) return ctx.message;
+      if (ctx?.error) return ctx.error;
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Fallback: check network
+  if (error.message === 'Edge Function returned a non-2xx status code') {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    return 'Unable to connect to server. Please try again in a moment.';
+  }
+
+  return error.message;
+}
+
 export interface CreateCheckoutRequest {
   parent_id: string;
   student_id: string;
@@ -59,13 +104,7 @@ export async function createCheckout(
   });
 
   if (error) {
-    // Try to extract meaningful error message
-    let errorMessage = error.message;
-    if (data?.message) {
-      errorMessage = data.message;
-    } else if (data?.error) {
-      errorMessage = data.error;
-    }
+    const errorMessage = await extractEdgeFunctionError(error, data);
     throw new Error(errorMessage);
   }
 
@@ -94,9 +133,7 @@ export async function createTopupCheckout(
   });
 
   if (error) {
-    let errorMessage = error.message;
-    if (data?.message) errorMessage = data.message;
-    else if (data?.error) errorMessage = data.error;
+    const errorMessage = await extractEdgeFunctionError(error, data);
     throw new Error(errorMessage);
   }
 
@@ -188,9 +225,7 @@ export async function retryCheckout(
   });
 
   if (error) {
-    let errorMessage = error.message;
-    if (data?.message) errorMessage = data.message;
-    else if (data?.error) errorMessage = data.error;
+    const errorMessage = await extractEdgeFunctionError(error, data);
     throw new Error(errorMessage);
   }
 
