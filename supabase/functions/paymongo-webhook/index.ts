@@ -282,20 +282,23 @@ async function handleTopupPaymentPaid(
     .eq('user_id', topupSession.parent_id)
     .single();
 
+  // Supabase returns NUMERIC columns as strings — cast to Number for arithmetic
+  const topupAmount = Number(topupSession.amount);
+  let walletCredited = false;
+
   if (wallet) {
-    const previousBalance = wallet.balance;
+    const previousBalance = Number(wallet.balance);
     const { error: walletError } = await supabaseAdmin
       .from('wallets')
       .update({
-        balance: previousBalance + topupSession.amount,
+        balance: previousBalance + topupAmount,
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', topupSession.parent_id)
-      .eq('balance', previousBalance); // Optimistic lock
+      .eq('balance', wallet.balance); // Optimistic lock: compare raw DB value
 
     if (walletError) {
       // Retry with fresh balance (up to 2 more attempts)
-      let retrySuccess = false;
       for (let attempt = 1; attempt <= 2; attempt++) {
         const { data: freshWallet } = await supabaseAdmin
           .from('wallets')
@@ -304,17 +307,18 @@ async function handleTopupPaymentPaid(
           .single();
 
         if (freshWallet) {
+          const freshBalance = Number(freshWallet.balance);
           const { error: retryError } = await supabaseAdmin
             .from('wallets')
             .update({
-              balance: freshWallet.balance + topupSession.amount,
+              balance: freshBalance + topupAmount,
               updated_at: new Date().toISOString(),
             })
             .eq('user_id', topupSession.parent_id)
-            .eq('balance', freshWallet.balance);
+            .eq('balance', freshWallet.balance); // Compare raw DB value
 
           if (!retryError) {
-            retrySuccess = true;
+            walletCredited = true;
             break;
           }
         }
@@ -322,8 +326,8 @@ async function handleTopupPaymentPaid(
         await new Promise(r => setTimeout(r, 200 * attempt));
       }
 
-      if (!retrySuccess) {
-        console.error('CRITICAL: Failed to credit wallet after retries for topup:', topupSessionId, 'amount:', topupSession.amount, 'parent:', topupSession.parent_id);
+      if (!walletCredited) {
+        console.error('CRITICAL: Failed to credit wallet after retries for topup:', topupSessionId, 'amount:', topupAmount, 'parent:', topupSession.parent_id);
         // Mark topup session for manual review — use 'failed' status (allowed by CHECK constraint)
         // The payment was received but wallet credit failed — needs admin intervention
         await supabaseAdmin
@@ -335,34 +339,40 @@ async function handleTopupPaymentPaid(
         await supabaseAdmin.from('transactions').insert({
           parent_id: topupSession.parent_id,
           type: 'topup',
-          amount: topupSession.amount,
+          amount: topupAmount,
           method: paymentMethod,
           status: 'failed',
           reference_id: paymentId ? `PAYMONGO-${paymentId}-NEEDS-REVIEW` : `TOPUP-${topupSessionId}-NEEDS-REVIEW`,
           paymongo_payment_id: paymentId,
           paymongo_checkout_id: checkout.id,
         });
+        return; // Don't create 'completed' transaction if wallet credit failed
       }
+    } else {
+      walletCredited = true;
     }
   } else {
     // Create wallet if it doesn't exist
     await supabaseAdmin.from('wallets').insert({
       user_id: topupSession.parent_id,
-      balance: topupSession.amount,
+      balance: topupAmount,
     });
+    walletCredited = true;
   }
 
-  // Create topup transaction record
-  await supabaseAdmin.from('transactions').insert({
-    parent_id: topupSession.parent_id,
-    type: 'topup',
-    amount: topupSession.amount,
-    method: paymentMethod,
-    status: 'completed',
-    reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
-    paymongo_payment_id: paymentId,
-    paymongo_checkout_id: checkout.id,
-  });
+  // Only create 'completed' transaction if wallet was actually credited
+  if (walletCredited) {
+    await supabaseAdmin.from('transactions').insert({
+      parent_id: topupSession.parent_id,
+      type: 'topup',
+      amount: topupAmount,
+      method: paymentMethod,
+      status: 'completed',
+      reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
+      paymongo_payment_id: paymentId,
+      paymongo_checkout_id: checkout.id,
+    });
+  }
 
   console.log('Topup completed:', { topupSessionId, amount: topupSession.amount, paymentMethod });
 }

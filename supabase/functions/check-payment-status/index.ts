@@ -221,56 +221,70 @@ serve(async (req) => {
             if (!updateError) {
               console.log('Fallback: Self-healed topup', topup.id, 'payment confirmed via PayMongo API');
 
-              // Credit wallet balance
+              // Credit wallet balance — cast NUMERIC strings to Number for arithmetic
+              const topupAmount = Number(topup.amount);
               const { data: wallet } = await supabaseAdmin
                 .from('wallets')
                 .select('balance')
                 .eq('user_id', topup.parent_id)
                 .single();
 
+              let walletCredited = false;
               if (wallet) {
+                const currentBalance = Number(wallet.balance);
                 const { error: walletError } = await supabaseAdmin
                   .from('wallets')
                   .update({
-                    balance: wallet.balance + topup.amount,
+                    balance: currentBalance + topupAmount,
                     updated_at: new Date().toISOString(),
                   })
                   .eq('user_id', topup.parent_id)
-                  .eq('balance', wallet.balance); // Optimistic lock
+                  .eq('balance', wallet.balance); // Compare raw DB value for optimistic lock
 
                 if (walletError) {
                   console.error('Fallback: Failed to credit wallet for topup:', topup.id, walletError);
+                  // Revert topup session to pending so webhook can retry
+                  await supabaseAdmin
+                    .from('topup_sessions')
+                    .update({ status: 'pending' })
+                    .eq('id', topup.id);
+                } else {
+                  walletCredited = true;
                 }
               } else {
                 // Create wallet if it doesn't exist
                 await supabaseAdmin.from('wallets').insert({
                   user_id: topup.parent_id,
-                  balance: topup.amount,
+                  balance: topupAmount,
                 });
+                walletCredited = true;
               }
 
-              // Create transaction record
-              await supabaseAdmin.from('transactions').insert({
-                parent_id: topup.parent_id,
-                type: 'topup',
-                amount: topup.amount,
-                method: resolvedMethod,
-                status: 'completed',
-                reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
-                paymongo_payment_id: paymentId,
-                paymongo_checkout_id: topup.paymongo_checkout_id,
-              });
+              if (walletCredited) {
+                // Create transaction record only if wallet was credited
+                await supabaseAdmin.from('transactions').insert({
+                  parent_id: topup.parent_id,
+                  type: 'topup',
+                  amount: topupAmount,
+                  method: resolvedMethod,
+                  status: 'completed',
+                  reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
+                  paymongo_payment_id: paymentId,
+                  paymongo_checkout_id: topup.paymongo_checkout_id,
+                });
 
-              return new Response(
-                JSON.stringify({
-                  topup_session_id: topup.id,
-                  status: 'paid',
-                  amount: topup.amount,
-                  payment_method: resolvedMethod,
-                  completed_at: new Date().toISOString(),
-                }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-              );
+                return new Response(
+                  JSON.stringify({
+                    topup_session_id: topup.id,
+                    status: 'paid',
+                    amount: topupAmount,
+                    payment_method: resolvedMethod,
+                    completed_at: new Date().toISOString(),
+                  }),
+                  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                );
+              }
+              // If wallet credit failed, fall through to return current DB status
             } else {
               console.error('Fallback: Failed to update topup session:', topup.id, updateError);
             }

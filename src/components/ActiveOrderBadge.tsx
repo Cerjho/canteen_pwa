@@ -3,11 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 
+// Helper to get today's date in Philippine timezone (UTC+8), matching Dashboard.tsx
+function getTodayPH(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+}
+
 export function useActiveOrderCount() {
   const { user } = useAuth();
   
+  const todayStr = getTodayPH();
+
   const { data: count = 0 } = useQuery({
-    queryKey: ['active-order-count', user?.id],
+    queryKey: ['active-order-count', user?.id, todayStr],
     queryFn: async () => {
       // Safety check - should not happen due to enabled flag but TypeScript needs it
       if (!user?.id) return 0;
@@ -16,6 +23,7 @@ export function useActiveOrderCount() {
         .from('orders')
         .select('*', { count: 'exact', head: true })
         .eq('parent_id', user.id)
+        .eq('scheduled_for', todayStr)
         .in('status', ['pending', 'preparing', 'ready']);
       
       if (error) throw error;
