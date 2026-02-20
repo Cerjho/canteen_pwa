@@ -68,23 +68,27 @@ export default function OrderConfirmation() {
       while (!cancelled && pollNum < MAX_POLLS) {
         try {
           const result = await checkPaymentStatus(orderIdParam);
-          if (result.payment_status === 'paid' || result.status === 'pending') {
+          // Edge function returns: payment_status (order) or status (topup)
+          // For orders: 'paid' | 'awaiting_payment' | 'timeout' | 'refunded'
+          // order_status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment'
+          if (result.payment_status === 'paid' || result.order_status === 'preparing' || result.order_status === 'ready') {
             if (!cancelled) setVerificationStatus('confirmed');
             return;
           }
-          if (result.payment_status === 'timeout' || result.status === 'cancelled') {
+          if (result.payment_status === 'timeout' || result.order_status === 'cancelled') {
             if (!cancelled) setVerificationStatus('failed');
             return;
           }
+          // 'awaiting_payment' + 'pending' means webhook hasn't fired yet — keep polling
         } catch {
-          // Continue polling on error
+          // Auth token may still be refreshing (lock) or network hiccup — keep polling
         }
         pollNum++;
         if (!cancelled) setPollCount(pollNum);
         await new Promise(r => setTimeout(r, 3000));
       }
-      // Max polls reached without confirmation
-      if (!cancelled) setVerificationStatus('confirmed'); // Assume success, webhook may be slow
+      // Max polls reached without confirmation — assume success, webhook may be slow
+      if (!cancelled) setVerificationStatus('confirmed');
     };
     
     pollPayment();

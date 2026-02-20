@@ -89,7 +89,7 @@ describe('Online Payment Checkout Flow', () => {
 
       for (let i = 0; i < MAX_POLLS; i++) {
         const result = await mockCheckPaymentStatus('order-1');
-        if (result.payment_status === 'paid' || result.order_status === 'pending') {
+        if (result.payment_status === 'paid' || result.order_status === 'preparing' || result.order_status === 'ready') {
           verificationStatus = 'confirmed';
           break;
         }
