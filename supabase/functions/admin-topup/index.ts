@@ -170,7 +170,9 @@ serve(async (req) => {
         amount,
         method: 'cash',
         status: 'completed',
-        reference_id: `TOPUP-${Date.now()}-${user.id.slice(-6)}`
+        reference_id: notes
+          ? `TOPUP-${Date.now()}-${user.id.slice(-6)}: ${notes}`
+          : `TOPUP-${Date.now()}-${user.id.slice(-6)}`,
       });
 
     if (txError) {

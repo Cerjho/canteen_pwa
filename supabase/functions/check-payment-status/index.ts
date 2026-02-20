@@ -176,7 +176,7 @@ serve(async (req) => {
     if (topupSessionId) {
       const { data: topup, error: topupError } = await supabaseAdmin
         .from('topup_sessions')
-        .select('id, status, amount, payment_method, parent_id, completed_at')
+        .select('id, status, amount, payment_method, parent_id, completed_at, paymongo_checkout_id')
         .eq('id', topupSessionId)
         .single();
 
@@ -192,6 +192,93 @@ serve(async (req) => {
           JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
+      }
+
+      // ── Fallback: If still pending and has a PayMongo checkout, check PayMongo directly ──
+      if (topup.status === 'pending' && topup.paymongo_checkout_id) {
+        try {
+          const checkout = await getCheckoutSession(topup.paymongo_checkout_id);
+          const payments = checkout.attributes?.payments;
+          const firstPayment = payments?.[0];
+
+          if (firstPayment && firstPayment.attributes?.status === 'paid') {
+            // Payment was completed but webhook didn't update the DB — self-heal
+            const paymentId = firstPayment.id;
+            const resolvedMethod = resolvePaymentMethod(payments);
+
+            // Update topup session to paid
+            const { error: updateError } = await supabaseAdmin
+              .from('topup_sessions')
+              .update({
+                status: 'paid',
+                payment_method: resolvedMethod,
+                paymongo_payment_id: paymentId,
+                completed_at: new Date().toISOString(),
+              })
+              .eq('id', topup.id)
+              .eq('status', 'pending'); // Optimistic lock
+
+            if (!updateError) {
+              console.log('Fallback: Self-healed topup', topup.id, 'payment confirmed via PayMongo API');
+
+              // Credit wallet balance
+              const { data: wallet } = await supabaseAdmin
+                .from('wallets')
+                .select('balance')
+                .eq('user_id', topup.parent_id)
+                .single();
+
+              if (wallet) {
+                const { error: walletError } = await supabaseAdmin
+                  .from('wallets')
+                  .update({
+                    balance: wallet.balance + topup.amount,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('user_id', topup.parent_id)
+                  .eq('balance', wallet.balance); // Optimistic lock
+
+                if (walletError) {
+                  console.error('Fallback: Failed to credit wallet for topup:', topup.id, walletError);
+                }
+              } else {
+                // Create wallet if it doesn't exist
+                await supabaseAdmin.from('wallets').insert({
+                  user_id: topup.parent_id,
+                  balance: topup.amount,
+                });
+              }
+
+              // Create transaction record
+              await supabaseAdmin.from('transactions').insert({
+                parent_id: topup.parent_id,
+                type: 'topup',
+                amount: topup.amount,
+                method: resolvedMethod,
+                status: 'completed',
+                reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
+                paymongo_payment_id: paymentId,
+                paymongo_checkout_id: topup.paymongo_checkout_id,
+              });
+
+              return new Response(
+                JSON.stringify({
+                  topup_session_id: topup.id,
+                  status: 'paid',
+                  amount: topup.amount,
+                  payment_method: resolvedMethod,
+                  completed_at: new Date().toISOString(),
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            } else {
+              console.error('Fallback: Failed to update topup session:', topup.id, updateError);
+            }
+          }
+        } catch (paymongoError) {
+          // PayMongo API check failed — return DB status as-is
+          console.error('Fallback: PayMongo API check failed for topup', topup.id, paymongoError);
+        }
       }
 
       return new Response(

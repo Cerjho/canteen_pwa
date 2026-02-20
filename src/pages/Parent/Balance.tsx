@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Wallet, ArrowUpCircle, ArrowDownCircle, RefreshCw, TrendingUp } from 'lucide-react';
+import { Wallet, ArrowUpCircle, ArrowDownCircle, RefreshCw, TrendingUp, Loader2 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
 import TopUpModal from '../../components/TopUpModal';
+import { checkTopupStatus } from '../../services/payments';
 
 interface Transaction {
   id: string;
@@ -26,15 +27,58 @@ export default function Balance() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpNotice, setTopUpNotice] = useState<string | null>(null);
+  const [isVerifyingTopup, setIsVerifyingTopup] = useState(false);
+  const pollingRef = useRef(false);
 
-  // Handle ?topup=success redirect from PayMongo
+  // Handle ?topup=success redirect from PayMongo — poll for confirmation
   useEffect(() => {
     const topupResult = searchParams.get('topup');
-    if (topupResult === 'success') {
-      setTopUpNotice('Your top-up payment is being processed. Your balance will update shortly.');
-      // Clean the URL
+    const sessionId = searchParams.get('session');
+
+    if (topupResult === 'success' && sessionId) {
+      // Clean the URL immediately but keep session ID for polling
       setSearchParams({}, { replace: true });
-      // Refetch balance after short delay for webhook to process
+      setIsVerifyingTopup(true);
+      setTopUpNotice('Verifying your top-up payment...');
+      pollingRef.current = true;
+
+      const pollTopup = async () => {
+        const MAX_POLLS = 20;
+        let pollNum = 0;
+
+        while (pollingRef.current && pollNum < MAX_POLLS) {
+          try {
+            const result = await checkTopupStatus(sessionId);
+            if (result.status === 'paid') {
+              setTopUpNotice('Top-up successful! Your balance has been updated.');
+              setIsVerifyingTopup(false);
+              refetch();
+              return;
+            }
+            if (result.status === 'failed' || result.status === 'expired') {
+              setTopUpNotice('Top-up payment failed or expired. Please try again.');
+              setIsVerifyingTopup(false);
+              return;
+            }
+          } catch {
+            // Network error or auth refresh — keep polling
+          }
+          pollNum++;
+          await new Promise(r => setTimeout(r, 3000));
+        }
+
+        // Max polls reached
+        setTopUpNotice('Payment verification is taking longer than expected. Your balance will update once confirmed.');
+        setIsVerifyingTopup(false);
+        refetch();
+      };
+
+      pollTopup();
+      return () => { pollingRef.current = false; };
+    } else if (topupResult === 'success') {
+      // No session ID — legacy fallback, just show notice and refetch
+      setSearchParams({}, { replace: true });
+      setTopUpNotice('Your top-up payment is being processed. Your balance will update shortly.');
       const timer = setTimeout(() => refetch(), 5000);
       return () => clearTimeout(timer);
     } else if (topupResult === 'cancelled') {
@@ -155,8 +199,13 @@ export default function Balance() {
         {/* Top-up success/cancel notice */}
         {topUpNotice && (
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
-            <span className="text-sm">{topUpNotice}</span>
-            <button onClick={() => setTopUpNotice(null)} className="text-blue-500 hover:text-blue-700 ml-2 font-bold">&times;</button>
+            <span className="text-sm flex items-center gap-2">
+              {isVerifyingTopup && <Loader2 size={16} className="animate-spin flex-shrink-0" />}
+              {topUpNotice}
+            </span>
+            {!isVerifyingTopup && (
+              <button onClick={() => setTopUpNotice(null)} className="text-blue-500 hover:text-blue-700 ml-2 font-bold">&times;</button>
+            )}
           </div>
         )}
 

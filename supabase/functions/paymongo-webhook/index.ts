@@ -324,11 +324,24 @@ async function handleTopupPaymentPaid(
 
       if (!retrySuccess) {
         console.error('CRITICAL: Failed to credit wallet after retries for topup:', topupSessionId, 'amount:', topupSession.amount, 'parent:', topupSession.parent_id);
-        // Mark topup session for manual review
+        // Mark topup session for manual review — use 'failed' status (allowed by CHECK constraint)
+        // The payment was received but wallet credit failed — needs admin intervention
         await supabaseAdmin
           .from('topup_sessions')
-          .update({ status: 'requires_review' })
+          .update({ status: 'failed' })
           .eq('id', topupSessionId);
+        
+        // Also log to transactions for audit trail
+        await supabaseAdmin.from('transactions').insert({
+          parent_id: topupSession.parent_id,
+          type: 'topup',
+          amount: topupSession.amount,
+          method: paymentMethod,
+          status: 'failed',
+          reference_id: paymentId ? `PAYMONGO-${paymentId}-NEEDS-REVIEW` : `TOPUP-${topupSessionId}-NEEDS-REVIEW`,
+          paymongo_payment_id: paymentId,
+          paymongo_checkout_id: checkout.id,
+        });
       }
     }
   } else {
