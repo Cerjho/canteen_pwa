@@ -105,13 +105,18 @@ function App() {
             </p>
             <button
               onClick={() => {
-                // Clear caches and hard reload
+                // Clear SW caches
                 if ('caches' in window) {
                   caches.keys().then(names => {
                     names.forEach(name => caches.delete(name));
                   });
                 }
-                window.location.reload();
+                // Clear stale Supabase session from localStorage
+                Object.keys(localStorage).forEach(key => {
+                  if (key.startsWith('sb-')) localStorage.removeItem(key);
+                });
+                // Redirect to login with a clean slate
+                window.location.href = '/login';
               }}
               className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors"
             >
