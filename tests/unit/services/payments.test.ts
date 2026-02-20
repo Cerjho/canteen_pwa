@@ -169,7 +169,7 @@ describe('Payment Service', () => {
       });
 
       await expect(createCheckout(mockOrderData)).rejects.toThrow(
-        'Insufficient stock'
+        'out of stock'
       );
     });
 
