@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow } from 'date-fns';
-import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus } from '../../services/products';
+import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus, formatDateLocal } from '../../services/products';
 import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
 import { ProductCard } from '../../components/ProductCard';
@@ -91,7 +91,7 @@ export default function Menu() {
   // Get selected weekday info for checking holiday status
   const selectedWeekdayInfo = useMemo(() => {
     if (!weekdaysInfo || !selectedDate) return null;
-    const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+    const selectedDateStr = formatDateLocal(selectedDate);
     return weekdaysInfo.find(w => w.dateStr === selectedDateStr);
   }, [weekdaysInfo, selectedDate]);
   
@@ -169,7 +169,7 @@ export default function Menu() {
     }
 
     const selectedStudent = students?.find(s => s.id === selectedStudentId);
-    const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
+    const scheduledFor = formatDateLocal(effectiveDate);
     
     if (selectedStudent) {
       addItem({
@@ -193,7 +193,7 @@ export default function Menu() {
 
     const product = products?.find(p => p.id === snackPopup.productId);
     const selectedStudent = students?.find(s => s.id === selectedStudentId);
-    const scheduledFor = format(effectiveDate, 'yyyy-MM-dd');
+    const scheduledFor = formatDateLocal(effectiveDate);
 
     if (product && selectedStudent) {
       addItem({
@@ -226,7 +226,7 @@ export default function Menu() {
 
     // Get unique scheduled dates from items to checkout
     const scheduledDates = [...new Set(itemsToCheckout.map(i => i.scheduled_for))];
-    const hasFutureOrders = scheduledDates.some(d => d !== format(new Date(), 'yyyy-MM-dd'));
+    const hasFutureOrders = scheduledDates.some(d => d !== formatDateLocal(new Date()));
 
     try {
       // Each item has its own scheduled_for date, checkout groups by student+date
@@ -267,7 +267,7 @@ export default function Menu() {
   const handlePrevDate = useCallback(() => {
     if (!weekdaysInfo) return;
     const currentIdx = weekdaysInfo.findIndex(w => 
-      w.dateStr === format(effectiveDate, 'yyyy-MM-dd')
+      w.dateStr === formatDateLocal(effectiveDate)
     );
     if (currentIdx > 0) {
       setSelectedDate(weekdaysInfo[currentIdx - 1].date);
@@ -277,7 +277,7 @@ export default function Menu() {
   const handleNextDate = useCallback(() => {
     if (!weekdaysInfo) return;
     const currentIdx = weekdaysInfo.findIndex(w => 
-      w.dateStr === format(effectiveDate, 'yyyy-MM-dd')
+      w.dateStr === formatDateLocal(effectiveDate)
     );
     if (currentIdx < weekdaysInfo.length - 1) {
       setSelectedDate(weekdaysInfo[currentIdx + 1].date);
@@ -286,7 +286,7 @@ export default function Menu() {
 
   // Show canteen closed message for the selected date (holiday)
   if (selectedWeekdayInfo && !selectedWeekdayInfo.isOpen) {
-    const currentIdx = weekdaysInfo?.findIndex(w => w.dateStr === format(effectiveDate, 'yyyy-MM-dd')) ?? -1;
+    const currentIdx = weekdaysInfo?.findIndex(w => w.dateStr === formatDateLocal(effectiveDate)) ?? -1;
     
     return (
       <div className="min-h-screen pb-20">
@@ -318,7 +318,7 @@ export default function Menu() {
             {weekdaysInfo && (
               <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
                 {weekdaysInfo.map((dayInfo) => {
-                  const isSelected = dayInfo.dateStr === format(effectiveDate, 'yyyy-MM-dd');
+                  const isSelected = dayInfo.dateStr === formatDateLocal(effectiveDate);
                   const isTodayDate = isToday(dayInfo.date);
                   
                   return (
@@ -426,7 +426,7 @@ export default function Menu() {
           {weekdaysInfo && (
             <div className="flex gap-1 overflow-x-auto pb-1">
               {weekdaysInfo.map((dayInfo) => {
-                const isSelected = dayInfo.dateStr === format(effectiveDate, 'yyyy-MM-dd');
+                const isSelected = dayInfo.dateStr === formatDateLocal(effectiveDate);
                 const isTodayDate = isToday(dayInfo.date);
                 
                 return (
@@ -529,7 +529,7 @@ export default function Menu() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Try ordering for:</p>
                 <div className="flex gap-2 justify-center flex-wrap">
                   {weekdaysInfo
-                    .filter(w => w.dateStr !== format(effectiveDate, 'yyyy-MM-dd') && w.isOpen)
+                    .filter(w => w.dateStr !== formatDateLocal(effectiveDate) && w.isOpen)
                     .slice(0, 3)
                     .map(dayInfo => (
                       <button

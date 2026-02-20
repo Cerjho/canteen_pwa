@@ -37,6 +37,10 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
   if (!orderData.items || orderData.items.length === 0) {
     throw new Error('At least one item is required');
   }
+  const validPaymentMethods = ['cash', 'balance', 'gcash'];
+  if (orderData.payment_method && !validPaymentMethods.includes(orderData.payment_method)) {
+    throw new Error(`Invalid payment method: ${orderData.payment_method}`);
+  }
   for (const item of orderData.items) {
     if (!item.product_id || item.quantity <= 0 || item.price_at_order < 0) {
       throw new Error('Invalid order item: product_id required, quantity must be positive, price must be non-negative');

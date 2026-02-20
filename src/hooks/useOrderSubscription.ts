@@ -61,6 +61,7 @@ export function useOrderSubscription() {
     queryClientRef.current.invalidateQueries({ queryKey: ['order-history'] });
     queryClientRef.current.invalidateQueries({ queryKey: ['active-orders'] });
     queryClientRef.current.invalidateQueries({ queryKey: ['scheduled-orders'] });
+    queryClientRef.current.invalidateQueries({ queryKey: ['active-order-count'] });
   }, []);
 
   useEffect(() => {

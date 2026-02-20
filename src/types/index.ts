@@ -97,7 +97,7 @@ export function autoMealPeriod(category: ProductCategory): MealPeriod | null {
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment';
 
-export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymongo';
+export type PaymentMethod = 'cash' | 'balance' | 'gcash';
 
 export type PaymentStatus = 'awaiting_payment' | 'paid' | 'timeout' | 'refunded';
 

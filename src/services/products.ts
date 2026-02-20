@@ -28,51 +28,36 @@ export interface CanteenStatus {
 }
 
 // Helper to format date as YYYY-MM-DD in Philippine timezone (UTC+8)
-function formatDateLocal(date: Date): string {
+export function formatDateLocal(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
 // Check if a date matches a holiday (including recurring holidays)
+// Uses a single query instead of two sequential queries
 async function checkHoliday(targetDate: Date): Promise<{ name: string } | null> {
   try {
     const dateStr = formatDateLocal(targetDate);
     const monthDay = dateStr.slice(5); // Extract MM-DD (e.g., "12-25" for Christmas)
     
-    // Check for exact date match (non-recurring holidays)
-    const { data: exactHoliday, error: exactError } = await supabase
+    // Single query: fetch exact date match OR all recurring holidays
+    const { data: holidays, error } = await supabase
       .from('holidays')
-      .select('name, is_recurring')
-      .eq('date', dateStr)
-      .maybeSingle();
+      .select('name, date, is_recurring')
+      .or(`date.eq.${dateStr},is_recurring.eq.true`);
     
-    if (exactError) {
-      console.warn('Error checking exact holiday:', exactError.message);
-      // Continue to check recurring holidays instead of failing
-    }
-    
-    if (exactHoliday) {
-      return { name: exactHoliday.name };
-    }
-    
-    // Check for recurring holidays (match month-day pattern)
-    // Get all recurring holidays and check if any match the month-day
-    const { data: recurringHolidays, error: recurringError } = await supabase
-      .from('holidays')
-      .select('name, date')
-      .eq('is_recurring', true);
-    
-    if (recurringError) {
-      console.warn('Error checking recurring holidays:', recurringError.message);
+    if (error) {
+      console.warn('Error checking holidays:', error.message);
       return null;
     }
     
-    if (recurringHolidays) {
-      for (const holiday of recurringHolidays) {
-        const holidayMonthDay = holiday.date.slice(5); // Extract MM-DD from stored date
-        if (holidayMonthDay === monthDay) {
-          return { name: holiday.name };
-        }
-      }
+    if (holidays) {
+      // Check exact match first
+      const exact = holidays.find(h => h.date === dateStr);
+      if (exact) return { name: exact.name };
+      
+      // Check recurring holidays by month-day
+      const recurring = holidays.find(h => h.is_recurring && h.date.slice(5) === monthDay);
+      if (recurring) return { name: recurring.name };
     }
     
     return null;

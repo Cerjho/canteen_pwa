@@ -422,8 +422,12 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
       const compressedFile = await compressImage(file, 800, 0.85);
       const result = await uploadProductImage(compressedFile, product?.id);
 
+      // Revoke the temporary object URL to prevent memory leak
+      URL.revokeObjectURL(previewUrl);
+
       if (result.success && result.url) {
         setFormData(prev => ({ ...prev, image_url: result.url ?? '' }));
+        setImagePreview(result.url);
         showToast('Image uploaded successfully', 'success');
       } else {
         setUploadError(result.error || 'Failed to upload image');

@@ -70,13 +70,31 @@ export default function AdminSettings() {
     }
   });
 
-  // Parse saved settings into state
+  // Parse saved settings into state with type validation
   useEffect(() => {
     if (savedSettings && savedSettings.length > 0) {
       const parsed: Partial<SettingsState> = {};
       savedSettings.forEach((setting) => {
         try {
-          (parsed as Record<string, unknown>)[setting.key] = setting.value;
+          const key = setting.key as keyof SettingsState;
+          if (!(key in defaultSettings)) return; // Skip unknown keys
+          
+          const defaultVal = defaultSettings[key];
+          const val = setting.value;
+          
+          // Type-check: ensure DB value matches expected type
+          if (typeof defaultVal === 'boolean' && typeof val === 'boolean') {
+            (parsed as Record<string, unknown>)[key] = val;
+          } else if (typeof defaultVal === 'number' && typeof val === 'number') {
+            (parsed as Record<string, unknown>)[key] = val;
+          } else if (typeof defaultVal === 'string' && typeof val === 'string') {
+            (parsed as Record<string, unknown>)[key] = val;
+          } else if (defaultVal === null && (typeof val === 'string' || val === null)) {
+            (parsed as Record<string, unknown>)[key] = val;
+          } else if (typeof defaultVal === 'object' && defaultVal !== null && typeof val === 'object' && val !== null) {
+            // For objects like operating_hours, validate shape
+            (parsed as Record<string, unknown>)[key] = { ...defaultVal, ...(val as Record<string, unknown>) };
+          }
         } catch {
           // Skip invalid settings
         }

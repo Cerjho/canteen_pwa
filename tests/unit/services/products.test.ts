@@ -32,6 +32,7 @@ describe('Products Service', () => {
     const mockQueryBuilder = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ data: [], error: null }),
       in: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: [], error: null }),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -50,7 +51,7 @@ describe('Products Service', () => {
         { id: 'p2', name: 'Product 2', available: true }
       ];
       mockQueryBuilder.in.mockResolvedValue({ data: mockProducts, error: null });
-      mockQueryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null }); // no holiday
+      mockQueryBuilder.or.mockResolvedValue({ data: [], error: null }); // no holiday
       
       const result = await getProducts();
       
@@ -61,6 +62,7 @@ describe('Products Service', () => {
       // Mock a Saturday
       const saturday = new Date('2024-01-06');
       mockQueryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null }); // no makeup day
+      mockQueryBuilder.or.mockResolvedValue({ data: [], error: null }); // no holiday
       
       const result = await getProductsForDate(saturday);
       
@@ -70,6 +72,7 @@ describe('Products Service', () => {
     it('calls menu_schedules table for weekday', async () => {
       const monday = new Date('2024-01-08');
       mockQueryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null }); // no holiday
+      mockQueryBuilder.or.mockResolvedValue({ data: [], error: null }); // checkHoliday uses .or()
       
       await getProductsForDate(monday);
       
@@ -190,11 +193,12 @@ describe('Products Service', () => {
 
     // Skip: Requires complex mock chaining for checkHoliday function
     it('returns closed on holiday', async () => {
-      // Mock holiday lookup - first call for exact match, second for recurring
+      // Mock holiday lookup - now uses single .or() query
       const holidayQueryBuilder = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'Test Holiday', is_recurring: false }, error: null })
+        or: vi.fn().mockResolvedValue({ data: [{ name: 'Test Holiday', date: '2024-01-08', is_recurring: false }], error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
       };
       mockFrom.mockReturnValue(holidayQueryBuilder);
 
@@ -210,6 +214,7 @@ describe('Products Service', () => {
       const noHolidayQueryBuilder = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        or: vi.fn().mockResolvedValue({ data: [], error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
       };
       mockFrom.mockReturnValue(noHolidayQueryBuilder);
@@ -286,6 +291,7 @@ describe('Products Service', () => {
     const mockQueryBuilder = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ data: [], error: null }),
       in: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: [], error: null }),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -306,12 +312,13 @@ describe('Products Service', () => {
 
     // These tests validate holiday and menu scenarios
     it('returns empty array on holiday', async () => {
-      // Mock holiday found
+      // Mock holiday found - checkHoliday now uses .or()
       const holidayQueryBuilder = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'Holiday', is_recurring: false }, error: null })
+        or: vi.fn().mockResolvedValue({ data: [{ name: 'Holiday', date: '2024-01-08', is_recurring: false }], error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
       };
       mockFrom.mockReturnValue(holidayQueryBuilder);
 
@@ -322,19 +329,11 @@ describe('Products Service', () => {
     });
 
     it('returns scheduled products for weekday', async () => {
-      // First mock returns no holiday, second returns schedules, third returns products
-      let callCount = 0;
+      // checkHoliday now uses .or() + .select() chain, not .eq().maybeSingle()
       const dynamicMockQueryBuilder = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            // Holiday check - no holiday
-            return { maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) };
-          }
-          // Menu schedules
-          return dynamicMockQueryBuilder;
-        }),
+        eq: vi.fn().mockReturnThis(),
+        or: vi.fn().mockResolvedValue({ data: [], error: null }), // no holiday
         in: vi.fn().mockResolvedValue({ 
           data: [{ id: 'p1', name: 'Product 1' }], 
           error: null 

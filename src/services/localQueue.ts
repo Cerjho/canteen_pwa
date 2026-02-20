@@ -251,7 +251,13 @@ const MAX_RETRIES = 5;
 async function moveToFailedQueue(order: QueuedOrder, reason: string): Promise<void> {
   // Store failed orders in localStorage for now
   // In production, could use another IndexedDB store
-  const failedOrders = JSON.parse(localStorage.getItem('failed-orders') || '[]');
+  let failedOrders: Array<QueuedOrder & { failed_at: string; failure_reason: string }>;
+  try {
+    failedOrders = JSON.parse(localStorage.getItem('failed-orders') || '[]');
+  } catch {
+    console.warn('Corrupted failed-orders in localStorage, resetting');
+    failedOrders = [];
+  }
   // Limit failed queue to prevent unbounded localStorage growth
   const MAX_FAILED_ORDERS = 20;
   if (failedOrders.length >= MAX_FAILED_ORDERS) {
@@ -274,7 +280,12 @@ async function moveToFailedQueue(order: QueuedOrder, reason: string): Promise<vo
 
 // Get failed orders for user review
 export function getFailedOrders(): Array<QueuedOrder & { failed_at: string; failure_reason: string }> {
-  return JSON.parse(localStorage.getItem('failed-orders') || '[]');
+  try {
+    return JSON.parse(localStorage.getItem('failed-orders') || '[]');
+  } catch {
+    console.warn('Failed to parse failed-orders from localStorage');
+    return [];
+  }
 }
 
 // Clear failed orders

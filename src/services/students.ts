@@ -29,9 +29,10 @@ export async function getStudents(parentId: string): Promise<Student[]> {
   
   // Flatten the result - students is an object (single record from FK)
   return (data || []).map(item => {
-    const student = item.students as unknown as Student;
-    return student;
-  }).filter(student => student?.is_active !== false);
+    const student = item.students;
+    if (!student || typeof student !== 'object') return null;
+    return student as unknown as Student;
+  }).filter((s): s is Student => s != null && s.is_active !== false);
 }
 
 // @deprecated Use getStudents instead
