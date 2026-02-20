@@ -97,7 +97,15 @@ export function autoMealPeriod(category: ProductCategory): MealPeriod | null {
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment';
 
-export type PaymentMethod = 'cash' | 'balance' | 'gcash';
+export type PaymentMethod = 'cash' | 'balance' | 'gcash' | 'paymaya' | 'card';
+
+/** Payment methods that require online checkout via PayMongo */
+export const ONLINE_PAYMENT_METHODS: PaymentMethod[] = ['gcash', 'paymaya', 'card'];
+
+/** Check if a payment method requires online checkout */
+export function isOnlinePaymentMethod(method: string): boolean {
+  return ONLINE_PAYMENT_METHODS.includes(method as PaymentMethod);
+}
 
 export type PaymentStatus = 'awaiting_payment' | 'paid' | 'timeout' | 'refunded';
 
@@ -111,6 +119,8 @@ export interface Order {
   payment_method: PaymentMethod;
   payment_status?: PaymentStatus;
   payment_due_at?: string;
+  paymongo_checkout_id?: string;
+  paymongo_payment_id?: string;
   notes?: string;
   scheduled_for?: string;
   meal_period?: MealPeriod;
@@ -137,7 +147,41 @@ export interface Transaction {
   method: PaymentMethod;
   status: 'pending' | 'completed' | 'failed';
   reference_id?: string;
+  paymongo_payment_id?: string;
+  paymongo_refund_id?: string;
+  paymongo_checkout_id?: string;
   created_at: string;
+}
+
+/** Response from the create-checkout edge function */
+export interface CreateCheckoutResponse {
+  success: boolean;
+  order_id: string;
+  checkout_url: string;
+  payment_due_at: string;
+  total_amount: number;
+}
+
+/** Response from the create-topup-checkout edge function */
+export interface CreateTopupCheckoutResponse {
+  success: boolean;
+  topup_session_id: string;
+  checkout_url: string;
+  expires_at: string;
+  amount: number;
+}
+
+/** Response from the check-payment-status edge function */
+export interface PaymentStatusResponse {
+  order_id?: string;
+  payment_status?: PaymentStatus;
+  order_status?: OrderStatus;
+  payment_method?: PaymentMethod;
+  total_amount?: number;
+  topup_session_id?: string;
+  status?: string;
+  amount?: number;
+  completed_at?: string;
 }
 
 // Frontend types

@@ -37,9 +37,15 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
   if (!orderData.items || orderData.items.length === 0) {
     throw new Error('At least one item is required');
   }
-  const validPaymentMethods = ['cash', 'balance', 'gcash'];
+  const validPaymentMethods = ['cash', 'balance', 'gcash', 'paymaya', 'card'];
   if (orderData.payment_method && !validPaymentMethods.includes(orderData.payment_method)) {
     throw new Error(`Invalid payment method: ${orderData.payment_method}`);
+  }
+
+  // Online payment methods should use the create-checkout endpoint, not process-order
+  const onlinePaymentMethods = ['gcash', 'paymaya', 'card'];
+  if (orderData.payment_method && onlinePaymentMethods.includes(orderData.payment_method)) {
+    throw new Error('Online payments (GCash, PayMaya, Card) should use the createCheckout function from payments.ts');
   }
   for (const item of orderData.items) {
     if (!item.product_id || item.quantity <= 0 || item.price_at_order < 0) {

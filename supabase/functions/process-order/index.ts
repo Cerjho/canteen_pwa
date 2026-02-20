@@ -121,6 +121,33 @@ serve(async (req) => {
       );
     }
 
+    // ============================================
+    // REJECT ONLINE PAYMENT METHODS
+    // Online payments (gcash, paymaya, card) must use the create-checkout endpoint
+    // ============================================
+    const onlinePaymentMethods = ['gcash', 'paymaya', 'card'];
+    if (onlinePaymentMethods.includes(payment_method)) {
+      return new Response(
+        JSON.stringify({
+          error: 'WRONG_ENDPOINT',
+          message: 'Online payments (GCash, PayMaya, Card) must use the create-checkout endpoint. This endpoint only handles cash and balance payments.',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate payment method is cash or balance
+    const validMethods = ['cash', 'balance'];
+    if (!validMethods.includes(payment_method)) {
+      return new Response(
+        JSON.stringify({
+          error: 'INVALID_PAYMENT_METHOD',
+          message: `Invalid payment method '${payment_method}'. Allowed: cash, balance. For online payments, use the create-checkout endpoint.`,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Processing order:', { parent_id, student_id, client_order_id, items_count: items.length, payment_method, scheduled_for });
 
     // ============================================

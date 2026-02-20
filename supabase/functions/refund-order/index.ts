@@ -4,6 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
+import { createRefund as createPayMongoRefund, toCentavos } from '../_shared/paymongo.ts';
 
 interface RefundRequest {
   order_id: string;
@@ -145,6 +146,43 @@ serve(async (req) => {
       );
     }
 
+    // ── PayMongo refund for online payments ──
+    const onlinePaymentMethods = ['gcash', 'paymaya', 'card', 'paymongo'];
+    let paymongoRefundId: string | null = null;
+    let refundStatus = 'completed';
+    let refundEstimate = '';
+
+    if (onlinePaymentMethods.includes(order.payment_method) && order.paymongo_payment_id) {
+      try {
+        console.log('Initiating PayMongo refund:', { payment_id: order.paymongo_payment_id, amount: order.total_amount });
+        const refundResult = await createPayMongoRefund(
+          order.paymongo_payment_id,
+          toCentavos(order.total_amount),
+          'requested_by_customer',
+          `Canteen order cancellation. Reason: ${reason}`,
+        );
+        paymongoRefundId = refundResult.id;
+        console.log('PayMongo refund created:', refundResult);
+
+        // Set estimated refund time based on payment method
+        if (order.payment_method === 'gcash') {
+          refundEstimate = 'Refund will be processed to your GCash within 1 business day.';
+        } else if (order.payment_method === 'paymaya') {
+          refundEstimate = 'Refund will be processed to your PayMaya within 1-3 business days.';
+        } else {
+          refundEstimate = 'Refund will be processed to your card within 5-10 business days.';
+        }
+      } catch (refundErr) {
+        console.error('PayMongo refund failed:', refundErr);
+        // Still proceed with DB refund — PayMongo refund can be retried manually
+        refundStatus = 'pending';
+        refundEstimate = 'Refund via payment provider is being processed. Please contact support if not received within 10 business days.';
+      }
+    } else if (onlinePaymentMethods.includes(order.payment_method) && !order.paymongo_payment_id) {
+      // Online payment order but no payment ID means payment was never completed
+      console.log('No PayMongo payment ID — order was likely unpaid, no refund needed');
+    }
+
     // Create refund transaction
     const { data: transaction, error: txError } = await supabaseAdmin
       .from('transactions')
@@ -154,8 +192,9 @@ serve(async (req) => {
         type: 'refund',
         amount: order.total_amount,
         method: order.payment_method,
-        status: 'completed',
-        reference_id: `REFUND-${order_id.substring(0, 8)}`
+        status: refundStatus,
+        reference_id: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : `REFUND-${order_id.substring(0, 8)}`,
+        paymongo_refund_id: paymongoRefundId,
       })
       .select()
       .single();
@@ -210,7 +249,11 @@ serve(async (req) => {
         success: true,
         refunded_amount: order.total_amount,
         transaction_id: transaction?.id || null,
-        message: `Order refunded successfully. Reason: ${reason}`
+        paymongo_refund_id: paymongoRefundId,
+        refund_estimate: refundEstimate || undefined,
+        message: refundEstimate
+          ? `Order refunded successfully. ${refundEstimate}`
+          : `Order refunded successfully. Reason: ${reason}`,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

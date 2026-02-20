@@ -17,7 +17,7 @@ import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabaseClient';
-import type { ProductCategory, MealPeriod } from '../../types';
+import type { ProductCategory, MealPeriod, PaymentMethod } from '../../types';
 import { autoMealPeriod, MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
@@ -213,7 +213,7 @@ export default function Menu() {
     setSnackPopup(null);
   }, [snackPopup, selectedStudentId, products, students, addItem, showToast, effectiveDate]);
 
-  const handleCheckout = useCallback(async (paymentMethod: 'cash' | 'gcash' | 'balance', notes: string, selectedDates?: string[]) => {
+  const handleCheckout = useCallback(async (paymentMethod: PaymentMethod, notes: string, selectedDates?: string[]) => {
     if (items.length === 0) {
       showToast('Cart is empty', 'error');
       return;

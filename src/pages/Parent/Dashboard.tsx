@@ -13,7 +13,7 @@ import { PullToRefresh } from '../../components/PullToRefresh';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import type { MealPeriod } from '../../types';
-import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
+import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, isOnlinePaymentMethod } from '../../types';
 import { 
   Package, 
   Clock, 
@@ -52,6 +52,7 @@ interface OrderItem {
 interface Order {
   id: string;
   status: string;
+  payment_method?: string;
   payment_status?: string;
   payment_due_at?: string;
   total_amount: number;
@@ -316,7 +317,7 @@ export default function ParentDashboard() {
     return () => clearInterval(interval);
   }, [todayOrders, scheduledOrders]);
 
-  const getStatusDetails = (status: string, paymentStatus?: string) => {
+  const getStatusDetails = (status: string, paymentStatus?: string, paymentMethod?: string) => {
     // Check for timeout first
     if (paymentStatus === 'timeout') {
       return {
@@ -330,11 +331,12 @@ export default function ParentDashboard() {
     
     // Check for awaiting payment
     if (status === 'awaiting_payment' || paymentStatus === 'awaiting_payment') {
+      const isOnline = paymentMethod ? isOnlinePaymentMethod(paymentMethod) : false;
       return {
         icon: Timer,
         label: 'Awaiting Payment',
         color: 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800',
-        message: 'Pay at the counter',
+        message: isOnline ? 'Verifying payment...' : 'Pay at the counter',
         progress: 10
       };
     }
@@ -496,12 +498,13 @@ export default function ParentDashboard() {
                   : hasAwaitingPayment ? 'awaiting_payment'
                   : hasPreparing ? 'preparing'
                   : 'pending';
-                const overallStatus = getStatusDetails(primaryStatus);
-                const OverallIcon = overallStatus.icon;
 
                 const awaitingPaymentOrder = group.orders.find(o =>
                   o.status === 'awaiting_payment' || o.payment_status === 'awaiting_payment'
                 );
+
+                const overallStatus = getStatusDetails(primaryStatus, undefined, awaitingPaymentOrder?.payment_method);
+                const OverallIcon = overallStatus.icon;
 
                 return (
                   <div
@@ -559,7 +562,10 @@ export default function ParentDashboard() {
                       <div className="bg-orange-500 text-white px-4 py-2 flex items-center justify-center gap-2">
                         <Timer size={16} className="animate-pulse" />
                         <span className="font-medium">
-                          Pay at counter: {getPaymentTimeRemaining(awaitingPaymentOrder.payment_due_at).text}
+                          {awaitingPaymentOrder.payment_method && isOnlinePaymentMethod(awaitingPaymentOrder.payment_method)
+                            ? `Verifying payment: ${getPaymentTimeRemaining(awaitingPaymentOrder.payment_due_at).text}`
+                            : `Pay at counter: ${getPaymentTimeRemaining(awaitingPaymentOrder.payment_due_at).text}`
+                          }
                         </span>
                       </div>
                     )}
@@ -594,7 +600,7 @@ export default function ParentDashboard() {
                       {/* Meal Period Sections */}
                       <div className="space-y-3">
                         {group.orders.map((order) => {
-                          const mealStatus = getStatusDetails(order.status, order.payment_status);
+                          const mealStatus = getStatusDetails(order.status, order.payment_status, order.payment_method);
                           const MealStatusIcon = mealStatus.icon;
 
                           return (

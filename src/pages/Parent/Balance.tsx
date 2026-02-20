@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, RefreshCw, TrendingUp } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
@@ -6,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import TopUpModal from '../../components/TopUpModal';
 
 interface Transaction {
   id: string;
@@ -20,6 +23,25 @@ interface Transaction {
 
 export default function Balance() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [topUpNotice, setTopUpNotice] = useState<string | null>(null);
+
+  // Handle ?topup=success redirect from PayMongo
+  useEffect(() => {
+    const topupResult = searchParams.get('topup');
+    if (topupResult === 'success') {
+      setTopUpNotice('Your top-up payment is being processed. Your balance will update shortly.');
+      // Clean the URL
+      setSearchParams({}, { replace: true });
+      // Refetch balance after short delay for webhook to process
+      const timer = setTimeout(() => refetch(), 5000);
+      return () => clearTimeout(timer);
+    } else if (topupResult === 'cancelled') {
+      setTopUpNotice('Top-up was cancelled. No charges were made.');
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   const { data: walletData, isLoading: loadingParent, isError: walletError, refetch } = useQuery({
     queryKey: ['parent-balance', user?.id],
@@ -130,17 +152,24 @@ export default function Balance() {
           </p>
         </div>
 
+        {/* Top-up success/cancel notice */}
+        {topUpNotice && (
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+            <span className="text-sm">{topUpNotice}</span>
+            <button onClick={() => setTopUpNotice(null)} className="text-blue-500 hover:text-blue-700 ml-2 font-bold">&times;</button>
+          </div>
+        )}
+
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <button
-            disabled
-            className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-2 opacity-60 cursor-not-allowed relative"
+            onClick={() => setShowTopUp(true)}
+            className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-2 hover:border-green-300 dark:hover:border-green-700 hover:shadow-md transition-all active:scale-95"
           >
             <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
               <TrendingUp size={20} className="text-green-600 dark:text-green-400" />
             </div>
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Top Up</span>
-            <span className="absolute top-2 right-2 text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
           </button>
           <button
             disabled
@@ -202,6 +231,9 @@ export default function Balance() {
           )}
         </div>
       </div>
+
+      {/* Top Up Modal */}
+      <TopUpModal isOpen={showTopUp} onClose={() => setShowTopUp(false)} />
     </div>
   );
 }

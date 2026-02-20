@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Minus, CreditCard, Wallet, Banknote, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check } from 'lucide-react';
+import { X, Plus, Minus, CreditCard, Wallet, Banknote, Smartphone, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check, Globe } from 'lucide-react';
 import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
-import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod } from '../types';
+import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod, type PaymentMethod, isOnlinePaymentMethod } from '../types';
+import { getCheckoutButtonText } from '../services/payments';
 
-type PaymentMethod = 'cash' | 'gcash' | 'balance';
+type CartPaymentMethod = PaymentMethod;
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ interface CartDrawerProps {
   itemsByStudent: Record<string, { student_name: string; items: CartItem[] }>;
   itemsByDateAndStudent?: DateCartGroup[];
   onUpdateQuantity: (productId: string, studentId: string, scheduledFor: string, quantity: number, mealPeriod?: MealPeriod) => void;
-  onCheckout: (paymentMethod: PaymentMethod, notes: string, selectedDates?: string[]) => Promise<void>;
+  onCheckout: (paymentMethod: CartPaymentMethod, notes: string, selectedDates?: string[]) => Promise<void>;
   onClearDate?: (dateStr: string) => Promise<void>;
   onCopyDateItems?: (fromDate: string, toDate: string) => Promise<void>;
   onError?: (error: Error) => void;
@@ -33,7 +34,7 @@ export function CartDrawer({
   onError,
   parentBalance = 0
 }: CartDrawerProps) {
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<CartPaymentMethod>('cash');
   const [notes, setNotes] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -165,30 +166,49 @@ export function CartDrawer({
     }
   };
 
-  const paymentOptions = [
+  const paymentOptions: { id: CartPaymentMethod; label: string; icon: typeof Banknote; disabled: boolean; description: string; group: 'school' | 'online' }[] = [
     { 
-      id: 'cash' as PaymentMethod, 
+      id: 'cash', 
       label: 'Cash', 
       icon: Banknote, 
       disabled: false,
-      description: 'Pay at pickup'
+      description: 'Pay at pickup',
+      group: 'school',
     },
     { 
-      id: 'gcash' as PaymentMethod, 
-      label: 'GCash', 
-      icon: CreditCard, 
-      disabled: false,
-      description: 'Mobile payment'
-    },
-    { 
-      id: 'balance' as PaymentMethod, 
+      id: 'balance', 
       label: 'Balance', 
       icon: Wallet, 
       disabled: !canUseBalance,
       description: canUseBalance 
         ? `Available: ₱${parentBalance.toFixed(2)}`
-        : `Need ₱${(selectedTotal - parentBalance).toFixed(2)} more`
-    }
+        : `Need ₱${(selectedTotal - parentBalance).toFixed(2)} more`,
+      group: 'school',
+    },
+    { 
+      id: 'gcash', 
+      label: 'GCash', 
+      icon: Smartphone, 
+      disabled: false,
+      description: 'Pay via GCash',
+      group: 'online',
+    },
+    { 
+      id: 'paymaya', 
+      label: 'PayMaya', 
+      icon: Smartphone, 
+      disabled: false,
+      description: 'Pay via PayMaya',
+      group: 'online',
+    },
+    { 
+      id: 'card', 
+      label: 'Card', 
+      icon: CreditCard, 
+      disabled: false,
+      description: 'Visa / Mastercard',
+      group: 'online',
+    },
   ];
 
   return (
@@ -446,8 +466,10 @@ export function CartDrawer({
             {items.length > 0 && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Payment Method</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {paymentOptions.map((option) => (
+                
+                {/* School payments: Cash + Balance */}
+                <div className="grid grid-cols-2 gap-2">
+                  {paymentOptions.filter(o => o.group === 'school').map((option) => (
                     <button
                       key={option.id}
                       onClick={() => !option.disabled && setPaymentMethod(option.id)}
@@ -474,8 +496,50 @@ export function CartDrawer({
                     </button>
                   ))}
                 </div>
+
+                {/* Online payment divider */}
+                <div className="flex items-center gap-2 py-0.5">
+                  <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
+                  <span className="flex items-center gap-1 text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    <Globe size={10} />
+                    Online
+                  </span>
+                  <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
+                </div>
+
+                {/* Online payments: GCash, PayMaya, Card */}
+                <div className="grid grid-cols-3 gap-2">
+                  {paymentOptions.filter(o => o.group === 'online').map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => !option.disabled && setPaymentMethod(option.id)}
+                      disabled={option.disabled}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        paymentMethod === option.id
+                          ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/30'
+                          : option.disabled
+                            ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 opacity-50 cursor-not-allowed'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
+                      <option.icon 
+                        size={20} 
+                        className={`mx-auto mb-1 ${
+                          paymentMethod === option.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'
+                        }`} 
+                      />
+                      <div className={`text-xs font-medium ${
+                        paymentMethod === option.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {option.label}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
                 <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
                   {paymentOptions.find(o => o.id === paymentMethod)?.description}
+                  {isOnlinePaymentMethod(paymentMethod) && ' — You\'ll be redirected'}
                 </p>
               </div>
             )}
@@ -530,7 +594,7 @@ export function CartDrawer({
               {isCheckingOut ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Processing...
+                  {isOnlinePaymentMethod(paymentMethod) ? 'Redirecting...' : 'Processing...'}
                 </>
               ) : selectedDates.size > 0 ? (
                 `Checkout ${selectedDates.size} ${selectedDates.size === 1 ? 'Day' : 'Days'}`
@@ -539,7 +603,7 @@ export function CartDrawer({
               ) : studentCount > 1 ? (
                 `Place ${studentCount} Orders`
               ) : (
-                'Place Order'
+                getCheckoutButtonText(paymentMethod)
               )}
             </button>
           </div>

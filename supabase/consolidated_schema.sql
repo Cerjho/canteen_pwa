@@ -157,9 +157,11 @@ CREATE TABLE IF NOT EXISTS orders (
     CHECK (status IN ('awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled')),
   total_amount NUMERIC(10,2) NOT NULL CHECK (total_amount >= 0),
   payment_method TEXT NOT NULL
-    CHECK (payment_method IN ('cash', 'balance', 'gcash', 'paymongo')),
+    CHECK (payment_method IN ('cash', 'balance', 'gcash', 'paymaya', 'card', 'paymongo')),
   payment_status payment_status DEFAULT 'paid',
   payment_due_at TIMESTAMPTZ,
+  paymongo_checkout_id TEXT,
+  paymongo_payment_id TEXT,
   notes TEXT,
   scheduled_for DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -184,11 +186,29 @@ CREATE TABLE IF NOT EXISTS transactions (
   order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
   type TEXT NOT NULL CHECK (type IN ('payment', 'refund', 'topup')),
   amount NUMERIC(10,2) NOT NULL,
-  method TEXT NOT NULL CHECK (method IN ('cash', 'gcash', 'paymongo', 'balance')),
+  method TEXT NOT NULL CHECK (method IN ('cash', 'gcash', 'paymaya', 'card', 'paymongo', 'balance')),
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'completed', 'failed')),
   reference_id TEXT,
+  paymongo_payment_id TEXT,
+  paymongo_refund_id TEXT,
+  paymongo_checkout_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Top-up sessions (self-service wallet top-ups via PayMongo)
+CREATE TABLE IF NOT EXISTS topup_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
+  amount NUMERIC(10,2) NOT NULL CHECK (amount >= 50 AND amount <= 50000),
+  paymongo_checkout_id TEXT NOT NULL,
+  paymongo_payment_id TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'paid', 'expired', 'failed')),
+  payment_method TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL
 );
 
 -- Invitations (for user registration)
@@ -372,6 +392,19 @@ CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id)
 -- transactions
 CREATE INDEX IF NOT EXISTS idx_transactions_parent_id ON transactions(parent_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_paymongo_payment_id
+  ON transactions(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
+
+-- orders (PayMongo)
+CREATE INDEX IF NOT EXISTS idx_orders_paymongo_checkout_id
+  ON orders(paymongo_checkout_id) WHERE paymongo_checkout_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_paymongo_payment_id
+  ON orders(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
+
+-- topup_sessions
+CREATE INDEX IF NOT EXISTS idx_topup_sessions_parent_id ON topup_sessions(parent_id);
+CREATE INDEX IF NOT EXISTS idx_topup_sessions_checkout_id ON topup_sessions(paymongo_checkout_id);
+CREATE INDEX IF NOT EXISTS idx_topup_sessions_status ON topup_sessions(status) WHERE status = 'pending';
 
 -- invitations
 CREATE INDEX IF NOT EXISTS idx_invitations_code ON invitations(code);
@@ -958,6 +991,7 @@ ALTER TABLE audit_logs       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cart_items       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cart_state       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE favorites        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE topup_sessions   ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- RLS POLICIES
@@ -1149,6 +1183,15 @@ DROP POLICY IF EXISTS "Admin can insert transactions" ON transactions;
 CREATE POLICY "Admin can insert transactions"
   ON transactions FOR INSERT
   WITH CHECK (is_admin());
+
+-- ─── topup_sessions ─────────────────────────
+
+DROP POLICY IF EXISTS "Parents can view own topup sessions" ON topup_sessions;
+CREATE POLICY "Parents can view own topup sessions"
+  ON topup_sessions FOR SELECT
+  USING (parent_id = auth.uid());
+
+-- Edge functions use service_role key which bypasses RLS for insert/update
 
 -- ─── invitations ─────────────────────────────
 

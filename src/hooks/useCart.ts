@@ -1,8 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createOrder } from '../services/orders';
+import { createCheckout } from '../services/payments';
 import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
 import type { PaymentMethod, MealPeriod } from '../types';
+import { isOnlinePaymentMethod } from '../types';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 
 // =====================================================
@@ -803,10 +805,24 @@ export function useCart() {
         }
       }
 
-      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; meal_period: MealPeriod; error?: string }> = [];
+      const results: Array<{ order_id?: string; checkout_url?: string; student_id: string; scheduled_for: string; meal_period: MealPeriod; error?: string }> = [];
+
+      const effectiveMethod = method || currentPaymentMethod;
+      const isOnline = isOnlinePaymentMethod(effectiveMethod);
+
+      // For online payments, we can only process ONE checkout at a time
+      // since the user will be redirected to PayMongo.
+      // If there are multiple groups and online payment, process the first one only.
+      const groupsArray = Array.from(groups.values());
+      
+      if (isOnline && groupsArray.length > 1) {
+        throw new Error(
+          'Online payments can only process one order at a time. Please select items for a single student/date/meal, or use Cash or Balance for multiple orders.'
+        );
+      }
 
       // Create order for each student+date+meal combination
-      for (const group of groups.values()) {
+      for (const group of groupsArray) {
         try {
           const orderData = {
             parent_id: user.id,
@@ -817,19 +833,59 @@ export function useCart() {
               quantity: item.quantity,
               price_at_order: item.price
             })),
-            payment_method: method || currentPaymentMethod,
+            payment_method: effectiveMethod,
             notes: orderNotes || currentNotes,
             scheduled_for: group.scheduled_for,
             meal_period: group.meal_period
           };
 
-          const result = await createOrder(orderData);
-          results.push({ 
-            order_id: result?.order_id, 
-            student_id: group.student_id, 
-            scheduled_for: group.scheduled_for,
-            meal_period: group.meal_period
-          });
+          if (isOnline) {
+            // Online payment: use create-checkout endpoint
+            const checkoutResult = await createCheckout({
+              ...orderData,
+              payment_method: effectiveMethod as 'gcash' | 'paymaya' | 'card',
+            });
+
+            // Clear cart items for this group before redirect
+            const successKey = `${group.student_id}_${group.scheduled_for}_${group.meal_period}`;
+            setItems(prev => prev.filter(item => {
+              const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
+              return key !== successKey;
+            }));
+
+            await supabase
+              .from('cart_items')
+              .delete()
+              .eq('user_id', user.id)
+              .eq('student_id', group.student_id)
+              .eq('scheduled_for', group.scheduled_for)
+              .eq('meal_period', group.meal_period);
+
+            // Redirect to PayMongo checkout page 
+            // This will navigate away from the app
+            window.location.href = checkoutResult.checkout_url;
+            return {
+              orders: [{ 
+                order_id: checkoutResult.order_id, 
+                checkout_url: checkoutResult.checkout_url,
+                student_id: group.student_id, 
+                scheduled_for: group.scheduled_for, 
+                meal_period: group.meal_period 
+              }],
+              total: currentItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+              successCount: 1,
+              failCount: 0,
+            };
+          } else {
+            // Cash or balance: use existing process-order endpoint
+            const result = await createOrder(orderData);
+            results.push({ 
+              order_id: result?.order_id, 
+              student_id: group.student_id, 
+              scheduled_for: group.scheduled_for,
+              meal_period: group.meal_period
+            });
+          }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : 'Failed to create order';
           results.push({ 

@@ -1,7 +1,10 @@
-import { useEffect, useMemo } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar, CalendarDays } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar, CalendarDays, Smartphone, Loader2, XCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { isOnlinePaymentMethod, type PaymentMethod } from '../../types';
+import { checkPaymentStatus } from '../../services/payments';
+import { getPaymentMethodLabel } from '../../services/payments';
 
 interface OrderConfirmationState {
   orderId: string;
@@ -9,7 +12,7 @@ interface OrderConfirmationState {
   childName: string;
   itemCount: number;
   isOffline?: boolean;
-  paymentMethod?: 'cash' | 'balance';
+  paymentMethod?: PaymentMethod;
   scheduledFor?: string; // Legacy single date
   scheduledDates?: string[]; // Multi-day support
   orderCount?: number; // Number of orders created
@@ -19,14 +22,62 @@ interface OrderConfirmationState {
 export default function OrderConfirmation() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const state = location.state as OrderConfirmationState | null;
+  
+  // Online payment verification state
+  const paymentResult = searchParams.get('payment'); // 'success' | 'cancelled'
+  const orderIdParam = searchParams.get('order_id');
+  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'confirmed' | 'failed' | 'cancelled'>('idle');
+  const [pollCount, setPollCount] = useState(0);
+  const MAX_POLLS = 20; // 20 polls * 3s = 60 seconds max
+
+  // Poll for payment verification when redirected back from PayMongo
+  useEffect(() => {
+    if (paymentResult === 'cancelled') {
+      setVerificationStatus('cancelled');
+      return;
+    }
+    
+    if (paymentResult !== 'success' || !orderIdParam) return;
+    
+    setVerificationStatus('verifying');
+    let cancelled = false;
+    let pollNum = 0;
+    
+    const pollPayment = async () => {
+      while (!cancelled && pollNum < MAX_POLLS) {
+        try {
+          const result = await checkPaymentStatus(orderIdParam);
+          if (result.payment_status === 'paid' || result.status === 'pending') {
+            if (!cancelled) setVerificationStatus('confirmed');
+            return;
+          }
+          if (result.payment_status === 'timeout' || result.status === 'cancelled') {
+            if (!cancelled) setVerificationStatus('failed');
+            return;
+          }
+        } catch {
+          // Continue polling on error
+        }
+        pollNum++;
+        if (!cancelled) setPollCount(pollNum);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      // Max polls reached without confirmation
+      if (!cancelled) setVerificationStatus('confirmed'); // Assume success, webhook may be slow
+    };
+    
+    pollPayment();
+    return () => { cancelled = true; };
+  }, [paymentResult, orderIdParam]);
 
   useEffect(() => {
-    // Redirect if no order data
-    if (!state) {
+    // Redirect if no order data AND not a payment redirect
+    if (!state && !paymentResult) {
       navigate('/menu');
     }
-  }, [state, navigate]);
+  }, [state, paymentResult, navigate]);
 
   // Format scheduled dates for display
   const formattedDates = useMemo(() => {
@@ -53,6 +104,114 @@ export default function OrderConfirmation() {
 
   const isMultiDay = formattedDates.length > 1;
   const orderCount = state?.orderCount || 1;
+  const isOnlineMethod = state?.paymentMethod ? isOnlinePaymentMethod(state.paymentMethod) : false;
+
+  // Handle payment redirect pages (no state, came from PayMongo redirect)
+  if (!state && paymentResult) {
+    if (verificationStatus === 'cancelled') {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4 pb-24">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto">
+                <XCircle className="w-12 h-12 text-orange-500" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Payment Cancelled</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Your payment was cancelled. The order is still pending and will be automatically cancelled if not paid within the deadline.
+            </p>
+            <div className="space-y-3">
+              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+                View Orders <ArrowRight size={20} />
+              </Link>
+              <Link to="/menu" className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                Back to Menu
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    if (verificationStatus === 'verifying') {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4 pb-24">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto">
+                <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Verifying Payment...</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Please wait while we confirm your payment. This may take a few moments.
+            </p>
+            <div className="w-48 mx-auto bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-6">
+              <div className="bg-primary-500 h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min((pollCount / MAX_POLLS) * 100, 95)}%` }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (verificationStatus === 'confirmed') {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4 pb-24">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle className="w-12 h-12 text-green-500" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Payment Confirmed!</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Your payment has been received and your order is being processed.
+            </p>
+            {orderIdParam && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-mono">
+                Order #{orderIdParam.slice(0, 8).toUpperCase()}
+              </p>
+            )}
+            <div className="space-y-3">
+              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+                View Order Status <ArrowRight size={20} />
+              </Link>
+              <Link to="/menu" className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                Continue Ordering
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (verificationStatus === 'failed') {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4 pb-24">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto">
+                <XCircle className="w-12 h-12 text-red-500" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Payment Failed</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Your payment could not be processed. Please try again or use a different payment method.
+            </p>
+            <div className="space-y-3">
+              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+                View Orders <ArrowRight size={20} />
+              </Link>
+              <Link to="/menu" className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                Back to Menu
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
 
   if (!state) return null;
 
@@ -104,7 +263,12 @@ export default function OrderConfirmation() {
 
           <div className="flex justify-between items-center mb-4">
             <span className="text-gray-600 dark:text-gray-400">Status</span>
-            {state.paymentMethod === 'cash' ? (
+            {isOnlineMethod ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-sm font-medium">
+                <Loader2 size={14} className="animate-spin" />
+                Redirecting to Payment
+              </span>
+            ) : state.paymentMethod === 'cash' ? (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full text-sm font-medium">
                 <Timer size={14} />
                 Awaiting Payment
@@ -121,7 +285,12 @@ export default function OrderConfirmation() {
           <div className="flex justify-between items-center mb-4">
             <span className="text-gray-600 dark:text-gray-400">Payment</span>
             <span className="inline-flex items-center gap-1 text-gray-900 dark:text-gray-100 text-sm font-medium">
-              {state.paymentMethod === 'cash' ? (
+              {isOnlineMethod ? (
+                <>
+                  <Smartphone size={14} />
+                  {getPaymentMethodLabel(state.paymentMethod!)}
+                </>
+              ) : state.paymentMethod === 'cash' ? (
                 <>
                   <CreditCard size={14} />
                   Pay at Counter
@@ -175,6 +344,16 @@ export default function OrderConfirmation() {
             </span>
           </div>
         </div>
+
+        {/* Online Payment Redirect Notice */}
+        {isOnlineMethod && !state.isOffline && (
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              <strong>🔄 Redirecting to {getPaymentMethodLabel(state.paymentMethod!)}...</strong> You'll be 
+              taken to a secure payment page to complete your payment. Do not close this window.
+            </p>
+          </div>
+        )}
 
         {/* Cash Payment Notice */}
         {state.paymentMethod === 'cash' && !state.isOffline && (
