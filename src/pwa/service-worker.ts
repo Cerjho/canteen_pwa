@@ -19,8 +19,12 @@ import { ExpirationPlugin } from 'workbox-expiration';
 precacheAndRoute(self.__WB_MANIFEST);
 
 // Cache API requests with network-first strategy
+// EXCLUDE auth endpoints — stale auth responses break login after redeployments
 registerRoute(
-  ({ url }) => url.origin.includes('supabase.co') && !url.pathname.includes('/functions/'),
+  ({ url }) =>
+    url.origin.includes('supabase.co') &&
+    !url.pathname.includes('/functions/') &&
+    !url.pathname.includes('/auth/'),
   new NetworkFirst({
     cacheName: 'api-cache',
     networkTimeoutSeconds: 5,
@@ -353,17 +357,23 @@ self.addEventListener('activate', (event) => {
   console.log('[SW] Activating service worker...');
   event.waitUntil(
     Promise.all([
-      // Clean up old caches
+      // Clean up ALL runtime caches (not precache) to prevent stale data after redeployment
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((name) => name.startsWith('workbox-') && !name.includes('precache'))
-            .map((name) => caches.delete(name))
+            .filter((name) => !name.includes('precache'))
+            .map((name) => {
+              console.log(`[SW] Deleting cache: ${name}`);
+              return caches.delete(name);
+            })
         );
       }),
       // Take control of all clients immediately
       self.clients.claim()
-    ])
+    ]).then(() => {
+      // Notify all clients to reload after new SW takes control
+      return notifyClients('SW_UPDATED', {});
+    })
   );
 });
 

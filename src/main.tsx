@@ -21,6 +21,17 @@ const queryClient = new QueryClient({
 // Note: Service Worker registration is handled by vite-plugin-pwa with registerType: 'autoUpdate'
 // Manual registration removed to avoid conflicts
 
+// Listen for SW update messages — reload the page to pick up the new deployment
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SW_UPDATED') {
+      // Clear React Query cache before reload so stale data doesn't persist
+      queryClient.clear();
+      window.location.reload();
+    }
+  });
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element not found');
 

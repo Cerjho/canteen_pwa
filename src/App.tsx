@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { useAuth } from './hooks/useAuth';
 import { useSystemSettings } from './hooks/useSystemSettings';
@@ -82,10 +83,42 @@ function App() {
   // Check if current path is admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
 
+  // Loading timeout — if stuck for 10s, show retry option (stale SW cache edge case)
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  useEffect(() => {
+    if (!loading && !settingsLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setLoadingTimedOut(true), 10_000);
+    return () => clearTimeout(timer);
+  }, [loading, settingsLoading]);
+
   if (loading || settingsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <LoadingSpinner size="lg" />
+        {loadingTimedOut && (
+          <div className="text-center animate-fade-in">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              Taking longer than expected...
+            </p>
+            <button
+              onClick={() => {
+                // Clear caches and hard reload
+                if ('caches' in window) {
+                  caches.keys().then(names => {
+                    names.forEach(name => caches.delete(name));
+                  });
+                }
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors"
+            >
+              Reload App
+            </button>
+          </div>
+        )}
       </div>
     );
   }
