@@ -313,7 +313,7 @@ export default function StaffProducts() {
                       <h3 className="font-semibold text-gray-900 dark:text-gray-100">{product.name}</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{product.category}</p>
                     </div>
-                    <span className="text-lg font-bold text-primary-600 dark:text-primary-400">â‚±{product.price.toFixed(2)}</span>
+                    <span className="text-lg font-bold text-primary-600 dark:text-primary-400">₱{product.price.toFixed(2)}</span>
                   </div>
                   
                   {/* Stock & Availability Controls */}

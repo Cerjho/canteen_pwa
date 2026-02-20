@@ -340,7 +340,7 @@ export default function Profile() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                  â‚±{profile?.balance?.toFixed(2) || '0.00'}
+                  ₱{profile?.balance?.toFixed(2) || '0.00'}
                 </span>
                 <ChevronRight size={20} className="text-gray-400 dark:text-gray-500" />
               </div>

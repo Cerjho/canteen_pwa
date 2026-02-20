@@ -1,8 +1,5 @@
-import { Heart } from 'lucide-react';
+import { Heart, UtensilsCrossed } from 'lucide-react';
 import { useState } from 'react';
-
-// Default placeholder image for products
-const DEFAULT_PRODUCT_IMAGE = '/icons/icon-192.png';
 
 interface ProductCardProps {
   id: string;
@@ -28,7 +25,7 @@ export function ProductCard({
   onAddToCart
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
-  const imageSrc = imageError || !image_url ? DEFAULT_PRODUCT_IMAGE : image_url;
+  const hasImage = image_url && !imageError;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md hover:scale-[1.02] transition-all duration-200 relative">
@@ -49,13 +46,19 @@ export function ProductCard({
         </button>
       )}
       
-      <img
-        src={imageSrc}
-        alt={name}
-        className="w-full h-48 object-cover"
-        loading="lazy"
-        onError={() => setImageError(true)}
-      />
+      {hasImage ? (
+        <img
+          src={image_url}
+          alt={name}
+          className="w-full h-40 object-cover"
+          loading="lazy"
+          onError={() => setImageError(true)}
+        />
+      ) : (
+        <div className="w-full h-40 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-750 flex items-center justify-center">
+          <UtensilsCrossed size={48} className="text-primary-300 dark:text-gray-500" />
+        </div>
+      )}
       <div className="p-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 line-clamp-1">{name}</h3>
         <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{description}</p>
