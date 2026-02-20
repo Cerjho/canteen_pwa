@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, isToday, isTomorrow, parseISO, differenceInMinutes } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
@@ -98,20 +98,6 @@ function getPaymentTimeRemaining(paymentDueAt?: string): { minutes: number; seco
     expired: false, 
     text: `${minutes}:${seconds.toString().padStart(2, '0')} remaining`
   };
-}
-
-// Get estimated wait time
-function getEstimatedWait(status: string, createdAt: string): string {
-  const elapsed = differenceInMinutes(new Date(), new Date(createdAt));
-  if (status === 'pending') {
-    const remaining = Math.max(10 - elapsed, 0);
-    return remaining > 0 ? `~${remaining}min` : 'Soon';
-  }
-  if (status === 'preparing') {
-    const remaining = Math.max(5 - (elapsed % 10), 0);
-    return remaining > 0 ? `~${remaining}min` : 'Almost ready';
-  }
-  return 'Ready now!';
 }
 
 export default function ParentDashboard() {
@@ -392,6 +378,46 @@ export default function ParentDashboard() {
   const isLoading = activeTab === 'today' ? loadingToday : loadingScheduled;
   const orders = activeTab === 'today' ? todayOrders : scheduledOrders;
 
+  // Group orders by student + date for merged card display
+  const MEAL_PERIOD_SORT: Record<string, number> = { morning_snack: 0, lunch: 1, afternoon_snack: 2 };
+  const groupedOrders = useMemo(() => {
+    if (!orders) return [];
+    const groups = new Map<string, {
+      studentId: string;
+      studentName: string;
+      scheduledFor: string;
+      createdAt: string;
+      orders: Order[];
+      totalAmount: number;
+    }>();
+
+    for (const order of orders) {
+      const key = `${order.child?.id || 'unknown'}_${order.scheduled_for}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          studentId: order.child?.id || '',
+          studentName: `${order.child?.first_name || 'Unknown'} ${order.child?.last_name || 'Student'}`,
+          scheduledFor: order.scheduled_for,
+          createdAt: order.created_at,
+          orders: [],
+          totalAmount: 0,
+        });
+      }
+      const group = groups.get(key)!;
+      group.orders.push(order);
+      group.totalAmount += order.total_amount;
+    }
+
+    // Sort orders within each group by meal period
+    for (const group of groups.values()) {
+      group.orders.sort((a, b) =>
+        (MEAL_PERIOD_SORT[a.meal_period || 'lunch'] ?? 1) - (MEAL_PERIOD_SORT[b.meal_period || 'lunch'] ?? 1)
+      );
+    }
+
+    return Array.from(groups.values());
+  }, [orders]);
+
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <PullToRefresh onRefresh={handleRefresh} className="min-h-screen">
@@ -451,171 +477,204 @@ export default function ParentDashboard() {
 
           {isLoading ? (
             <LoadingSpinner size="lg" />
-          ) : orders && orders.length > 0 ? (
+          ) : groupedOrders.length > 0 ? (
             <div className="space-y-4">
-              {orders.map((order) => {
-                const status = getStatusDetails(order.status, order.payment_status);
-                const StatusIcon = status.icon;
+              {groupedOrders.map((group) => {
                 const isFutureOrder = activeTab === 'scheduled';
-                const isTimedOut = order.payment_status === 'timeout';
-                
+
+                // Overall card status based on most actionable sub-order
+                const hasReadyOrder = group.orders.some(o => o.status === 'ready');
+                const hasAwaitingPayment = group.orders.some(o =>
+                  o.status === 'awaiting_payment' || o.payment_status === 'awaiting_payment'
+                );
+                const hasTimedOut = group.orders.some(o => o.payment_status === 'timeout');
+                const hasPreparing = group.orders.some(o => o.status === 'preparing');
+
+                const primaryStatus = hasReadyOrder ? 'ready'
+                  : hasAwaitingPayment ? 'awaiting_payment'
+                  : hasPreparing ? 'preparing'
+                  : 'pending';
+                const overallStatus = getStatusDetails(primaryStatus);
+                const OverallIcon = overallStatus.icon;
+
+                const awaitingPaymentOrder = group.orders.find(o =>
+                  o.status === 'awaiting_payment' || o.payment_status === 'awaiting_payment'
+                );
+
                 return (
-                  <div 
-                    key={order.id} 
+                  <div
+                    key={`${group.studentId}_${group.scheduledFor}`}
                     className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 overflow-hidden transition-all ${
-                      isFutureOrder ? 'border-amber-200 dark:border-amber-800' : status.color
-                    } ${order.status === 'ready' ? 'animate-pulse-subtle ring-2 ring-green-400' : ''}`}
+                      isFutureOrder ? 'border-amber-200 dark:border-amber-800' : overallStatus.color
+                    } ${hasReadyOrder ? 'animate-pulse-subtle ring-2 ring-green-400' : ''}`}
                   >
                     {/* Progress Bar */}
                     {!isFutureOrder && (
                       <div className="h-1 bg-gray-100 dark:bg-gray-700">
-                        <div 
+                        <div
                           className={`h-full transition-all duration-500 ${
-                            order.status === 'pending' ? 'bg-gray-400' :
-                            order.status === 'preparing' ? 'bg-yellow-400' : 'bg-green-500'
+                            primaryStatus === 'pending' ? 'bg-gray-400' :
+                            primaryStatus === 'preparing' ? 'bg-yellow-400' : 'bg-green-500'
                           }`}
-                          style={{ width: `${status.progress}%` }}
+                          style={{ width: `${overallStatus.progress}%` }}
                         />
                       </div>
                     )}
-                    
+
                     {/* Status Banner */}
                     <div className={`px-4 py-3 flex items-center justify-between ${
-                      isFutureOrder ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : status.color
+                      isFutureOrder ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : overallStatus.color
                     }`}>
                       <div className="flex items-center gap-2">
                         {isFutureOrder ? (
                           <>
                             <Calendar size={20} />
-                            <span className="font-semibold">{getScheduledLabel(order.scheduled_for)}</span>
+                            <span className="font-semibold">{getScheduledLabel(group.scheduledFor)}</span>
                           </>
                         ) : (
                           <>
-                            <StatusIcon size={20} className={order.status === 'ready' ? 'animate-bounce' : ''} />
-                            <span className="font-semibold">{status.label}</span>
+                            <OverallIcon size={20} className={hasReadyOrder ? 'animate-bounce' : ''} />
+                            <span className="font-semibold">{overallStatus.label}</span>
                           </>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {!isFutureOrder && order.status !== 'ready' && (
-                          <span className="text-sm bg-white/50 dark:bg-black/20 px-2 py-0.5 rounded-full">
-                            {getEstimatedWait(order.status, order.created_at)}
-                          </span>
-                        )}
-                        <span className="text-sm">
-                          {isFutureOrder ? 'Advance Order' : status.message}
-                        </span>
-                      </div>
+                      <span className="text-sm">
+                        {isFutureOrder ? 'Advance Order' : overallStatus.message}
+                      </span>
                     </div>
-                    
+
                     {/* Ready Banner */}
-                    {order.status === 'ready' && (
+                    {hasReadyOrder && (
                       <div className="bg-green-500 text-white px-4 py-2 flex items-center justify-center gap-2">
                         <Sparkles size={16} />
-                        <span className="font-medium">Your order is ready for pickup!</span>
+                        <span className="font-medium">Order ready for pickup!</span>
                         <Sparkles size={16} />
                       </div>
                     )}
-                    
+
                     {/* Payment Countdown Banner */}
-                    {(order.status === 'awaiting_payment' || order.payment_status === 'awaiting_payment') && (
+                    {hasAwaitingPayment && awaitingPaymentOrder && (
                       <div className="bg-orange-500 text-white px-4 py-2 flex items-center justify-center gap-2">
                         <Timer size={16} className="animate-pulse" />
                         <span className="font-medium">
-                          Pay at counter: {getPaymentTimeRemaining(order.payment_due_at).text}
+                          Pay at counter: {getPaymentTimeRemaining(awaitingPaymentOrder.payment_due_at).text}
                         </span>
                       </div>
                     )}
-                    
+
                     {/* Timeout Banner */}
-                    {isTimedOut && (
+                    {hasTimedOut && (
                       <div className="bg-red-500 text-white px-4 py-2 flex items-center justify-center gap-2">
                         <XCircle size={16} />
                         <span className="font-medium">Payment expired - Order cancelled</span>
                       </div>
                     )}
-                    
+
                     <div className="p-4">
+                      {/* Student Header */}
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                            For {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                            For {group.studentName}
                           </h3>
                           <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {isFutureOrder 
-                              ? format(parseISO(order.scheduled_for), 'EEEE, MMMM d')
-                              : `Ordered at ${format(new Date(order.created_at), 'h:mm a')}`
+                            {isFutureOrder
+                              ? format(parseISO(group.scheduledFor), 'EEEE, MMMM d')
+                              : `Ordered at ${format(new Date(group.createdAt), 'h:mm a')}`
                             }
                           </p>
                         </div>
                         <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
-                          ₱{order.total_amount.toFixed(2)}
+                          ₱{group.totalAmount.toFixed(2)}
                         </span>
                       </div>
 
-                      {/* Meal Period Badge */}
-                      {order.meal_period && (
-                        <div className="inline-flex items-center gap-1 px-2.5 py-1 mb-3 rounded-full text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700">
-                          <span>{MEAL_PERIOD_ICONS[order.meal_period]}</span>
-                          <span>{MEAL_PERIOD_LABELS[order.meal_period]}</span>
-                        </div>
-                      )}
+                      {/* Meal Period Sections */}
+                      <div className="space-y-3">
+                        {group.orders.map((order) => {
+                          const mealStatus = getStatusDetails(order.status, order.payment_status);
+                          const MealStatusIcon = mealStatus.icon;
 
-                      {/* Order Notes */}
-                      {order.notes && (
-                        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2 mb-3">
-                          <p className="text-sm text-yellow-800 dark:text-yellow-300">📝 {order.notes}</p>
-                        </div>
-                      )}
+                          return (
+                            <div key={order.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                              {/* Meal Header */}
+                              <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50">
+                                <div className="flex items-center gap-2">
+                                  {order.meal_period && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+                                      {MEAL_PERIOD_ICONS[order.meal_period]} {MEAL_PERIOD_LABELS[order.meal_period]}
+                                    </span>
+                                  )}
+                                  {group.orders.length > 1 && (
+                                    <span className={`inline-flex items-center gap-1 text-xs ${
+                                      order.payment_status === 'timeout' ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'
+                                    }`}>
+                                      <MealStatusIcon size={12} />
+                                      {mealStatus.label}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                  ₱{order.total_amount.toFixed(2)}
+                                </span>
+                              </div>
 
-                      {/* Items List */}
-                      <div className="space-y-2 mb-4">
-                        {order.items.map((item) => (
-                          <div key={item.id} className="flex items-center gap-3">
-                            {item.product.image_url && (
-                              <img
-                                src={item.product.image_url}
-                                alt={item.product.name}
-                                className="w-10 h-10 rounded-lg object-cover"
-                              />
-                            )}
-                            <div className="flex-1">
-                              <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{item.product.name}</p>
+                              {/* Notes */}
+                              {order.notes && (
+                                <div className="mx-3 mt-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2">
+                                  <p className="text-sm text-yellow-800 dark:text-yellow-300">📝 {order.notes}</p>
+                                </div>
+                              )}
+
+                              {/* Items */}
+                              <div className="px-3 py-2 space-y-1.5">
+                                {order.items.map((item) => (
+                                  <div key={item.id} className="flex items-center gap-3">
+                                    {item.product.image_url && (
+                                      <img
+                                        src={item.product.image_url}
+                                        alt={item.product.name}
+                                        className="w-8 h-8 rounded-lg object-cover"
+                                      />
+                                    )}
+                                    <div className="flex-1">
+                                      <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{item.product.name}</p>
+                                    </div>
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">×{item.quantity}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Per-meal Action Buttons */}
+                              <div className="flex gap-2 px-3 py-2 border-t border-gray-100 dark:border-gray-700">
+                                <button
+                                  onClick={() => handleReorder(order)}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors"
+                                >
+                                  <RotateCcw size={14} />
+                                  <span className="text-xs font-medium">Reorder</span>
+                                </button>
+
+                                {(order.status === 'pending' || order.status === 'awaiting_payment') && (
+                                  <button
+                                    onClick={() => setShowCancelDialog(order.id)}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                  >
+                                    <X size={14} />
+                                    <span className="text-xs font-medium">Cancel</span>
+                                  </button>
+                                )}
+
+                                {order.status === 'ready' && (
+                                  <div className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                                    <MapPin size={14} />
+                                    <span className="text-xs font-medium">Pickup at Canteen</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">×{item.quantity}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                        {/* Reorder button - available for all orders */}
-                        <button
-                          onClick={() => handleReorder(order)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors"
-                        >
-                          <RotateCcw size={16} />
-                          <span className="text-sm font-medium">Reorder</span>
-                        </button>
-                        
-                        {/* Cancel button - for pending and awaiting_payment orders */}
-                        {(order.status === 'pending' || order.status === 'awaiting_payment') && (
-                          <button
-                            onClick={() => setShowCancelDialog(order.id)}
-                            className="flex-1 flex items-center justify-center gap-2 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                          >
-                            <X size={16} />
-                            <span className="text-sm font-medium">Cancel</span>
-                          </button>
-                        )}
-                        
-                        {/* Pickup location for ready orders */}
-                        {order.status === 'ready' && (
-                          <div className="flex-1 flex items-center justify-center gap-2 py-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                            <MapPin size={16} />
-                            <span className="text-sm font-medium">Pickup at Canteen</span>
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
