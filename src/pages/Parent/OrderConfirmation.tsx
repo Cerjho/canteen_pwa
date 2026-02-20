@@ -29,7 +29,7 @@ export default function OrderConfirmation() {
   // Online payment verification state
   const paymentResult = searchParams.get('payment'); // 'success' | 'cancelled'
   const orderIdParam = searchParams.get('order_id');
-  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'confirmed' | 'failed' | 'cancelled'>('idle');
+  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'confirmed' | 'failed' | 'cancelled' | 'unverified'>('idle');
   const [pollCount, setPollCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
@@ -87,8 +87,8 @@ export default function OrderConfirmation() {
         if (!cancelled) setPollCount(pollNum);
         await new Promise(r => setTimeout(r, 3000));
       }
-      // Max polls reached without confirmation — assume success, webhook may be slow
-      if (!cancelled) setVerificationStatus('confirmed');
+      // Max polls reached without confirmation — don't assume success
+      if (!cancelled) setVerificationStatus('unverified');
     };
     
     pollPayment();
@@ -282,6 +282,37 @@ export default function OrderConfirmation() {
         </div>
       );
     }
+
+    if (verificationStatus === 'unverified') {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4 pb-24">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto">
+                <Clock className="w-12 h-12 text-yellow-500" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Payment Verification Pending</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Your payment is still being verified. This may take a few minutes. Please check your order history for the latest status.
+            </p>
+            {orderIdParam && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-mono">
+                Order #{orderIdParam.slice(0, 8).toUpperCase()}
+              </p>
+            )}
+            <div className="space-y-3">
+              <Link to="/dashboard" className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+                Check Order Status <ArrowRight size={20} />
+              </Link>
+              <Link to="/menu" className="block w-full py-3 text-primary-600 dark:text-primary-400 font-medium hover:bg-primary-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                Continue Ordering
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   if (!state) return null;
@@ -359,7 +390,7 @@ export default function OrderConfirmation() {
               {isOnlineMethod ? (
                 <>
                   <Smartphone size={14} />
-                  {getPaymentMethodLabel(state.paymentMethod!)}
+                  {getPaymentMethodLabel(state.paymentMethod ?? 'gcash')}
                 </>
               ) : state.paymentMethod === 'cash' ? (
                 <>
@@ -420,7 +451,7 @@ export default function OrderConfirmation() {
         {isOnlineMethod && !state.isOffline && (
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6 text-left">
             <p className="text-sm text-blue-800 dark:text-blue-300">
-              <strong>🔄 Redirecting to {getPaymentMethodLabel(state.paymentMethod!)}...</strong> You'll be 
+              <strong>🔄 Redirecting to {getPaymentMethodLabel(state.paymentMethod ?? 'gcash')}...</strong> You'll be 
               taken to a secure payment page to complete your payment. Do not close this window.
             </p>
           </div>

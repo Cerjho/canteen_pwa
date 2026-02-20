@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, TouchEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame, Smartphone } from 'lucide-react';
 import { format, differenceInMinutes, isToday } from 'date-fns';
 import { supabase } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
@@ -11,6 +11,7 @@ import { SearchBar } from '../../components/SearchBar';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { playNotificationSound } from '../../utils/notificationSound';
 import { friendlyError } from '../../utils/friendlyError';
+import { getPaymentMethodLabel } from '../../services/payments';
 import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
@@ -1792,7 +1793,11 @@ export default function StaffDashboard() {
                               }`}>
                                 <div className="flex items-center justify-between flex-wrap gap-2">
                                   <div className="flex items-center gap-2">
-                                    <Banknote className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'} size={20} />
+                                    {['gcash', 'paymaya', 'card'].includes(order.payment_method) ? (
+                                      <Smartphone className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'} size={20} />
+                                    ) : (
+                                      <Banknote className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'} size={20} />
+                                    )}
                                     <span className={`text-sm font-medium ${
                                       isPaymentExpired(order.payment_due_at, order.payment_status)
                                         ? 'text-red-800 dark:text-red-300'
@@ -1800,7 +1805,7 @@ export default function StaffDashboard() {
                                     }`}>
                                       {isPaymentExpired(order.payment_due_at, order.payment_status)
                                         ? 'Payment expired - Order will be cancelled'
-                                        : `Cash payment pending - ₱${order.total_amount.toFixed(2)}`
+                                        : `${getPaymentMethodLabel(order.payment_method)} payment pending - ₱${order.total_amount.toFixed(2)}`
                                       }
                                     </span>
                                   </div>
@@ -1809,7 +1814,7 @@ export default function StaffDashboard() {
                                       <span className="px-3 py-1.5 bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium cursor-not-allowed">
                                         Expired
                                       </span>
-                                    ) : (
+                                    ) : order.payment_method === 'cash' ? (
                                       <>
                                         <button
                                           onClick={() => setShowCancelDialog(order.id)}
@@ -1823,6 +1828,18 @@ export default function StaffDashboard() {
                                         >
                                           Confirm Payment
                                         </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => setShowCancelDialog(order.id)}
+                                          className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-500"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium">
+                                          Awaiting online payment…
+                                        </span>
                                       </>
                                     )}
                                   </div>
@@ -2109,7 +2126,11 @@ export default function StaffDashboard() {
                     }`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Banknote className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'} size={20} />
+                          {['gcash', 'paymaya', 'card'].includes(order.payment_method) ? (
+                            <Smartphone className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'} size={20} />
+                          ) : (
+                            <Banknote className={isPaymentExpired(order.payment_due_at, order.payment_status) ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'} size={20} />
+                          )}
                           <span className={`text-sm font-medium ${
                             isPaymentExpired(order.payment_due_at, order.payment_status)
                               ? 'text-red-800 dark:text-red-300'
@@ -2117,7 +2138,7 @@ export default function StaffDashboard() {
                           }`}>
                             {isPaymentExpired(order.payment_due_at, order.payment_status)
                               ? 'Payment expired - Order will be cancelled'
-                              : `Cash payment pending - ₱${order.total_amount.toFixed(2)}`
+                              : `${getPaymentMethodLabel(order.payment_method)} payment pending - ₱${order.total_amount.toFixed(2)}`
                             }
                           </span>
                         </div>
@@ -2126,7 +2147,7 @@ export default function StaffDashboard() {
                             <span className="px-3 py-1.5 bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium cursor-not-allowed">
                               Expired
                             </span>
-                          ) : (
+                          ) : order.payment_method === 'cash' ? (
                             <>
                               <button
                                 onClick={() => setShowCancelDialog(order.id)}
@@ -2140,6 +2161,18 @@ export default function StaffDashboard() {
                               >
                                 Confirm Payment
                               </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => setShowCancelDialog(order.id)}
+                                className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-500"
+                              >
+                                Cancel
+                              </button>
+                              <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium">
+                                Awaiting online payment…
+                              </span>
                             </>
                           )}
                         </div>

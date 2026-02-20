@@ -1,10 +1,12 @@
 // Check Payment Status Edge Function
-// Simple DB lookup for frontend to poll payment status after PayMongo redirect
-// Does NOT call PayMongo API — webhook updates DB, this just reads it.
+// DB lookup for frontend to poll payment status after PayMongo redirect.
+// If DB still shows awaiting_payment for an online order, falls back to
+// querying PayMongo directly and self-heals the DB if payment was completed.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
+import { getCheckoutSession, resolvePaymentMethod } from '../_shared/paymongo.ts';
 
 serve(async (req) => {
   const origin = req.headers.get('Origin');
@@ -66,7 +68,7 @@ serve(async (req) => {
     if (orderId) {
       const { data: order, error: orderError } = await supabaseAdmin
         .from('orders')
-        .select('id, status, payment_status, payment_method, total_amount, parent_id')
+        .select('id, status, payment_status, payment_method, total_amount, parent_id, paymongo_checkout_id')
         .eq('id', orderId)
         .single();
 
@@ -83,6 +85,79 @@ serve(async (req) => {
           JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
+      }
+
+      // ── Fallback: If still awaiting_payment and has a PayMongo checkout, check PayMongo directly ──
+      if (
+        order.payment_status === 'awaiting_payment' &&
+        order.paymongo_checkout_id &&
+        ['gcash', 'paymaya', 'card', 'paymongo'].includes(order.payment_method)
+      ) {
+        try {
+          const checkout = await getCheckoutSession(order.paymongo_checkout_id);
+          const payments = checkout.attributes?.payments;
+          const firstPayment = payments?.[0];
+
+          if (firstPayment && firstPayment.attributes?.status === 'paid') {
+            // Payment was completed but webhook didn't update the DB — self-heal
+            const paymentId = firstPayment.id;
+            const resolvedMethod = resolvePaymentMethod(payments);
+
+            const { error: updateError } = await supabaseAdmin
+              .from('orders')
+              .update({
+                status: 'pending',
+                payment_status: 'paid',
+                paymongo_payment_id: paymentId,
+                payment_method: resolvedMethod,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', order.id)
+              .eq('payment_status', 'awaiting_payment'); // Optimistic lock
+
+            if (updateError) {
+              console.error('Fallback: Failed to update order:', order.id, updateError);
+            } else {
+              console.log('Fallback: Self-healed order', order.id, 'payment confirmed via PayMongo API');
+
+              // Also update/create the transaction record
+              const { data: existingTx } = await supabaseAdmin
+                .from('transactions')
+                .select('id')
+                .eq('order_id', order.id)
+                .eq('type', 'payment')
+                .eq('status', 'pending')
+                .single();
+
+              if (existingTx) {
+                await supabaseAdmin
+                  .from('transactions')
+                  .update({
+                    status: 'completed',
+                    method: resolvedMethod,
+                    reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
+                    paymongo_payment_id: paymentId,
+                    paymongo_checkout_id: order.paymongo_checkout_id,
+                  })
+                  .eq('id', existingTx.id);
+              }
+
+              return new Response(
+                JSON.stringify({
+                  order_id: order.id,
+                  payment_status: 'paid',
+                  order_status: 'pending',
+                  payment_method: resolvedMethod,
+                  total_amount: order.total_amount,
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+          }
+        } catch (paymongoError) {
+          // PayMongo API check failed — return DB status as-is, don't block the poll
+          console.error('Fallback: PayMongo API check failed for order', order.id, paymongoError);
+        }
       }
 
       return new Response(

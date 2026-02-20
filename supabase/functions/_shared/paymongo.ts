@@ -247,22 +247,42 @@ export async function verifyWebhookSignature(
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  // Compare live or test signature using constant-time comparison
-  const expected = parts['li'] || parts['te'];
-  if (!expected) {
+  // Compare signature — try both te (test) and li (live), accept if either matches
+  // In test mode, PayMongo sends valid 'te'; in live mode, valid 'li'
+  const testSig = parts['te'];
+  const liveSig = parts['li'];
+
+  if (!testSig && !liveSig) {
     console.error('No signature found in header');
     return false;
   }
 
   // Constant-time comparison to prevent timing attacks
-  if (computed.length !== expected.length) return false;
-  const computedBuf = new TextEncoder().encode(computed);
-  const expectedBuf = new TextEncoder().encode(expected);
-  let mismatch = 0;
-  for (let i = 0; i < computedBuf.length; i++) {
-    mismatch |= computedBuf[i] ^ expectedBuf[i];
+  const matchesSig = (expected: string): boolean => {
+    if (!expected || computed.length !== expected.length) return false;
+    const computedBuf = new TextEncoder().encode(computed);
+    const expectedBuf = new TextEncoder().encode(expected);
+    let mismatch = 0;
+    for (let i = 0; i < computedBuf.length; i++) {
+      mismatch |= computedBuf[i] ^ expectedBuf[i];
+    }
+    return mismatch === 0;
+  };
+
+  // Accept if either test or live signature matches
+  const isValid = matchesSig(testSig) || matchesSig(liveSig);
+
+  if (!isValid) {
+    console.error('Webhook signature mismatch', {
+      hasTestSig: !!testSig,
+      hasLiveSig: !!liveSig,
+      computedLength: computed.length,
+      testSigLength: testSig?.length,
+      liveSigLength: liveSig?.length,
+    });
   }
-  return mismatch === 0;
+
+  return isValid;
 }
 
 // ============================================
