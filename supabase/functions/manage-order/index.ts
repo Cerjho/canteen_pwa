@@ -335,8 +335,9 @@ serve(async (req) => {
           notes: reason ? `Cancelled: ${reason}` : 'Cancelled by staff/admin',
           updated_at: new Date().toISOString()
         };
-        // Set payment_status to refunded if refund will be applied
-        if (order.total_amount > 0) {
+        // Set payment_status to refunded only if the order was already paid
+        // For awaiting_payment orders, we don't set refunded since no money was collected
+        if (order.total_amount > 0 && order.payment_status === 'paid') {
           updateData.payment_status = 'refunded';
         }
 
@@ -352,50 +353,25 @@ serve(async (req) => {
           );
         }
 
-        // Restore stock
+        // Restore stock using atomic RPC
         const { data: orderItems } = await supabaseAdmin
           .from('order_items')
           .select('product_id, quantity')
           .eq('order_id', order_id);
 
-        let stockRestoreErrors: string[] = [];
         if (orderItems) {
           for (const item of orderItems) {
-            // Try RPC first
-            const { error: rpcError } = await supabaseAdmin.rpc('increment_stock', { 
+            await supabaseAdmin.rpc('increment_stock', { 
               p_product_id: item.product_id, 
               p_quantity: item.quantity 
-            });
-            
-            if (rpcError) {
-              // Fallback to direct update
-              const { data: product } = await supabaseAdmin
-                .from('products')
-                .select('stock_quantity')
-                .eq('id', item.product_id)
-                .single();
-              
-              if (product && product.stock_quantity !== null) {
-                const { error: updateError } = await supabaseAdmin
-                  .from('products')
-                  .update({ stock_quantity: product.stock_quantity + item.quantity })
-                  .eq('id', item.product_id);
-                
-                if (updateError) {
-                  stockRestoreErrors.push(`Failed to restore stock for product ${item.product_id}: ${updateError.message}`);
-                }
-              }
-            }
+            }).catch(err => console.error(`Stock restore failed for product ${item.product_id}:`, err));
           }
         }
-        
-        if (stockRestoreErrors.length > 0) {
-          console.error('Stock restoration errors:', stockRestoreErrors);
-        }
 
-        // Refund to wallet for all payment methods
+        // Refund to wallet only if order was actually paid
+        // (awaiting_payment cash orders haven't collected money yet)
         let refundApplied = false;
-        if (order.total_amount > 0) {
+        if (order.total_amount > 0 && order.payment_status === 'paid') {
           // Get or create wallet for parent
           let wallet = null;
           const { data: existingWallet } = await supabaseAdmin

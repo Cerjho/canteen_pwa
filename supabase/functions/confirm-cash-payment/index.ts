@@ -182,12 +182,11 @@ serve(async (req) => {
       );
     }
 
-    // Update transaction record
+    // Update transaction record (transactions table has no updated_at column)
     await supabaseAdmin
       .from('transactions')
       .update({ 
-        status: 'completed',
-        updated_at: new Date().toISOString()
+        status: 'completed'
       })
       .eq('order_id', order_id)
       .eq('type', 'payment');

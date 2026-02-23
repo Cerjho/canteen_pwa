@@ -62,7 +62,7 @@ serve(async (req) => {
     // Previously only cleaned up cash orders, causing stock leaks for abandoned online checkouts
     const { data: expiredOrders, error: fetchError } = await supabaseAdmin
       .from('orders')
-      .select('id, parent_id, total_amount, payment_due_at, payment_method')
+      .select('id, parent_id, total_amount, payment_due_at, payment_method, payment_status')
       .eq('payment_status', 'awaiting_payment')
       .lt('payment_due_at', now);
 
@@ -103,7 +103,7 @@ serve(async (req) => {
           continue;
         }
 
-        // Restore stock for cancelled order
+        // Restore stock for cancelled order using atomic RPC
         const { data: orderItems } = await supabaseAdmin
           .from('order_items')
           .select('product_id, quantity')
@@ -113,31 +113,54 @@ serve(async (req) => {
           for (const item of orderItems) {
             await supabaseAdmin.rpc('increment_stock', {
               p_product_id: item.product_id,
-              p_quantity: item.quantity
-            }).catch(async () => {
-              // Fallback: direct update if RPC doesn't exist
-              const { data: product } = await supabaseAdmin
-                .from('products')
-                .select('stock_quantity')
-                .eq('id', item.product_id)
-                .single();
-              
-              if (product) {
-                await supabaseAdmin
-                  .from('products')
-                  .update({ stock_quantity: product.stock_quantity + item.quantity })
-                  .eq('id', item.product_id);
-              }
-            });
+              p_quantity: item.quantity,
+            }).catch(err => console.error(`[CLEANUP] Stock restore failed for product ${item.product_id}:`, err));
+          }
+        }
+
+        // Refund wallet if order was paid with balance
+        // (Balance is deducted immediately at order creation, must be returned on timeout)
+        if (order.payment_method === 'balance' && order.total_amount > 0) {
+          const refundAmount = Number(order.total_amount);
+          const { data: wallet } = await supabaseAdmin
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', order.parent_id)
+            .single();
+
+          if (wallet) {
+            const currentBalance = Number(wallet.balance);
+            const { error: refundError } = await supabaseAdmin
+              .from('wallets')
+              .update({ balance: currentBalance + refundAmount, updated_at: now })
+              .eq('user_id', order.parent_id)
+              .eq('balance', wallet.balance); // Optimistic lock
+
+            if (!refundError) {
+              // Record refund transaction
+              await supabaseAdmin.from('transactions').insert({
+                parent_id: order.parent_id,
+                order_id: order.id,
+                type: 'refund',
+                amount: refundAmount,
+                method: 'balance',
+                status: 'completed',
+                reference_id: `TIMEOUT-${order.id.substring(0, 8)}`,
+              });
+              console.log(`[CLEANUP] Refunded ₱${refundAmount} to wallet for balance-paid order ${order.id}`);
+            } else {
+              console.error(`[CLEANUP] CRITICAL: Failed to refund wallet for order ${order.id}:`, refundError);
+              errors.push(`Order ${order.id}: Wallet refund failed`);
+            }
           }
         }
 
         // Update transaction status to 'failed' (valid per CHECK constraint)
-        // Note: transactions table has no updated_at column
         await supabaseAdmin
           .from('transactions')
           .update({ status: 'failed' })
-          .eq('order_id', order.id);
+          .eq('order_id', order.id)
+          .eq('type', 'payment');
 
         cancelledOrders.push(order.id);
         console.log(`[CLEANUP] Cancelled order ${order.id} (${order.payment_method || 'unknown'}) due to payment timeout`);

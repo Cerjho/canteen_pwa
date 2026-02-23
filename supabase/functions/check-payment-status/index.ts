@@ -68,7 +68,7 @@ serve(async (req) => {
     if (orderId) {
       const { data: order, error: orderError } = await supabaseAdmin
         .from('orders')
-        .select('id, status, payment_status, payment_method, total_amount, parent_id, paymongo_checkout_id')
+        .select('id, status, payment_status, payment_method, total_amount, parent_id, paymongo_checkout_id, payment_group_id')
         .eq('id', orderId)
         .single();
 
@@ -103,28 +103,30 @@ serve(async (req) => {
             const paymentId = firstPayment.id;
             const resolvedMethod = resolvePaymentMethod(payments);
 
-            const { error: updateError } = await supabaseAdmin
-              .from('orders')
-              .update({
-                status: 'pending',
-                payment_status: 'paid',
-                paymongo_payment_id: paymentId,
-                payment_method: resolvedMethod,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', order.id)
-              .eq('payment_status', 'awaiting_payment'); // Optimistic lock
+            // Helper to self-heal a single order
+            const selfHealOrder = async (healOrderId: string) => {
+              const { error: updateError } = await supabaseAdmin
+                .from('orders')
+                .update({
+                  status: 'pending',
+                  payment_status: 'paid',
+                  paymongo_payment_id: paymentId,
+                  payment_method: resolvedMethod,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', healOrderId)
+                .eq('payment_status', 'awaiting_payment'); // Optimistic lock
 
-            if (updateError) {
-              console.error('Fallback: Failed to update order:', order.id, updateError);
-            } else {
-              console.log('Fallback: Self-healed order', order.id, 'payment confirmed via PayMongo API');
+              if (updateError) {
+                console.error('Fallback: Failed to update order:', healOrderId, updateError);
+                return;
+              }
 
-              // Also update/create the transaction record
+              // Update/create transaction record
               const { data: existingTx } = await supabaseAdmin
                 .from('transactions')
                 .select('id')
-                .eq('order_id', order.id)
+                .eq('order_id', healOrderId)
                 .eq('type', 'payment')
                 .eq('status', 'pending')
                 .single();
@@ -142,17 +144,39 @@ serve(async (req) => {
                   .eq('id', existingTx.id);
               }
 
-              return new Response(
-                JSON.stringify({
-                  order_id: order.id,
-                  payment_status: 'paid',
-                  order_status: 'pending',
-                  payment_method: resolvedMethod,
-                  total_amount: order.total_amount,
-                }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-              );
+              console.log('Fallback: Self-healed order', healOrderId, 'payment confirmed via PayMongo API');
+            };
+
+            // Self-heal this order
+            await selfHealOrder(order.id);
+
+            // Also self-heal batch siblings if this is a batch payment
+            if (order.payment_group_id) {
+              const { data: siblings } = await supabaseAdmin
+                .from('orders')
+                .select('id')
+                .eq('payment_group_id', order.payment_group_id)
+                .eq('payment_status', 'awaiting_payment')
+                .neq('id', order.id);
+
+              if (siblings && siblings.length > 0) {
+                console.log('Fallback: Self-healing', siblings.length, 'batch siblings for group', order.payment_group_id);
+                for (const sibling of siblings) {
+                  await selfHealOrder(sibling.id);
+                }
+              }
             }
+
+            return new Response(
+              JSON.stringify({
+                order_id: order.id,
+                payment_status: 'paid',
+                order_status: 'pending',
+                payment_method: resolvedMethod,
+                total_amount: order.total_amount,
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
           }
         } catch (paymongoError) {
           // PayMongo API check failed — return DB status as-is, don't block the poll

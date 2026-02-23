@@ -495,34 +495,50 @@ serve(async (req) => {
       }
     }
 
-    // Process order in transaction using RPC
-    // First, deduct stock for all items
+    // Deduct stock atomically using RPC, with rollback on partial failure
+    const reservedProducts: Array<{ product_id: string; quantity: number }> = [];
     for (const item of items) {
-      const product = productMap.get(item.product_id)!;
-      const { error: stockError } = await supabaseAdmin
-        .from('products')
-        .update({ stock_quantity: product.stock_quantity - item.quantity })
-        .eq('id', item.product_id)
-        .gte('stock_quantity', item.quantity); // Optimistic lock
+      const { error: stockError } = await supabaseAdmin.rpc('decrement_stock', {
+        p_product_id: item.product_id,
+        p_quantity: item.quantity,
+      });
 
       if (stockError) {
-        // Rollback would happen here in production with proper transaction
+        console.error('Stock deduction failed:', item.product_id, stockError);
+        // Rollback all previously reserved stock
+        for (const reserved of reservedProducts) {
+          await supabaseAdmin.rpc('increment_stock', {
+            p_product_id: reserved.product_id,
+            p_quantity: reserved.quantity,
+          }).catch(err => console.error('Rollback failed for', reserved.product_id, err));
+        }
         return new Response(
           JSON.stringify({ 
             error: 'STOCK_UPDATE_FAILED', 
-            message: 'Failed to update stock, please retry',
+            message: `Failed to reserve stock for '${productMap.get(item.product_id)?.name}'. Please retry.`,
             product_id: item.product_id
           }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      reservedProducts.push({ product_id: item.product_id, quantity: item.quantity });
     }
+
+    // Helper to rollback all reserved stock
+    const rollbackStock = async () => {
+      for (const reserved of reservedProducts) {
+        await supabaseAdmin.rpc('increment_stock', {
+          p_product_id: reserved.product_id,
+          p_quantity: reserved.quantity,
+        }).catch(err => console.error('Rollback failed for', reserved.product_id, err));
+      }
+    };
 
     // Determine payment status and order status based on payment method
     // Cash: awaiting_payment until cashier confirms, with timeout
     // Balance: paid immediately, order goes to pending
     const isCashPayment = payment_method === 'cash';
-    const CASH_PAYMENT_TIMEOUT_MINUTES = 15; // 15 minutes to pay at cashier
+    const CASH_PAYMENT_TIMEOUT_MINUTES = 240; // 4 hours to pay at cashier (configurable)
     
     const paymentStatus = isCashPayment ? 'awaiting_payment' : 'paid';
     const orderStatus = isCashPayment ? 'awaiting_payment' : 'pending';
@@ -550,8 +566,8 @@ serve(async (req) => {
       .single();
 
     if (orderError || !order) {
-      // In production, rollback stock updates
       console.error('Order insert error:', orderError);
+      await rollbackStock();
       return new Response(
         JSON.stringify({ error: 'ORDER_CREATION_FAILED', message: 'Failed to create order' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -572,7 +588,9 @@ serve(async (req) => {
 
     if (itemsError) {
       console.error('Order items insert error:', itemsError);
-      // In production, rollback order and stock updates
+      // Rollback: delete order and restore stock
+      await supabaseAdmin.from('orders').delete().eq('id', order.id);
+      await rollbackStock();
       return new Response(
         JSON.stringify({ error: 'ORDER_ITEMS_FAILED', message: 'Failed to create order items' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -593,17 +611,10 @@ serve(async (req) => {
 
       if (balanceError || !balanceResult) {
         console.error('Balance deduction error:', balanceError);
-        // Rollback: restore stock for all items
-        for (const item of items) {
-          const product = productMap.get(item.product_id)!;
-          await supabaseAdmin
-            .from('products')
-            .update({ stock_quantity: product.stock_quantity })
-            .eq('id', item.product_id);
-        }
-        // Delete the order
+        // Rollback: restore stock and delete order
         await supabaseAdmin.from('order_items').delete().eq('order_id', order.id);
         await supabaseAdmin.from('orders').delete().eq('id', order.id);
+        await rollbackStock();
         
         return new Response(
           JSON.stringify({ error: 'BALANCE_DEDUCTION_FAILED', message: 'Failed to deduct balance. Balance may have changed. Please retry.' }),

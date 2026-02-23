@@ -37,7 +37,7 @@ DROP VIEW IF EXISTS students_with_parents;
 -- ============================================
 
 DO $$ BEGIN
-  CREATE TYPE payment_status AS ENUM ('awaiting_payment', 'paid', 'timeout', 'refunded');
+  CREATE TYPE payment_status AS ENUM ('awaiting_payment', 'paid', 'timeout', 'refunded', 'failed');
 EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_due_at TIMESTAMPTZ,
   paymongo_checkout_id TEXT,
   paymongo_payment_id TEXT,
+  payment_group_id UUID,
   notes TEXT,
   scheduled_for DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -400,6 +401,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_paymongo_checkout_id
   ON orders(paymongo_checkout_id) WHERE paymongo_checkout_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_paymongo_payment_id
   ON orders(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_payment_group
+  ON orders(payment_group_id) WHERE payment_group_id IS NOT NULL;
 
 -- topup_sessions
 CREATE INDEX IF NOT EXISTS idx_topup_sessions_parent_id ON topup_sessions(parent_id);
@@ -894,6 +897,84 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Atomic stock increment (for order cancellation / refund)
+CREATE OR REPLACE FUNCTION increment_stock(p_product_id UUID, p_quantity INTEGER)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE products
+  SET stock_quantity = stock_quantity + p_quantity
+  WHERE id = p_product_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Product % not found', p_product_id;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Atomic stock decrement with row lock (for order creation)
+CREATE OR REPLACE FUNCTION decrement_stock(p_product_id UUID, p_quantity INTEGER)
+RETURNS VOID AS $$
+DECLARE
+  current_stock INTEGER;
+BEGIN
+  SELECT stock_quantity INTO current_stock
+  FROM products
+  WHERE id = p_product_id
+  FOR UPDATE;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Product % not found', p_product_id;
+  END IF;
+  
+  IF current_stock < p_quantity THEN
+    RAISE EXCEPTION 'Insufficient stock for product %. Available: %, Requested: %',
+      p_product_id, current_stock, p_quantity;
+  END IF;
+  
+  UPDATE products
+  SET stock_quantity = stock_quantity - p_quantity
+  WHERE id = p_product_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION increment_stock(UUID, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION decrement_stock(UUID, INTEGER) TO authenticated;
+
+-- Order status transition validation
+CREATE OR REPLACE FUNCTION validate_order_status_transition()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.status = NEW.status THEN
+    RETURN NEW;
+  END IF;
+  CASE OLD.status
+    WHEN 'awaiting_payment' THEN
+      IF NEW.status NOT IN ('pending', 'cancelled') THEN
+        RAISE EXCEPTION 'Invalid transition from awaiting_payment to %', NEW.status;
+      END IF;
+    WHEN 'pending' THEN
+      IF NEW.status NOT IN ('preparing', 'cancelled') THEN
+        RAISE EXCEPTION 'Invalid transition from pending to %', NEW.status;
+      END IF;
+    WHEN 'preparing' THEN
+      IF NEW.status NOT IN ('ready', 'cancelled') THEN
+        RAISE EXCEPTION 'Invalid transition from preparing to %', NEW.status;
+      END IF;
+    WHEN 'ready' THEN
+      IF NEW.status NOT IN ('completed', 'cancelled') THEN
+        RAISE EXCEPTION 'Invalid transition from ready to %', NEW.status;
+      END IF;
+    WHEN 'completed' THEN
+      RAISE EXCEPTION 'Cannot transition from completed status';
+    WHEN 'cancelled' THEN
+      RAISE EXCEPTION 'Cannot transition from cancelled status';
+    ELSE
+      NULL;
+  END CASE;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================
 -- TRIGGERS
 -- ============================================
@@ -954,6 +1035,13 @@ CREATE TRIGGER audit_orders_status
   FOR EACH ROW
   WHEN (OLD.status IS DISTINCT FROM NEW.status)
   EXECUTE FUNCTION log_audit_action();
+
+-- Order status transition validation trigger
+DROP TRIGGER IF EXISTS validate_order_status_trigger ON orders;
+CREATE TRIGGER validate_order_status_trigger
+  BEFORE UPDATE OF status ON orders
+  FOR EACH ROW
+  EXECUTE FUNCTION validate_order_status_transition();
 
 -- Cart validation triggers
 DROP TRIGGER IF EXISTS validate_cart_item_date_trigger ON cart_items;

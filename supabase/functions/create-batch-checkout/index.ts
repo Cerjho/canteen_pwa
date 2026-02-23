@@ -344,25 +344,39 @@ serve(async (req) => {
       lineItems.push({ ...item, currency: 'PHP' });
     }
 
-    // ── Reserve stock (aggregate) ──
+    // ── Reserve stock atomically using RPC ──
+    const reservedProducts: Array<{ product_id: string; quantity: number }> = [];
     for (const [productId, demand] of totalDemand) {
-      const product = productMap.get(productId)!;
-      const { error: stockError } = await supabaseAdmin
-        .from('products')
-        .update({ stock_quantity: product.stock_quantity - demand })
-        .eq('id', productId)
-        .gte('stock_quantity', demand);
+      const { error: stockError } = await supabaseAdmin.rpc('decrement_stock', {
+        p_product_id: productId,
+        p_quantity: demand,
+      });
 
       if (stockError) {
-        // Rollback stock already reserved
-        for (const [pid] of totalDemand) {
-          if (pid === productId) break;
-          const p = productMap.get(pid)!;
-          await supabaseAdmin.from('products').update({ stock_quantity: p.stock_quantity }).eq('id', pid);
+        console.error('Stock reservation failed:', productId, stockError);
+        // Rollback previously reserved stock
+        for (const reserved of reservedProducts) {
+          await supabaseAdmin.rpc('increment_stock', {
+            p_product_id: reserved.product_id,
+            p_quantity: reserved.quantity,
+          }).catch(err => console.error('Rollback failed for', reserved.product_id, err));
         }
-        return errorResponse(corsHeaders, 409, 'STOCK_UPDATE_FAILED', 'Failed to reserve stock, please retry');
+        const product = productMap.get(productId);
+        return errorResponse(corsHeaders, 409, 'STOCK_UPDATE_FAILED',
+          `Failed to reserve stock for '${product?.name}'. Please retry.`);
       }
+      reservedProducts.push({ product_id: productId, quantity: demand });
     }
+
+    // Helper to rollback all reserved stock
+    const rollbackStock = async () => {
+      for (const reserved of reservedProducts) {
+        await supabaseAdmin.rpc('increment_stock', {
+          p_product_id: reserved.product_id,
+          p_quantity: reserved.quantity,
+        }).catch(err => console.error('Stock rollback failed for', reserved.product_id, err));
+      }
+    };
 
     // ── Create all orders in DB ──
     const paymentGroupId = crypto.randomUUID();
@@ -404,15 +418,12 @@ serve(async (req) => {
       if (orderError || !dbOrder) {
         console.error('Order insert error:', orderError);
         // Rollback: restore stock, delete already created orders
-        for (const [pid, demand] of totalDemand) {
-          const p = productMap.get(pid)!;
-          await supabaseAdmin.from('products').update({ stock_quantity: p.stock_quantity }).eq('id', pid);
-        }
         for (const oid of createdOrderIds) {
           await supabaseAdmin.from('order_items').delete().eq('order_id', oid);
           await supabaseAdmin.from('transactions').delete().eq('order_id', oid);
           await supabaseAdmin.from('orders').delete().eq('id', oid);
         }
+        await rollbackStock();
         return errorResponse(corsHeaders, 500, 'ORDER_CREATION_FAILED', 'Failed to create order');
       }
 
@@ -471,24 +482,21 @@ serve(async (req) => {
         cancelUrl,
       });
 
-      // Save checkout ID on the first order (webhook uses metadata.payment_group_id)
+      // Save checkout ID on ALL orders in the batch (not just the first)
       await supabaseAdmin
         .from('orders')
         .update({ paymongo_checkout_id: checkoutSession.id })
-        .eq('id', createdOrderIds[0]);
+        .eq('payment_group_id', paymentGroupId);
 
     } catch (paymongoErr) {
       console.error('PayMongo checkout creation failed:', paymongoErr);
       // Rollback everything
-      for (const [pid, demand] of totalDemand) {
-        const p = productMap.get(pid)!;
-        await supabaseAdmin.from('products').update({ stock_quantity: p.stock_quantity }).eq('id', pid);
-      }
       for (const oid of createdOrderIds) {
         await supabaseAdmin.from('order_items').delete().eq('order_id', oid);
         await supabaseAdmin.from('transactions').delete().eq('order_id', oid);
         await supabaseAdmin.from('orders').delete().eq('id', oid);
       }
+      await rollbackStock();
       return errorResponse(corsHeaders, 502, 'PAYMENT_ERROR', 'Online payments are temporarily unavailable. Please use Cash or Wallet Balance.');
     }
 

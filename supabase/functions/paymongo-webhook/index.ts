@@ -524,58 +524,38 @@ async function handlePaymentFailed(
 
   if (!metadata) return;
 
-  if (metadata.type === 'order' && metadata.order_id) {
-    console.log('Payment failed for order:', metadata.order_id);
+  if (metadata.type === 'order') {
+    const paymentGroupId = metadata.payment_group_id;
+    const orderId = metadata.order_id;
 
-    // Mark order as failed so parent sees it immediately instead of waiting for timeout
-    const { error: updateError } = await supabaseAdmin
-      .from('orders')
-      .update({
-        status: 'cancelled',
-        payment_status: 'failed',
-        updated_at: new Date().toISOString(),
-        notes: 'Payment failed via PayMongo',
-      })
-      .eq('id', metadata.order_id)
-      .eq('payment_status', 'awaiting_payment'); // Optimistic lock
+    // ── Batch: cancel ALL orders in the payment group ──
+    if (paymentGroupId) {
+      console.log('Payment failed for batch group:', paymentGroupId);
 
-    if (!updateError) {
-      // Restore stock for the failed order
-      const { data: orderItems } = await supabaseAdmin
-        .from('order_items')
-        .select('product_id, quantity')
-        .eq('order_id', metadata.order_id);
+      const { data: groupOrders, error: groupError } = await supabaseAdmin
+        .from('orders')
+        .select('id, status, payment_status')
+        .eq('payment_group_id', paymentGroupId)
+        .eq('payment_status', 'awaiting_payment');
 
-      if (orderItems) {
-        for (const item of orderItems) {
-          await supabaseAdmin.rpc('increment_stock', {
-            p_product_id: item.product_id,
-            p_quantity: item.quantity,
-          }).catch(async () => {
-            // Fallback: direct update if RPC doesn't exist
-            const { data: product } = await supabaseAdmin
-              .from('products')
-              .select('stock_quantity')
-              .eq('id', item.product_id)
-              .single();
-            if (product) {
-              await supabaseAdmin
-                .from('products')
-                .update({ stock_quantity: product.stock_quantity + item.quantity })
-                .eq('id', item.product_id);
-            }
-          });
+      if (groupError || !groupOrders || groupOrders.length === 0) {
+        console.error('No awaiting orders found for failed payment group:', paymentGroupId, groupError);
+        // Fall through to single-order handling
+      } else {
+        let cancelledCount = 0;
+        for (const order of groupOrders) {
+          await cancelFailedOrder(supabaseAdmin, order.id);
+          cancelledCount++;
         }
+        console.log(`Batch payment failure: cancelled ${cancelledCount}/${groupOrders.length} orders for group ${paymentGroupId}`);
+        return;
       }
+    }
 
-      // Update transaction to failed
-      await supabaseAdmin
-        .from('transactions')
-        .update({ status: 'failed' })
-        .eq('order_id', metadata.order_id)
-        .eq('status', 'pending');
-
-      console.log('Order cancelled due to payment failure:', metadata.order_id);
+    // ── Single order fallback ──
+    if (orderId) {
+      console.log('Payment failed for order:', orderId);
+      await cancelFailedOrder(supabaseAdmin, orderId);
     }
   } else if (metadata.type === 'topup' && metadata.topup_session_id) {
     console.log('Payment failed for topup:', metadata.topup_session_id);
@@ -586,6 +566,55 @@ async function handlePaymentFailed(
       .eq('id', metadata.topup_session_id)
       .eq('status', 'pending');
   }
+}
+
+/**
+ * Cancel a failed order: update status, restore stock, mark transaction failed.
+ * Used by both single-order and batch failure paths.
+ */
+async function cancelFailedOrder(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  orderId: string,
+) {
+  const { error: updateError } = await supabaseAdmin
+    .from('orders')
+    .update({
+      status: 'cancelled',
+      payment_status: 'failed',
+      updated_at: new Date().toISOString(),
+      notes: 'Payment failed via PayMongo',
+    })
+    .eq('id', orderId)
+    .eq('payment_status', 'awaiting_payment'); // Optimistic lock
+
+  if (updateError) {
+    console.error('Failed to cancel order:', orderId, updateError);
+    return;
+  }
+
+  // Restore stock using atomic RPC
+  const { data: orderItems } = await supabaseAdmin
+    .from('order_items')
+    .select('product_id, quantity')
+    .eq('order_id', orderId);
+
+  if (orderItems) {
+    for (const item of orderItems) {
+      await supabaseAdmin.rpc('increment_stock', {
+        p_product_id: item.product_id,
+        p_quantity: item.quantity,
+      }).catch(err => console.error('Stock restore failed for', item.product_id, err));
+    }
+  }
+
+  // Update transaction to failed
+  await supabaseAdmin
+    .from('transactions')
+    .update({ status: 'failed' })
+    .eq('order_id', orderId)
+    .eq('status', 'pending');
+
+  console.log('Order cancelled due to payment failure:', orderId);
 }
 
 async function handlePaymentRefunded(
