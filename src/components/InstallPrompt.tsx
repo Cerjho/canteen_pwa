@@ -11,9 +11,10 @@ interface NavigatorStandalone extends Navigator {
   standalone?: boolean;
 }
 
-// Extend Window for legacy IE/Edge MSStream
+// Extend Window for legacy IE/Edge MSStream and PWA install prompt
 interface WindowWithMSStream extends Window {
   MSStream?: unknown;
+  __pwaInstallPrompt?: BeforeInstallPromptEvent | null;
 }
 
 export function InstallPrompt() {
@@ -43,7 +44,14 @@ export function InstallPrompt() {
       }
     }
 
-    // Listen for the install prompt event
+    // Check for globally captured install prompt (fires before React loads)
+    if (win.__pwaInstallPrompt) {
+      setDeferredPrompt(win.__pwaInstallPrompt);
+      setShowBanner(true);
+      win.__pwaInstallPrompt = null; // Clear it so we don't use it again
+    }
+
+    // Listen for the install prompt event (in case it fires later)
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);

@@ -8,6 +8,13 @@
     <meta name="theme-color" content="#F9FAFB" id="dynamic-theme-color" />
     <script>
       (function() {
+        // Capture PWA install prompt before React loads
+        window.__pwaInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+          e.preventDefault();
+          window.__pwaInstallPrompt = e;
+        });
+
         // Centralised theme helper — sets CSS vars, meta tag, and dark class
         window.__applyTheme = function(t) {
           var d = document.documentElement;
