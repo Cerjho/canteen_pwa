@@ -232,6 +232,7 @@ export async function createBatchOrder(batchData: CreateBatchOrderRequest): Prom
         payment_method: batchData.payment_method,
         notes: batchData.notes,
         scheduled_for: order.scheduled_for,
+        meal_period: order.meal_period,
       });
     }
     return {

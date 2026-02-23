@@ -15,6 +15,7 @@ interface QueuedOrder {
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  meal_period?: string;
   queued_at: Date;
   retry_count: number;
   last_error?: string;
@@ -176,7 +177,8 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
           items: order.items,
           payment_method: order.payment_method,
           notes: order.notes,
-          scheduled_for: order.scheduled_for
+          scheduled_for: order.scheduled_for,
+          meal_period: order.meal_period
         }
       });
 
@@ -308,7 +310,8 @@ export async function retryFailedOrder(clientOrderId: string): Promise<void> {
       items: orderToRetry.items,
       payment_method: orderToRetry.payment_method,
       notes: orderToRetry.notes,
-      scheduled_for: orderToRetry.scheduled_for
+      scheduled_for: orderToRetry.scheduled_for,
+      meal_period: orderToRetry.meal_period
     });
 
     // Remove from failed queue
