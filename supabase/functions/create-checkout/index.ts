@@ -379,15 +379,26 @@ serve(async (req) => {
       console.error('Order items insert error:', itemsError);
     }
 
-    // ── Create pending transaction ──
-    await supabaseAdmin.from('transactions').insert({
-      parent_id,
-      order_id: order.id,
-      type: 'payment',
-      amount: totalAmount,
-      method: payment_method,
-      status: 'pending',
-    });
+    // ── Create pending payment record (payment-centric model) ──
+    const { data: payment } = await supabaseAdmin
+      .from('payments')
+      .insert({
+        parent_id,
+        type: 'payment',
+        amount_total: totalAmount,
+        method: payment_method,
+        status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (payment) {
+      await supabaseAdmin.from('payment_allocations').insert({
+        payment_id: payment.id,
+        order_id: order.id,
+        allocated_amount: totalAmount,
+      });
+    }
 
     // ── Create PayMongo Checkout Session ──
     let checkoutSession;
@@ -422,7 +433,10 @@ serve(async (req) => {
         await supabaseAdmin.from('products').update({ stock_quantity: product.stock_quantity }).eq('id', item.product_id);
       }
       await supabaseAdmin.from('order_items').delete().eq('order_id', order.id);
-      await supabaseAdmin.from('transactions').delete().eq('order_id', order.id);
+      if (payment) {
+        await supabaseAdmin.from('payment_allocations').delete().eq('payment_id', payment.id);
+        await supabaseAdmin.from('payments').delete().eq('id', payment.id);
+      }
       await supabaseAdmin.from('orders').delete().eq('id', order.id);
 
       return new Response(

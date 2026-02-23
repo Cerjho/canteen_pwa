@@ -448,19 +448,36 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
     }
 
-    // Build all transaction rows for batch insert
-    const allTransactions = createdOrders.map(o => ({
-      parent_id,
-      order_id: o.id,
-      type: 'payment',
-      amount: o.total_amount,
-      method: payment_method,
-      status: 'pending',
-    }));
+    // Insert ONE pending payment for the entire batch (payment-centric model)
+    const { data: payment, error: paymentError } = await supabaseAdmin
+      .from('payments')
+      .insert({
+        parent_id,
+        type: 'payment',
+        amount_total: grandTotal,
+        method: payment_method,
+        status: 'pending',
+        payment_group_id: paymentGroupId,
+      })
+      .select('id')
+      .single();
 
-    const { error: txError } = await supabaseAdmin.from('transactions').insert(allTransactions);
-    if (txError) {
-      console.error('Batch transactions insert error (non-fatal):', txError);
+    if (paymentError || !payment) {
+      console.error('Payment insert error (non-fatal):', paymentError);
+    } else {
+      // Link payment to each order via allocations
+      const allAllocations = createdOrders.map(o => ({
+        payment_id: payment.id,
+        order_id: o.id,
+        allocated_amount: o.total_amount,
+      }));
+
+      const { error: allocError } = await supabaseAdmin
+        .from('payment_allocations')
+        .insert(allAllocations);
+      if (allocError) {
+        console.error('Payment allocations insert error (non-fatal):', allocError);
+      }
     }
 
     // ── Create SINGLE PayMongo Checkout Session for all orders ──
@@ -502,7 +519,10 @@ serve(async (req) => {
       console.error('PayMongo checkout creation failed:', paymongoErr);
       // Rollback everything using batch deletes
       await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
-      await supabaseAdmin.from('transactions').delete().in('order_id', createdOrderIds);
+      if (payment) {
+        await supabaseAdmin.from('payment_allocations').delete().eq('payment_id', payment.id);
+        await supabaseAdmin.from('payments').delete().eq('id', payment.id);
+      }
       await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
       await rollbackStock();
       return errorResponse(corsHeaders, 502, 'PAYMENT_ERROR', 'Online payments are temporarily unavailable. Please use Cash or Wallet Balance.');

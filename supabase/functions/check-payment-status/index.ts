@@ -122,26 +122,25 @@ serve(async (req) => {
                 return;
               }
 
-              // Update/create transaction record
-              const { data: existingTx } = await supabaseAdmin
-                .from('transactions')
-                .select('id')
+              // Update payment record via allocation lookup
+              const { data: existingAlloc } = await supabaseAdmin
+                .from('payment_allocations')
+                .select('payment_id')
                 .eq('order_id', healOrderId)
-                .eq('type', 'payment')
-                .eq('status', 'pending')
+                .limit(1)
                 .single();
 
-              if (existingTx) {
+              if (existingAlloc) {
                 await supabaseAdmin
-                  .from('transactions')
+                  .from('payments')
                   .update({
                     status: 'completed',
                     method: resolvedMethod,
-                    reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
+                    external_ref: paymentId ? `PAYMONGO-${paymentId}` : null,
                     paymongo_payment_id: paymentId,
                     paymongo_checkout_id: order.paymongo_checkout_id,
                   })
-                  .eq('id', existingTx.id);
+                  .eq('id', existingAlloc.payment_id);
               }
 
               console.log('Fallback: Self-healed order', healOrderId, 'payment confirmed via PayMongo API');
@@ -292,14 +291,14 @@ serve(async (req) => {
               }
 
               if (walletCredited) {
-                // Create transaction record only if wallet was credited
-                await supabaseAdmin.from('transactions').insert({
+                // Create payment record only if wallet was credited
+                await supabaseAdmin.from('payments').insert({
                   parent_id: topup.parent_id,
                   type: 'topup',
-                  amount: topupAmount,
+                  amount_total: topupAmount,
                   method: resolvedMethod,
                   status: 'completed',
-                  reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
+                  external_ref: paymentId ? `PAYMONGO-${paymentId}` : null,
                   paymongo_payment_id: paymentId,
                   paymongo_checkout_id: topup.paymongo_checkout_id,
                 });

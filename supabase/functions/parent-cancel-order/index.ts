@@ -247,18 +247,27 @@ serve(async (req) => {
           refundApplied = true;
           refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
 
-          // Record the refund in the transactions table (correct schema)
-          await supabaseAdmin
-            .from('transactions')
+          // Record the refund in payments table
+          const { data: refundPayment } = await supabaseAdmin
+            .from('payments')
             .insert({
               parent_id: user.id,
-              order_id: order_id,
               type: 'refund',
-              amount: order.total_amount,
+              amount_total: order.total_amount,
               method: order.payment_method,
               status: 'completed',
               reference_id: `CANCEL-${order_id.substring(0, 8)}`
+            })
+            .select('id')
+            .single();
+
+          if (refundPayment) {
+            await supabaseAdmin.from('payment_allocations').insert({
+              payment_id: refundPayment.id,
+              order_id: order_id,
+              allocated_amount: order.total_amount,
             });
+          }
         } else {
           // Retry once with fresh balance if optimistic lock failed
           const { data: freshWallet } = await supabaseAdmin
@@ -283,17 +292,26 @@ serve(async (req) => {
               refundApplied = true;
               refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
 
-              await supabaseAdmin
-                .from('transactions')
+              const { data: retryRefundPayment } = await supabaseAdmin
+                .from('payments')
                 .insert({
                   parent_id: user.id,
-                  order_id: order_id,
                   type: 'refund',
-                  amount: order.total_amount,
+                  amount_total: order.total_amount,
                   method: order.payment_method,
                   status: 'completed',
                   reference_id: `CANCEL-${order_id.substring(0, 8)}`
+                })
+                .select('id')
+                .single();
+
+              if (retryRefundPayment) {
+                await supabaseAdmin.from('payment_allocations').insert({
+                  payment_id: retryRefundPayment.id,
+                  order_id: order_id,
+                  allocated_amount: order.total_amount,
                 });
+              }
             }
           }
         }

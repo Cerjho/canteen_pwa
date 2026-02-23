@@ -139,6 +139,7 @@ export interface OrderItem {
   created_at: string;
 }
 
+/** @deprecated Use Payment + PaymentAllocation instead */
 export interface Transaction {
   id: string;
   parent_id: string;
@@ -151,6 +152,33 @@ export interface Transaction {
   paymongo_payment_id?: string;
   paymongo_refund_id?: string;
   paymongo_checkout_id?: string;
+  created_at: string;
+}
+
+/** Payment-centric model: one row per real money movement */
+export interface Payment {
+  id: string;
+  parent_id: string;
+  type: 'payment' | 'refund' | 'topup';
+  amount_total: number;
+  method: PaymentMethod;
+  status: 'pending' | 'completed' | 'failed';
+  external_ref?: string;
+  paymongo_checkout_id?: string;
+  paymongo_payment_id?: string;
+  paymongo_refund_id?: string;
+  payment_group_id?: string;
+  reference_id?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+/** Links a payment to one or more orders */
+export interface PaymentAllocation {
+  id: string;
+  payment_id: string;
+  order_id: string;
+  allocated_amount: number;
   created_at: string;
 }
 

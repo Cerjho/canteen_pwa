@@ -11,15 +11,14 @@ import { EmptyState } from '../../components/EmptyState';
 import TopUpModal from '../../components/TopUpModal';
 import { checkTopupStatus } from '../../services/payments';
 
-interface Transaction {
+interface PaymentRecord {
   id: string;
   type: 'payment' | 'refund' | 'topup';
-  amount: number;
+  amount_total: number;
   method: string;
   status: string;
   reference_id: string;
   created_at: string;
-  order_id?: string;
 }
 
 export default function Balance() {
@@ -115,12 +114,12 @@ export default function Balance() {
     enabled: !!user
   });
 
-  const { data: transactions, isLoading: loadingTx, isError: txError } = useQuery<Transaction[]>({
-    queryKey: ['transactions', user?.id],
+  const { data: transactions, isLoading: loadingTx, isError: txError } = useQuery<PaymentRecord[]>({
+    queryKey: ['payments', user?.id],
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
-        .from('transactions')
+        .from('payments')
         .select('*')
         .eq('parent_id', user.id)
         .order('created_at', { ascending: false })
@@ -281,7 +280,7 @@ export default function Balance() {
                   </div>
                   <div className="text-right">
                     <p className={`font-semibold ${getTransactionColor(tx.type)}`}>
-                      {formatAmount(tx.type, tx.amount)}
+                      {formatAmount(tx.type, tx.amount_total)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tx.method}</p>
                   </div>

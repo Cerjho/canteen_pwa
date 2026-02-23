@@ -182,14 +182,21 @@ serve(async (req) => {
       );
     }
 
-    // Update transaction record (transactions table has no updated_at column)
-    await supabaseAdmin
-      .from('transactions')
-      .update({ 
-        status: 'completed'
-      })
+    // Update payment record via allocation lookup
+    const { data: alloc } = await supabaseAdmin
+      .from('payment_allocations')
+      .select('payment_id')
       .eq('order_id', order_id)
-      .eq('type', 'payment');
+      .limit(1)
+      .single();
+
+    if (alloc) {
+      await supabaseAdmin
+        .from('payments')
+        .update({ status: 'completed' })
+        .eq('id', alloc.payment_id)
+        .eq('status', 'pending');
+    }
 
     console.log(`[AUDIT] ${userRole} ${user.email} confirmed cash payment for order ${order_id} (₱${order.total_amount})`);
 

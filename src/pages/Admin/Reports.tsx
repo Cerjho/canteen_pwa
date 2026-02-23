@@ -88,7 +88,7 @@ interface PaymentBreakdown {
 interface TransactionRecord {
   id: string;
   type: 'payment' | 'refund' | 'topup';
-  amount: number;
+  amount_total: number;
   method: string;
   status: string;
   created_at: string;
@@ -196,12 +196,12 @@ export default function AdminReports() {
     }
   });
 
-  // Fetch recent transactions (only completed ones for financial accuracy)
+  // Fetch recent payments (only completed ones for financial accuracy)
   const { data: transactions } = useQuery<TransactionRecord[]>({
-    queryKey: ['admin-transactions'],
+    queryKey: ['admin-payments'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('transactions')
+        .from('payments')
         .select(`
           *,
           parent:user_profiles(first_name, last_name)
@@ -544,7 +544,7 @@ export default function AdminReports() {
                   <p className={`font-semibold ${
                     tx.type === 'payment' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
                   }`}>
-                    {tx.type === 'payment' ? '-' : '+'}₱{tx.amount.toFixed(2)}
+                    {tx.type === 'payment' ? '-' : '+'}₱{tx.amount_total.toFixed(2)}
                   </p>
                 </div>
               ))}

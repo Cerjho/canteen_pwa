@@ -623,17 +623,29 @@ serve(async (req) => {
       }
     }
 
-    // Insert transaction record
-    await supabaseAdmin
-      .from('transactions')
+    // Insert payment record (payment-centric model)
+    const { data: payment } = await supabaseAdmin
+      .from('payments')
       .insert({
         parent_id,
-        order_id: order.id,
         type: 'payment',
-        amount: totalAmount,
+        amount_total: totalAmount,
         method: payment_method,
-        status: payment_method === 'cash' ? 'pending' : 'completed'
-      });
+        status: payment_method === 'cash' ? 'pending' : 'completed',
+      })
+      .select('id')
+      .single();
+
+    // Link payment to order via allocation
+    if (payment) {
+      await supabaseAdmin
+        .from('payment_allocations')
+        .insert({
+          payment_id: payment.id,
+          order_id: order.id,
+          allocated_amount: totalAmount,
+        });
+    }
 
     // Return success response with payment info
     return new Response(

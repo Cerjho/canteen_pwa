@@ -110,7 +110,7 @@ Refund an order and restore inventory (admin only).
 {
   "success": true,
   "refunded_amount": 50.00,
-  "transaction_id": "uuid"
+  "transaction_id": "uuid (payment record ID)"
 }
 ```
 

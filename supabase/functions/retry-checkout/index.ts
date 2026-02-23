@@ -207,12 +207,20 @@ serve(async (req) => {
       );
     }
 
-    // Reset pending transaction
-    await supabaseAdmin
-      .from('transactions')
-      .update({ status: 'pending', method: effectiveMethod })
+    // Reset pending payment via allocation lookup
+    const { data: retryAlloc } = await supabaseAdmin
+      .from('payment_allocations')
+      .select('payment_id')
       .eq('order_id', order_id)
-      .eq('type', 'payment');
+      .limit(1)
+      .single();
+
+    if (retryAlloc) {
+      await supabaseAdmin
+        .from('payments')
+        .update({ status: 'pending', method: effectiveMethod })
+        .eq('id', retryAlloc.payment_id);
+    }
 
     // ── Create new PayMongo Checkout Session ──
     let checkoutSession;

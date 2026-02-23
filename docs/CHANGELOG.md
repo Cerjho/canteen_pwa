@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Payment-centric data model**: Replaced per-order `transactions` table with `payments` + `payment_allocations`
+  - `payments` table: one row per real money movement (payment, refund, top-up)
+  - `payment_allocations` table: links a payment to one or more orders (enables batch payments)
+  - Old `transactions` table renamed to `transactions_legacy` (data preserved, not dropped)
+  - Migration backfills existing transaction data into new tables
+  - New `Payment` and `PaymentAllocation` TypeScript interfaces in `src/types/index.ts`
+  - All 12 edge functions updated to use new model
+  - Balance page now shows one line per real payment (not per-order)
+  - Admin reports query `payments` table with `amount_total` field
+
 - **Ordering Flow Overhaul**: Comprehensive backend + frontend reliability improvements
   - Atomic `increment_stock`/`decrement_stock` RPC functions with `FOR UPDATE` row locks (eliminates stock race conditions)
   - `payment_group_id` UUID column on orders table for batch order tracking

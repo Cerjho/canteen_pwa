@@ -185,24 +185,37 @@ USING (
 
 ---
 
-### **transactions** Table
+### **payments** Table
 
 ```sql
--- Parents can view their own transactions
-CREATE POLICY "Parents can view own transactions"
-ON transactions FOR SELECT
+-- Parents can view their own payments
+CREATE POLICY "Parents can view own payments"
+ON payments FOR SELECT
 USING (parent_id = auth.uid());
 
--- Staff can view all transactions
-CREATE POLICY "Staff can view all transactions"
-ON transactions FOR SELECT
+-- Staff can view all payments
+CREATE POLICY "Staff can view all payments"
+ON payments FOR SELECT
+USING (is_staff_or_admin());
+```
+
+### **payment_allocations** Table
+
+```sql
+-- Parents can view allocations for their own payments
+CREATE POLICY "Parents can view own allocations"
+ON payment_allocations FOR SELECT
 USING (
   EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND auth.users.raw_user_meta_data->>'role' IN ('staff', 'admin')
+    SELECT 1 FROM payments p
+    WHERE p.id = payment_id AND p.parent_id = auth.uid()
   )
 );
+
+-- Staff can view all allocations
+CREATE POLICY "Staff can view all allocations"
+ON payment_allocations FOR SELECT
+USING (is_staff_or_admin());
 ```
 
 ---

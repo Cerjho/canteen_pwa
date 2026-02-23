@@ -137,16 +137,23 @@ serve(async (req) => {
               .eq('balance', wallet.balance); // Optimistic lock
 
             if (!refundError) {
-              // Record refund transaction
-              await supabaseAdmin.from('transactions').insert({
+              // Record refund payment
+              const { data: refundPayment } = await supabaseAdmin.from('payments').insert({
                 parent_id: order.parent_id,
-                order_id: order.id,
                 type: 'refund',
-                amount: refundAmount,
+                amount_total: refundAmount,
                 method: 'balance',
                 status: 'completed',
                 reference_id: `TIMEOUT-${order.id.substring(0, 8)}`,
-              });
+              }).select('id').single();
+
+              if (refundPayment) {
+                await supabaseAdmin.from('payment_allocations').insert({
+                  payment_id: refundPayment.id,
+                  order_id: order.id,
+                  allocated_amount: refundAmount,
+                });
+              }
               console.log(`[CLEANUP] Refunded ₱${refundAmount} to wallet for balance-paid order ${order.id}`);
             } else {
               console.error(`[CLEANUP] CRITICAL: Failed to refund wallet for order ${order.id}:`, refundError);
@@ -155,12 +162,21 @@ serve(async (req) => {
           }
         }
 
-        // Update transaction status to 'failed' (valid per CHECK constraint)
-        await supabaseAdmin
-          .from('transactions')
-          .update({ status: 'failed' })
+        // Update payment status to 'failed' via allocation lookup
+        const { data: orderAlloc } = await supabaseAdmin
+          .from('payment_allocations')
+          .select('payment_id')
           .eq('order_id', order.id)
-          .eq('type', 'payment');
+          .limit(1)
+          .single();
+
+        if (orderAlloc) {
+          await supabaseAdmin
+            .from('payments')
+            .update({ status: 'failed' })
+            .eq('id', orderAlloc.payment_id)
+            .eq('status', 'pending');
+        }
 
         cancelledOrders.push(order.id);
         console.log(`[CLEANUP] Cancelled order ${order.id} (${order.payment_method || 'unknown'}) due to payment timeout`);

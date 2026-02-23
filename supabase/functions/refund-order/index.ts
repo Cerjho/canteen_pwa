@@ -183,21 +183,29 @@ serve(async (req) => {
       console.log('No PayMongo payment ID — order was likely unpaid, no refund needed');
     }
 
-    // Create refund transaction
-    const { data: transaction, error: txError } = await supabaseAdmin
-      .from('transactions')
+    // Create refund payment record
+    const { data: refundPayment, error: txError } = await supabaseAdmin
+      .from('payments')
       .insert({
         parent_id: order.parent_id,
-        order_id: order.id,
         type: 'refund',
-        amount: order.total_amount,
+        amount_total: order.total_amount,
         method: order.payment_method,
         status: refundStatus,
         reference_id: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : `REFUND-${order_id.substring(0, 8)}`,
+        external_ref: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : null,
         paymongo_refund_id: paymongoRefundId,
       })
       .select()
       .single();
+
+    if (refundPayment) {
+      await supabaseAdmin.from('payment_allocations').insert({
+        payment_id: refundPayment.id,
+        order_id: order.id,
+        allocated_amount: order.total_amount,
+      });
+    }
 
     if (txError) {
       console.error('Transaction insert error:', txError);
@@ -248,7 +256,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         refunded_amount: order.total_amount,
-        transaction_id: transaction?.id || null,
+        transaction_id: refundPayment?.id || null,
         paymongo_refund_id: paymongoRefundId,
         refund_estimate: refundEstimate || undefined,
         message: refundEstimate

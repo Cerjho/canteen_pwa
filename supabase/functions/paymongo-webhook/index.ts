@@ -258,8 +258,9 @@ async function handleOrderPaymentPaid(
 }
 
 /**
- * Confirm payment for a single order: update status + transaction.
+ * Confirm payment for a single order: update status + payment record.
  * Shared between single-order and batch-order flows.
+ * Uses payment-centric model (payments + payment_allocations).
  */
 async function confirmOrderPayment(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -286,38 +287,51 @@ async function confirmOrderPayment(
     return;
   }
 
-  // Update or create completed transaction
-  const { data: existingTx } = await supabaseAdmin
-    .from('transactions')
-    .select('id')
+  // Find existing pending payment via allocation → payment join
+  const { data: existingAlloc } = await supabaseAdmin
+    .from('payment_allocations')
+    .select('payment_id')
     .eq('order_id', order.id)
-    .eq('type', 'payment')
-    .eq('status', 'pending')
+    .limit(1)
     .single();
 
-  if (existingTx) {
+  if (existingAlloc) {
+    // Update existing payment to completed
     await supabaseAdmin
-      .from('transactions')
+      .from('payments')
       .update({
         status: 'completed',
         method: paymentMethod,
-        reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
+        external_ref: paymentId ? `PAYMONGO-${paymentId}` : null,
         paymongo_payment_id: paymentId,
         paymongo_checkout_id: checkoutId,
       })
-      .eq('id', existingTx.id);
+      .eq('id', existingAlloc.payment_id)
+      .eq('status', 'pending');
   } else {
-    await supabaseAdmin.from('transactions').insert({
-      parent_id: order.parent_id,
-      order_id: order.id,
-      type: 'payment',
-      amount: order.total_amount,
-      method: paymentMethod,
-      status: 'completed',
-      reference_id: paymentId ? `PAYMONGO-${paymentId}` : null,
-      paymongo_payment_id: paymentId,
-      paymongo_checkout_id: checkoutId,
-    });
+    // Create new completed payment + allocation (fallback if pending was missing)
+    const { data: newPayment } = await supabaseAdmin
+      .from('payments')
+      .insert({
+        parent_id: order.parent_id,
+        type: 'payment',
+        amount_total: order.total_amount,
+        method: paymentMethod,
+        status: 'completed',
+        external_ref: paymentId ? `PAYMONGO-${paymentId}` : null,
+        paymongo_payment_id: paymentId,
+        paymongo_checkout_id: checkoutId,
+      })
+      .select('id')
+      .single();
+
+    if (newPayment) {
+      await supabaseAdmin.from('payment_allocations').insert({
+        payment_id: newPayment.id,
+        order_id: order.id,
+        allocated_amount: order.total_amount,
+      });
+    }
   }
 }
 
@@ -473,11 +487,11 @@ async function handleTopupPaymentPaid(
           .update({ status: 'failed' })
           .eq('id', topupSessionId);
         
-        // Also log to transactions for audit trail
-        await supabaseAdmin.from('transactions').insert({
+        // Also log to payments for audit trail
+        await supabaseAdmin.from('payments').insert({
           parent_id: topupSession.parent_id,
           type: 'topup',
-          amount: topupAmount,
+          amount_total: topupAmount,
           method: paymentMethod,
           status: 'failed',
           reference_id: paymentId ? `PAYMONGO-${paymentId}-NEEDS-REVIEW` : `TOPUP-${topupSessionId}-NEEDS-REVIEW`,
@@ -498,12 +512,12 @@ async function handleTopupPaymentPaid(
     walletCredited = true;
   }
 
-  // Only create 'completed' transaction if wallet was actually credited
+  // Only create 'completed' payment if wallet was actually credited
   if (walletCredited) {
-    await supabaseAdmin.from('transactions').insert({
+    await supabaseAdmin.from('payments').insert({
       parent_id: topupSession.parent_id,
       type: 'topup',
-      amount: topupAmount,
+      amount_total: topupAmount,
       method: paymentMethod,
       status: 'completed',
       reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
@@ -607,12 +621,21 @@ async function cancelFailedOrder(
     }
   }
 
-  // Update transaction to failed
-  await supabaseAdmin
-    .from('transactions')
-    .update({ status: 'failed' })
+  // Update payment to failed via allocation lookup
+  const { data: alloc } = await supabaseAdmin
+    .from('payment_allocations')
+    .select('payment_id')
     .eq('order_id', orderId)
-    .eq('status', 'pending');
+    .limit(1)
+    .single();
+
+  if (alloc) {
+    await supabaseAdmin
+      .from('payments')
+      .update({ status: 'failed' })
+      .eq('id', alloc.payment_id)
+      .eq('status', 'pending');
+  }
 
   console.log('Order cancelled due to payment failure:', orderId);
 }
@@ -628,9 +651,9 @@ async function handlePaymentRefunded(
 
   console.log('Payment refunded:', paymentId);
 
-  // Update any transactions referencing this payment
+  // Update any payments referencing this PayMongo payment
   await supabaseAdmin
-    .from('transactions')
+    .from('payments')
     .update({ status: 'completed' })
     .eq('paymongo_payment_id', paymentId)
     .eq('type', 'refund')

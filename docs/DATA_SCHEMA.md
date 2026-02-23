@@ -31,9 +31,9 @@ Supabase Postgres database with 6 core tables enforcing referential integrity an
                       │  products   │
                       └─────────────┘
 
-┌─────────────┐
-│transactions │  (linked to orders)
-└─────────────┘
+┌─────────────┐      ┌──────────────────────┐
+│  payments   │─────>│ payment_allocations  │  (linked to orders)
+└─────────────┘      └──────────────────────┘
 ```
 
 ---
@@ -197,28 +197,49 @@ Line items for each order.
 
 ---
 
-### **transactions**
+### **payments**
 
-Payment/refund records.
+One row per real money movement (payment, refund, top-up).
+Replaces the legacy `transactions` table (renamed to `transactions_legacy`).
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
 | `id` | uuid | PRIMARY KEY | |
-| `parent_id` | uuid | FOREIGN KEY → parents(id), NOT NULL | |
-| `order_id` | uuid | FOREIGN KEY → orders(id), NULL | |
+| `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | |
 | `type` | text | NOT NULL | "payment", "refund", "topup" |
-| `amount` | numeric(10,2) | NOT NULL | |
-| `method` | text | NOT NULL | "cash", "gcash", "paymongo" |
+| `amount_total` | numeric(10,2) | NOT NULL | Total payment amount |
+| `method` | text | NOT NULL | "cash", "gcash", "paymaya", "card", "paymongo", "balance" |
 | `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "completed", "failed" |
-| `reference_id` | text | | External transaction ID |
+| `external_ref` | text | | External reference (e.g. PAYMONGO-xxx) |
+| `paymongo_checkout_id` | text | | PayMongo checkout session ID |
+| `paymongo_payment_id` | text | | PayMongo payment ID |
+| `paymongo_refund_id` | text | | PayMongo refund ID |
+| `payment_group_id` | text | | Groups payments from batch checkout |
+| `reference_id` | text | | Internal reference ID |
+| `metadata` | jsonb | DEFAULT '{}' | Flexible key-value data |
 | `created_at` | timestamptz | DEFAULT now() | |
 
-**Indexes**:
+**Indexes**: `parent_id`, `status`, `type`, `payment_group_id`, `paymongo_checkout_id`, `paymongo_payment_id`, `created_at`
 
-- `idx_transactions_parent_id` on `parent_id`
-- `idx_transactions_order_id` on `order_id`
+**RLS**: Parents see only their own payments. Staff/admin can view all.
 
-**RLS**: Parents see only their transactions.
+---
+
+### **payment_allocations**
+
+Links a payment to one or more orders. Enables batch payments (1 payment → N orders).
+
+| Column | Type | Constraints | Description |
+| ------ | ---- | ----------- | ----------- |
+| `id` | uuid | PRIMARY KEY | |
+| `payment_id` | uuid | FOREIGN KEY → payments(id) ON DELETE CASCADE, NOT NULL | |
+| `order_id` | uuid | FOREIGN KEY → orders(id) ON DELETE CASCADE, NOT NULL | |
+| `allocated_amount` | numeric(10,2) | NOT NULL | Amount allocated to this order |
+| `created_at` | timestamptz | DEFAULT now() | |
+
+**Indexes**: `payment_id`, `order_id`
+
+**RLS**: Parents see allocations for their own payments. Staff/admin can view all.
 
 ---
 

@@ -20,7 +20,9 @@ DROP TABLE IF EXISTS makeup_days       CASCADE;
 DROP TABLE IF EXISTS holidays          CASCADE;
 DROP TABLE IF EXISTS menu_schedules    CASCADE;
 DROP TABLE IF EXISTS invitations       CASCADE;
-DROP TABLE IF EXISTS transactions      CASCADE;
+DROP TABLE IF EXISTS payment_allocations CASCADE;
+DROP TABLE IF EXISTS payments           CASCADE;
+DROP TABLE IF EXISTS transactions_legacy CASCADE;
 DROP TABLE IF EXISTS order_items       CASCADE;
 DROP TABLE IF EXISTS orders            CASCADE;
 DROP TABLE IF EXISTS parent_students   CASCADE;
@@ -180,20 +182,31 @@ CREATE TABLE IF NOT EXISTS order_items (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Transactions (payments, refunds, top-ups)
-CREATE TABLE IF NOT EXISTS transactions (
+-- Payments (one row per real money movement)
+CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
-  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
   type TEXT NOT NULL CHECK (type IN ('payment', 'refund', 'topup')),
-  amount NUMERIC(10,2) NOT NULL,
+  amount_total NUMERIC(10,2) NOT NULL,
   method TEXT NOT NULL CHECK (method IN ('cash', 'gcash', 'paymaya', 'card', 'paymongo', 'balance')),
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'completed', 'failed')),
-  reference_id TEXT,
+  external_ref TEXT,
+  paymongo_checkout_id TEXT,
   paymongo_payment_id TEXT,
   paymongo_refund_id TEXT,
-  paymongo_checkout_id TEXT,
+  payment_group_id TEXT,
+  reference_id TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Payment allocations (links a payment to one or more orders)
+CREATE TABLE IF NOT EXISTS payment_allocations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  allocated_amount NUMERIC(10,2) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -390,11 +403,21 @@ CREATE INDEX IF NOT EXISTS idx_orders_payment_due_at
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
 
--- transactions
-CREATE INDEX IF NOT EXISTS idx_transactions_parent_id ON transactions(parent_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_paymongo_payment_id
-  ON transactions(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
+-- payments
+CREATE INDEX IF NOT EXISTS idx_payments_parent_id ON payments(parent_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_type ON payments(type);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_group_id
+  ON payments(payment_group_id) WHERE payment_group_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_paymongo_checkout_id
+  ON payments(paymongo_checkout_id) WHERE paymongo_checkout_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_paymongo_payment_id
+  ON payments(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at);
+
+-- payment_allocations
+CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment_id ON payment_allocations(payment_id);
+CREATE INDEX IF NOT EXISTS idx_payment_allocations_order_id ON payment_allocations(order_id);
 
 -- orders (PayMongo)
 CREATE INDEX IF NOT EXISTS idx_orders_paymongo_checkout_id
@@ -1067,7 +1090,8 @@ ALTER TABLE parent_students  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transactions     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_allocations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invitations      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE menu_schedules   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE holidays         ENABLE ROW LEVEL SECURITY;
@@ -1255,22 +1279,38 @@ CREATE POLICY "Staff can view all order items"
   ON order_items FOR SELECT
   USING (is_staff_or_admin());
 
--- ─── transactions ────────────────────────────
+-- ─── payments ────────────────────────────
 
-DROP POLICY IF EXISTS "Parents can view own transactions" ON transactions;
-CREATE POLICY "Parents can view own transactions"
-  ON transactions FOR SELECT
+DROP POLICY IF EXISTS "Parents can view own payments" ON payments;
+CREATE POLICY "Parents can view own payments"
+  ON payments FOR SELECT
   USING (parent_id = auth.uid());
 
-DROP POLICY IF EXISTS "Staff can view all transactions" ON transactions;
-CREATE POLICY "Staff can view all transactions"
-  ON transactions FOR SELECT
+DROP POLICY IF EXISTS "Staff can view all payments" ON payments;
+CREATE POLICY "Staff can view all payments"
+  ON payments FOR SELECT
   USING (is_staff_or_admin());
 
-DROP POLICY IF EXISTS "Admin can insert transactions" ON transactions;
-CREATE POLICY "Admin can insert transactions"
-  ON transactions FOR INSERT
+DROP POLICY IF EXISTS "Admin can insert payments" ON payments;
+CREATE POLICY "Admin can insert payments"
+  ON payments FOR INSERT
   WITH CHECK (is_admin());
+
+-- ─── payment_allocations ─────────────────
+
+DROP POLICY IF EXISTS "Parents can view own allocations" ON payment_allocations;
+CREATE POLICY "Parents can view own allocations"
+  ON payment_allocations FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM payments p WHERE p.id = payment_id AND p.parent_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Staff can view all allocations" ON payment_allocations;
+CREATE POLICY "Staff can view all allocations"
+  ON payment_allocations FOR SELECT
+  USING (is_staff_or_admin());
 
 -- ─── topup_sessions ─────────────────────────
 

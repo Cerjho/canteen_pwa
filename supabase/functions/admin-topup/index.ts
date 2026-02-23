@@ -161,13 +161,13 @@ serve(async (req) => {
       );
     }
 
-    // Create transaction record
+    // Create payment record
     const { error: txError } = await supabaseAdmin
-      .from('transactions')
+      .from('payments')
       .insert({
         parent_id: user_id,
         type: 'topup',
-        amount,
+        amount_total: amount,
         method: 'cash',
         status: 'completed',
         reference_id: notes

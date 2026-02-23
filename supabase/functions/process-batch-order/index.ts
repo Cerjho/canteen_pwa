@@ -5,7 +5,7 @@
 // Key optimisations vs calling process-order N times:
 //   1. Auth, settings, holidays, products fetched ONCE
 //   2. Stock decremented per unique product (aggregated demand)
-//   3. Orders, order_items, transactions inserted in batches
+//   3. Orders, order_items, payments + allocations inserted in batches
 //   4. Balance checked & deducted ONCE (total across all orders)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -333,7 +333,7 @@ serve(async (req) => {
     };
 
     // ================================================================
-    // STEP 4 — Create orders, order_items, transactions in BATCHES
+    // STEP 4 — Create orders, order_items, payments + allocations in BATCHES
     // ================================================================
 
     const isCash = payment_method === 'cash';
@@ -403,20 +403,36 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
     }
 
-    // Build all transaction rows for batch insert
-    const allTransactions = createdOrders.map(o => ({
-      parent_id,
-      order_id: o.id,
-      type: 'payment',
-      amount: o.total_amount,
-      method: payment_method,
-      status: isCash ? 'pending' : 'completed',
-    }));
+    // Insert ONE payment row for the entire batch (payment-centric model)
+    const { data: payment, error: paymentError } = await supabaseAdmin
+      .from('payments')
+      .insert({
+        parent_id,
+        type: 'payment',
+        amount_total: grandTotal,
+        method: payment_method,
+        status: isCash ? 'pending' : 'completed',
+      })
+      .select('id')
+      .single();
 
-    const { error: txError } = await supabaseAdmin.from('transactions').insert(allTransactions);
-    if (txError) {
-      console.error('Batch transactions insert error (non-fatal):', txError);
-      // Non-fatal — orders are already created, transactions can be reconciled
+    if (paymentError || !payment) {
+      console.error('Payment insert error (non-fatal):', paymentError);
+      // Non-fatal — orders are already created, payment can be reconciled
+    } else {
+      // Link payment to each order via allocations
+      const allAllocations = createdOrders.map(o => ({
+        payment_id: payment.id,
+        order_id: o.id,
+        allocated_amount: o.total_amount,
+      }));
+
+      const { error: allocError } = await supabaseAdmin
+        .from('payment_allocations')
+        .insert(allAllocations);
+      if (allocError) {
+        console.error('Payment allocations insert error (non-fatal):', allocError);
+      }
     }
 
     // ── Deduct balance ONCE for grand total ──
@@ -430,9 +446,12 @@ serve(async (req) => {
 
       if (balanceError) {
         console.error('Balance deduction error:', balanceError);
-        // Rollback: delete orders (cascade), restore stock
+        // Rollback: delete orders (cascade), restore stock, clean up payment
         await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
-        await supabaseAdmin.from('transactions').delete().in('order_id', createdOrderIds);
+        if (payment) {
+          await supabaseAdmin.from('payment_allocations').delete().eq('payment_id', payment.id);
+          await supabaseAdmin.from('payments').delete().eq('id', payment.id);
+        }
         await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
         await rollbackStock();
         return errorResponse(corsHeaders, 409, 'BALANCE_DEDUCTION_FAILED',
