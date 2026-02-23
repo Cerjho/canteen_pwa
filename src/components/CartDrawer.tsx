@@ -4,7 +4,9 @@ import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod, type PaymentMethod, isOnlinePaymentMethod } from '../types';
 import { getCheckoutButtonText } from '../services/payments';
+import { formatDateLocal } from '../services/products';
 import { friendlyError } from '../utils/friendlyError';
+import { useConfirm } from './ConfirmDialog';
 
 type CartPaymentMethod = PaymentMethod;
 
@@ -42,6 +44,7 @@ export function CartDrawer({
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [showCopyModal, setShowCopyModal] = useState<string | null>(null);
+  const { confirm, ConfirmDialogElement } = useConfirm();
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
@@ -131,7 +134,7 @@ export function CartDrawer({
       if (date.getDay() === 0) continue; // Skip Sunday
       if (isSaturday(date)) continue; // Skip Saturday (TODO: check makeup calendar)
       
-      const dateStr = format(date, 'yyyy-MM-dd');
+      const dateStr = formatDateLocal(date);
       // Don't include dates already in cart with items
       if (!uniqueDates.includes(dateStr) || dateStr === excludeDate) {
         dates.push(dateStr);
@@ -152,7 +155,14 @@ export function CartDrawer({
   // Handle clear date
   const handleClearDate = async (dateStr: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onClearDate && confirm(`Clear all items for ${format(parseISO(dateStr), 'EEE, MMM d')}?`)) {
+    if (!onClearDate) return;
+    const confirmed = await confirm({
+      title: 'Clear Items',
+      message: `Clear all items for ${format(parseISO(dateStr), 'EEE, MMM d')}?`,
+      confirmLabel: 'Clear',
+      type: 'warning',
+    });
+    if (confirmed) {
       await onClearDate(dateStr);
     }
   };
@@ -631,6 +641,7 @@ export function CartDrawer({
           </div>
         </div>
       </div>
+      {ConfirmDialogElement}
     </>
   );
 }

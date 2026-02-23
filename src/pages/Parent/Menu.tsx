@@ -234,6 +234,9 @@ export default function Menu() {
       const result = await checkout(paymentMethod, notes, selectedDates);
       setCartOpen(false);
       
+      // If checkout redirected to external payment page, don't navigate
+      if (result?.redirecting) return;
+      
       // Invalidate wallet balance if paid with balance
       if (paymentMethod === 'balance') {
         queryClient.invalidateQueries({ queryKey: ['parent-wallet'] });

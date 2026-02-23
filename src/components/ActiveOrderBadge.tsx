@@ -24,7 +24,7 @@ export function useActiveOrderCount() {
         .select('*', { count: 'exact', head: true })
         .eq('parent_id', user.id)
         .eq('scheduled_for', todayStr)
-        .in('status', ['pending', 'preparing', 'ready']);
+        .in('status', ['awaiting_payment', 'pending', 'preparing', 'ready']);
       
       if (error) throw error;
       return count || 0;

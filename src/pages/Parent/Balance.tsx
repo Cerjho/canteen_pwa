@@ -30,51 +30,17 @@ export default function Balance() {
   const [isVerifyingTopup, setIsVerifyingTopup] = useState(false);
   const pollingRef = useRef(false);
 
-  // Handle ?topup=success redirect from PayMongo — poll for confirmation
+  // State to hold extracted URL params before cleaning the URL
+  const [topupSession, setTopupSession] = useState<{ result: string; sessionId: string } | null>(null);
+
+  // Effect 1: Extract search params and clean URL (runs once on redirect)
   useEffect(() => {
     const topupResult = searchParams.get('topup');
     const sessionId = searchParams.get('session');
 
     if (topupResult === 'success' && sessionId) {
-      // Clean the URL immediately but keep session ID for polling
+      setTopupSession({ result: topupResult, sessionId });
       setSearchParams({}, { replace: true });
-      setIsVerifyingTopup(true);
-      setTopUpNotice('Verifying your top-up payment...');
-      pollingRef.current = true;
-
-      const pollTopup = async () => {
-        const MAX_POLLS = 20;
-        let pollNum = 0;
-
-        while (pollingRef.current && pollNum < MAX_POLLS) {
-          try {
-            const result = await checkTopupStatus(sessionId);
-            if (result.status === 'paid') {
-              setTopUpNotice('Top-up successful! Your balance has been updated.');
-              setIsVerifyingTopup(false);
-              refetch();
-              return;
-            }
-            if (result.status === 'failed' || result.status === 'expired') {
-              setTopUpNotice('Top-up payment failed or expired. Please try again.');
-              setIsVerifyingTopup(false);
-              return;
-            }
-          } catch {
-            // Network error or auth refresh — keep polling
-          }
-          pollNum++;
-          await new Promise(r => setTimeout(r, 3000));
-        }
-
-        // Max polls reached
-        setTopUpNotice('Payment verification is taking longer than expected. Your balance will update once confirmed.');
-        setIsVerifyingTopup(false);
-        refetch();
-      };
-
-      pollTopup();
-      return () => { pollingRef.current = false; };
     } else if (topupResult === 'success') {
       // No session ID — legacy fallback, just show notice and refetch
       setSearchParams({}, { replace: true });
@@ -85,7 +51,52 @@ export default function Balance() {
       setTopUpNotice('Top-up was cancelled. No charges were made.');
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Effect 2: Poll for top-up confirmation (triggered by extracted session, not searchParams)
+  useEffect(() => {
+    if (!topupSession) return;
+
+    setIsVerifyingTopup(true);
+    setTopUpNotice('Verifying your top-up payment...');
+    pollingRef.current = true;
+
+    const pollTopup = async () => {
+      const MAX_POLLS = 20;
+      let pollNum = 0;
+
+      while (pollingRef.current && pollNum < MAX_POLLS) {
+        try {
+          const result = await checkTopupStatus(topupSession.sessionId);
+          if (result.status === 'paid') {
+            setTopUpNotice('Top-up successful! Your balance has been updated.');
+            setIsVerifyingTopup(false);
+            refetch();
+            return;
+          }
+          if (result.status === 'failed' || result.status === 'expired') {
+            setTopUpNotice('Top-up payment failed or expired. Please try again.');
+            setIsVerifyingTopup(false);
+            return;
+          }
+        } catch {
+          // Network error or auth refresh — keep polling
+        }
+        pollNum++;
+        await new Promise(r => setTimeout(r, 3000));
+      }
+
+      // Max polls reached
+      setTopUpNotice('Payment verification is taking longer than expected. Your balance will update once confirmed.');
+      setIsVerifyingTopup(false);
+      refetch();
+    };
+
+    pollTopup();
+    return () => { pollingRef.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topupSession]);
 
   const { data: walletData, isLoading: loadingParent, isError: walletError, refetch } = useQuery({
     queryKey: ['parent-balance', user?.id],

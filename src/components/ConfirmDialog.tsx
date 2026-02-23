@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -23,6 +23,18 @@ export function ConfirmDialog({
   onConfirm,
   onCancel
 }: ConfirmDialogProps) {
+  // Handle Escape key to dismiss dialog
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
 
   const iconConfig = {
@@ -44,13 +56,13 @@ export function ConfirmDialog({
   return (
     <>
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-fade-in"
-        onClick={onCancel}
-      />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-fade-in" />
       
-      {/* Dialog */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Dialog wrapper — click outside panel dismisses */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={onCancel}
+      >
         <div 
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full animate-slide-up"
           onClick={(e) => e.stopPropagation()}
@@ -84,7 +96,7 @@ export function ConfirmDialog({
 }
 
 // Hook for easier usage
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 
 interface UseConfirmOptions {
   title: string;

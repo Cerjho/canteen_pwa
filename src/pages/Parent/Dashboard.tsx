@@ -234,6 +234,10 @@ export default function ParentDashboard() {
 
   // Reorder functionality - fetches current prices and checks availability
   const handleReorder = async (order: Order) => {
+    if (!order.child) {
+      showToast('Cannot reorder — student info is missing', 'error');
+      return;
+    }
     const studentName = `${order.child.first_name} ${order.child.last_name}`;
     
     // Fetch current prices and availability for the products
@@ -395,7 +399,7 @@ export default function ParentDashboard() {
     }>();
 
     for (const order of orders) {
-      const key = `${order.child?.id || 'unknown'}_${order.scheduled_for}`;
+      const key = `${order.child?.id || order.id}_${order.scheduled_for}`;
       if (!groups.has(key)) {
         groups.set(key, {
           studentId: order.child?.id || '',

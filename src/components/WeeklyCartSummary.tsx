@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { format, addDays, isToday, isSaturday, isSunday } from 'date-fns';
 import { Calendar, ShoppingCart, ChevronRight } from 'lucide-react';
+import { formatDateLocal } from '../services/products';
 import type { CartItem } from '../hooks/useCart';
 
 interface WeeklyCartSummaryProps {
@@ -44,7 +45,7 @@ export function WeeklyCartSummary({
     while (daysAdded < daysToShow) {
       // Skip Sundays (Saturdays might be makeup days)
       if (!isSunday(currentDate)) {
-        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        const dateStr = formatDateLocal(currentDate);
         const dayItems = items.filter(i => i.scheduled_for === dateStr);
         const uniqueStudents = new Set(dayItems.map(i => i.student_id));
         

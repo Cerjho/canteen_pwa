@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Package, AlertTriangle, Check, X, RefreshCw } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
@@ -22,6 +22,11 @@ function StockInput({ productId, initialValue, onUpdate }: {
 }) {
   const [localValue, setLocalValue] = useState(String(initialValue));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync local value when server data changes (e.g. after refetch)
+  useEffect(() => {
+    setLocalValue(String(initialValue));
+  }, [initialValue]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { Package, Clock, ChefHat, CheckCircle, XCircle, AlertCircle, RefreshCw, CreditCard, Calendar, Timer } from 'lucide-react';
@@ -91,6 +92,18 @@ export default function OrderHistory() {
         return { text: `${method}`, color: 'text-gray-500 dark:text-gray-400' };
     }
   };
+
+  // Timer tick to keep payment countdown updating every second
+  const [, setTimerTick] = useState(0);
+  useEffect(() => {
+    const hasAwaitingPayment = orders?.some(
+      o => o.payment_status === 'awaiting_payment' && o.payment_due_at
+    );
+    if (!hasAwaitingPayment) return;
+
+    const interval = setInterval(() => setTimerTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [orders]);
 
   /**
    * Get time remaining until payment expires

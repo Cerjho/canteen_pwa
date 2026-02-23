@@ -859,6 +859,7 @@ export function useCart() {
         // Redirect to PayMongo checkout page
         window.location.href = batchResult.checkout_url;
         return {
+          redirecting: true,
           orders: batchResult.order_ids.map((oid, i) => ({
             order_id: oid,
             checkout_url: batchResult.checkout_url,

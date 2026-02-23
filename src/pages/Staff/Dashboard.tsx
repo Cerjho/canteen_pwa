@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, TouchEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame, Smartphone } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, XCircle, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame, Smartphone } from 'lucide-react';
 import { format, differenceInMinutes, isToday } from 'date-fns';
 import { supabase } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
@@ -460,17 +460,18 @@ export default function StaffDashboard() {
     return prepByGrade.reduce((sum, g) => sum + g.totalItems, 0);
   }, [prepByGrade]);
 
-  // Peak hour detection - calculate orders per hour
+  // Peak hour detection - calculate orders per hour (including completed orders)
   const peakHourStatus = useMemo(() => {
-    if (!orders) return { isPeak: false, isRush: false, ordersPerHour: 0, trend: 'stable' as const };
+    const allOrders = [...(orders || []), ...(completedOrdersToday || [])];
+    if (allOrders.length === 0) return { isPeak: false, isRush: false, ordersPerHour: 0, trend: 'stable' as const };
     
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
     
     // Count orders in last hour
-    const recentOrders = orders.filter(o => new Date(o.created_at) >= oneHourAgo);
-    const previousHourOrders = orders.filter(o => {
+    const recentOrders = allOrders.filter(o => new Date(o.created_at) >= oneHourAgo);
+    const previousHourOrders = allOrders.filter(o => {
       const orderTime = new Date(o.created_at);
       return orderTime >= twoHoursAgo && orderTime < oneHourAgo;
     });
@@ -489,7 +490,7 @@ export default function StaffDashboard() {
       ordersPerHour,
       trend,
     };
-  }, [orders]);
+  }, [orders, completedOrdersToday]);
 
   // Order completion stats
   const orderStats = useMemo(() => {
@@ -592,8 +593,8 @@ export default function StaffDashboard() {
           showToast('🎉 Order completed!', 'success');
         }
       } else {
-        // Swipe left - show cancel dialog
-        if (order.status === 'pending') {
+        // Swipe left - show cancel dialog (for pending, preparing, and ready orders)
+        if (order.status === 'pending' || order.status === 'preparing' || order.status === 'ready') {
           setShowCancelDialog(order.id);
         }
       }
@@ -627,6 +628,10 @@ export default function StaffDashboard() {
     }
   }, [orders]);
 
+  // Keep soundEnabled in a ref to avoid re-creating realtime subscription
+  const soundEnabledRef = useRef(soundEnabled);
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
   // Realtime subscription for new orders
   useEffect(() => {
     const channel = supabase
@@ -637,7 +642,7 @@ export default function StaffDashboard() {
         () => {
           refetch();
           // Play notification sound for new orders
-          if (soundEnabled) {
+          if (soundEnabledRef.current) {
             playNotificationSound(0.5);
           }
           showToast('🔔 New order received!', 'info');
@@ -655,7 +660,7 @@ export default function StaffDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [refetch, showToast, soundEnabled]);
+  }, [refetch, showToast]);
 
   // Track order count for notifications (sound already played by realtime INSERT handler)
   useEffect(() => {
@@ -771,6 +776,27 @@ export default function StaffDashboard() {
   const handleBatchStatusUpdate = useCallback(async (status: string) => {
     if (selectedOrders.length === 0) return;
     
+    // Pre-filter: only include orders whose current status is a valid predecessor
+    const validPredecessors: Record<string, string[]> = {
+      preparing: ['pending'],
+      ready: ['preparing'],
+      completed: ['ready'],
+    };
+    const allowedFrom = validPredecessors[status] || [];
+    const eligibleOrderIds = orders
+      ? selectedOrders.filter(id => {
+          const order = orders.find(o => o.id === id);
+          return order && allowedFrom.includes(order.status);
+        })
+      : selectedOrders;
+
+    if (eligibleOrderIds.length === 0) {
+      showToast(`No selected orders can be moved to "${status}" from their current status`, 'error');
+      return;
+    }
+
+    const skippedCount = selectedOrders.length - eligibleOrderIds.length;
+    
     try {
       const accessToken = await ensureValidAccessToken();
 
@@ -785,7 +811,7 @@ export default function StaffDashboard() {
           },
           body: JSON.stringify({
             action: 'bulk-update-status',
-            order_ids: selectedOrders,
+            order_ids: eligibleOrderIds,
             status
           }),
         }
@@ -797,13 +823,14 @@ export default function StaffDashboard() {
         throw new Error(result.message || 'Failed to update orders');
       }
 
-      showToast(`${result.updated_count || selectedOrders.length} orders marked as ${status}`, 'success');
+      const msg = `${result.updated_count || eligibleOrderIds.length} orders marked as ${status}`;
+      showToast(skippedCount > 0 ? `${msg} (${skippedCount} skipped — incompatible status)` : msg, 'success');
       setSelectedOrders([]);
       refetch();
     } catch (error) {
       showToast(friendlyError(error instanceof Error ? error.message : '', 'update orders'), 'error');
     }
-  }, [selectedOrders, refetch, showToast]);
+  }, [selectedOrders, orders, refetch, showToast]);
 
   const handleCancelOrder = async (orderId: string) => {
     try {
@@ -1008,6 +1035,10 @@ export default function StaffDashboard() {
   }, [selectedOrders, handleBatchStatusUpdate]);
 
   const getStatusBadge = (status: string, paymentStatus?: string) => {
+    // Show failed / timeout payment distinctly
+    if (paymentStatus === 'failed' || paymentStatus === 'timeout') {
+      return 'bg-red-200 dark:bg-red-900/50 text-red-800 dark:text-red-300';
+    }
     // Show awaiting payment status differently
     if (status === 'awaiting_payment' || paymentStatus === 'awaiting_payment') {
       return 'bg-orange-200 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300';
@@ -1016,12 +1047,16 @@ export default function StaffDashboard() {
       pending: 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
       preparing: 'bg-yellow-200 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300',
       ready: 'bg-green-200 dark:bg-green-900/50 text-green-800 dark:text-green-300',
-      completed: 'bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
+      completed: 'bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300',
+      cancelled: 'bg-red-200 dark:bg-red-900/50 text-red-800 dark:text-red-300',
     };
     return styles[status] || styles.pending;
   };
 
   const getStatusIcon = (status: string, paymentStatus?: string) => {
+    if (paymentStatus === 'failed' || paymentStatus === 'timeout') {
+      return <XCircle size={16} />;
+    }
     if (status === 'awaiting_payment' || paymentStatus === 'awaiting_payment') {
       return <Banknote size={16} />;
     }
@@ -1851,10 +1886,16 @@ export default function StaffDashboard() {
                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                               Parent: {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                               {order.parent?.phone_number && ` • ${order.parent.phone_number}`}
-                              {order.payment_method && ` • `}
-                              {order.payment_method === 'cash' && <span className="text-orange-600 dark:text-orange-400 font-medium">CASH</span>}
-                              {order.payment_method === 'balance' && <span className="text-green-600 dark:text-green-400 font-medium">BALANCE</span>}
-                              {order.payment_method === 'gcash' && <span className="text-blue-600 dark:text-blue-400 font-medium">GCASH</span>}
+                              {order.payment_method && (
+                                <>
+                                  {' • '}
+                                  <span className={`font-medium ${
+                                    order.payment_method === 'cash' ? 'text-orange-600 dark:text-orange-400' :
+                                    order.payment_method === 'balance' ? 'text-green-600 dark:text-green-400' :
+                                    'text-blue-600 dark:text-blue-400'
+                                  }`}>{getPaymentMethodLabel(order.payment_method).toUpperCase()}</span>
+                                </>
+                              )}
                             </p>
 
                             {/* Scheduled Date (for future orders) */}
@@ -1949,22 +1990,40 @@ export default function StaffDashboard() {
                                 </>
                               )}
                               {order.status === 'preparing' && (
-                                <button
-                                  onClick={() => updateOrderStatus(order.id, 'ready')}
-                                  className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
-                                >
-                                  <Bell size={18} />
-                                  Mark Ready
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => updateOrderStatus(order.id, 'ready')}
+                                    className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                                  >
+                                    <Bell size={18} />
+                                    Mark Ready
+                                  </button>
+                                  <button
+                                    onClick={() => setShowCancelDialog(order.id)}
+                                    className="p-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg"
+                                    title="Cancel order"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </>
                               )}
                               {order.status === 'ready' && (
-                                <button
-                                  onClick={() => updateOrderStatus(order.id, 'completed')}
-                                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 font-medium flex items-center justify-center gap-2"
-                                >
-                                  <CheckCircle size={18} />
-                                  Complete Order
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => updateOrderStatus(order.id, 'completed')}
+                                    className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 font-medium flex items-center justify-center gap-2"
+                                  >
+                                    <CheckCircle size={18} />
+                                    Complete Order
+                                  </button>
+                                  <button
+                                    onClick={() => setShowCancelDialog(order.id)}
+                                    className="p-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg"
+                                    title="Cancel order"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </>
                               )}
                               {/* Add Note Button */}
                               <button
@@ -2184,10 +2243,16 @@ export default function StaffDashboard() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                     Parent: {order.parent?.first_name || 'Unknown'} {order.parent?.last_name || ''}
                     {order.parent?.phone_number && ` • ${order.parent.phone_number}`}
-                    {order.payment_method && ` • `}
-                    {order.payment_method === 'cash' && <span className="text-orange-600 dark:text-orange-400 font-medium">CASH</span>}
-                    {order.payment_method === 'balance' && <span className="text-green-600 dark:text-green-400 font-medium">BALANCE</span>}
-                    {order.payment_method === 'gcash' && <span className="text-blue-600 dark:text-blue-400 font-medium">GCASH</span>}
+                    {order.payment_method && (
+                      <>
+                        {' • '}
+                        <span className={`font-medium ${
+                          order.payment_method === 'cash' ? 'text-orange-600 dark:text-orange-400' :
+                          order.payment_method === 'balance' ? 'text-green-600 dark:text-green-400' :
+                          'text-blue-600 dark:text-blue-400'
+                        }`}>{getPaymentMethodLabel(order.payment_method).toUpperCase()}</span>
+                      </>
+                    )}
                   </p>
 
                   {/* Scheduled Date (for future orders) */}
@@ -2282,22 +2347,40 @@ export default function StaffDashboard() {
                       </>
                     )}
                     {order.status === 'preparing' && (
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'ready')}
-                        className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
-                      >
-                        <Bell size={18} />
-                        Mark Ready
-                      </button>
+                      <>
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'ready')}
+                          className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                        >
+                          <Bell size={18} />
+                          Mark Ready
+                        </button>
+                        <button
+                          onClick={() => setShowCancelDialog(order.id)}
+                          className="p-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg"
+                          title="Cancel order"
+                        >
+                          <X size={18} />
+                        </button>
+                      </>
                     )}
                     {order.status === 'ready' && (
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'completed')}
-                        className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 font-medium flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle size={18} />
-                        Complete Order
-                      </button>
+                      <>
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'completed')}
+                          className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 font-medium flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle size={18} />
+                          Complete Order
+                        </button>
+                        <button
+                          onClick={() => setShowCancelDialog(order.id)}
+                          className="p-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg"
+                          title="Cancel order"
+                        >
+                          <X size={18} />
+                        </button>
+                      </>
                     )}
                     {/* Add Note Button */}
                     <button

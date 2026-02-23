@@ -64,6 +64,13 @@ export function useOrderSubscription() {
     queryClientRef.current.invalidateQueries({ queryKey: ['active-orders'] });
     queryClientRef.current.invalidateQueries({ queryKey: ['scheduled-orders'] });
     queryClientRef.current.invalidateQueries({ queryKey: ['active-order-count'] });
+    
+    // Refresh balance when payment status changes (paid, refunded, or cancelled)
+    if (newPaymentStatus && newPaymentStatus !== oldPaymentStatus) {
+      queryClientRef.current.invalidateQueries({ queryKey: ['parent-balance'] });
+      queryClientRef.current.invalidateQueries({ queryKey: ['parent-wallet'] });
+      queryClientRef.current.invalidateQueries({ queryKey: ['profile'] });
+    }
   }, []);
 
   useEffect(() => {
