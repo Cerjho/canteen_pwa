@@ -18,13 +18,9 @@
           var bg    = isDark ? '#111827' : '#F9FAFB';
           var txt   = isDark ? '#F3F4F6' : '#111827';
           var sub   = isDark ? '#9CA3AF' : '#6B7280';
-          var ring  = isDark ? '#374151' : '#E5E7EB';
-          var accent= isDark ? '#818CF8' : '#6366F1';
           d.style.setProperty('--splash-bg', bg);
           d.style.setProperty('--splash-text', txt);
           d.style.setProperty('--splash-sub', sub);
-          d.style.setProperty('--splash-ring', ring);
-          d.style.setProperty('--splash-accent', accent);
 
           // Status-bar / address-bar colour
           var meta = document.getElementById('dynamic-theme-color');
@@ -87,18 +83,6 @@
         font-size: 14px;
         color: var(--splash-sub, #6B7280);
       }
-      #splash-screen .splash-loader {
-        margin-top: 32px;
-        width: 32px;
-        height: 32px;
-        border: 3px solid var(--splash-ring, #E5E7EB);
-        border-top-color: var(--splash-accent, #6366F1);
-        border-radius: 50%;
-        animation: splash-spin 0.8s linear infinite;
-      }
-      @keyframes splash-spin {
-        to { transform: rotate(360deg); }
-      }
       @keyframes splash-bounce {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-8px); }
@@ -110,7 +94,6 @@
       <img src="/icons/icon-192.png" alt="" class="splash-icon" />
       <div class="splash-title">LOHECA Canteen</div>
       <div class="splash-subtitle">Order food for your kids</div>
-      <div class="splash-loader"></div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
