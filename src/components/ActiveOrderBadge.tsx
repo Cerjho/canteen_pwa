@@ -19,15 +19,19 @@ export function useActiveOrderCount() {
       // Safety check - should not happen due to enabled flag but TypeScript needs it
       if (!user?.id) return 0;
       
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
-        .select('*', { count: 'exact', head: true })
+        .select('student_id, scheduled_for')
         .eq('parent_id', user.id)
         .eq('scheduled_for', todayStr)
         .in('status', ['awaiting_payment', 'pending', 'preparing', 'ready']);
       
       if (error) throw error;
-      return count || 0;
+      if (!data) return 0;
+
+      // Count distinct (student_id, scheduled_for) pairs to match Dashboard's grouped display
+      const groups = new Set(data.map(o => `${o.student_id}_${o.scheduled_for}`));
+      return groups.size;
     },
     enabled: !!user?.id, // Only run when user is authenticated
     refetchInterval: 30000 // Refresh every 30 seconds

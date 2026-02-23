@@ -223,9 +223,9 @@ export interface CreateOrderRequest {
 }
 
 export interface OrderWithDetails extends Order {
-  student?: Pick<Student, 'first_name' | 'last_name'>;
+  student?: Pick<Student, 'id' | 'first_name' | 'last_name'>;
   // @deprecated Use 'student' instead - kept for backward compatibility
-  child?: Pick<Child, 'first_name' | 'last_name'>;
+  child?: Pick<Child, 'id' | 'first_name' | 'last_name'>;
   items: Array<OrderItem & {
     product: Pick<Product, 'name' | 'image_url'>;
   }>;
