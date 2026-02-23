@@ -5,16 +5,17 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Dynamically set theme-color based on user/app preference -->
-    <meta name="theme-color" content="" id="dynamic-theme-color" />
+    <meta name="theme-color" content="#4F46E5" id="dynamic-theme-color" />
     <script>
       (function() {
         try {
-          var THEME_STORAGE_KEY = 'theme';
+          var THEME_STORAGE_KEY = 'canteen_theme';
           var theme = localStorage.getItem(THEME_STORAGE_KEY);
           if (!theme) {
             theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
           }
-          var color = theme === 'dark' ? '#18181b' : '#EEF2FF'; // Match Tailwind primary 500
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+          var color = theme === 'dark' ? '#18181b' : '#4F46E5';
           var meta = document.getElementById('dynamic-theme-color');
           if (meta) meta.setAttribute('content', color);
         } catch (e) {}
@@ -24,8 +25,71 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>School Canteen</title>
+    <style>
+      #splash-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #818CF8 100%);
+        transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+      }
+      #splash-screen.hide {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .dark #splash-screen {
+        background: linear-gradient(135deg, #312E81 0%, #3730A3 50%, #4338CA 100%);
+      }
+      #splash-screen .splash-icon {
+        width: 96px;
+        height: 96px;
+        border-radius: 24px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        animation: splash-bounce 1.2s ease-in-out infinite;
+      }
+      #splash-screen .splash-title {
+        margin-top: 24px;
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: -0.025em;
+      }
+      #splash-screen .splash-subtitle {
+        margin-top: 8px;
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 14px;
+        color: rgba(255,255,255,0.8);
+      }
+      #splash-screen .splash-loader {
+        margin-top: 32px;
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: splash-spin 0.8s linear infinite;
+      }
+      @keyframes splash-spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes splash-bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash-screen">
+      <img src="/icons/icon-192.png" alt="" class="splash-icon" />
+      <div class="splash-title">LOHECA Canteen</div>
+      <div class="splash-subtitle">Order food for your kids</div>
+      <div class="splash-loader"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

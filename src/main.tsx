@@ -51,3 +51,15 @@ ReactDOM.createRoot(rootElement).render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// Dismiss splash screen after React has mounted
+requestAnimationFrame(() => {
+  const splash = document.getElementById('splash-screen');
+  if (splash) {
+    // Small delay so the first paint is visible
+    setTimeout(() => {
+      splash.classList.add('hide');
+      splash.addEventListener('transitionend', () => splash.remove(), { once: true });
+    }, 600);
+  }
+});
