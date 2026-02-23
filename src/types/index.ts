@@ -107,7 +107,7 @@ export function isOnlinePaymentMethod(method: string): boolean {
   return ONLINE_PAYMENT_METHODS.includes(method as PaymentMethod);
 }
 
-export type PaymentStatus = 'awaiting_payment' | 'paid' | 'timeout' | 'refunded';
+export type PaymentStatus = 'awaiting_payment' | 'paid' | 'timeout' | 'refunded' | 'failed';
 
 export interface Order {
   id: string;
@@ -121,6 +121,7 @@ export interface Order {
   payment_due_at?: string;
   paymongo_checkout_id?: string;
   paymongo_payment_id?: string;
+  payment_group_id?: string;
   notes?: string;
   scheduled_for?: string;
   meal_period?: MealPeriod;

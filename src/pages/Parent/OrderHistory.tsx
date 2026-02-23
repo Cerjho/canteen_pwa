@@ -85,6 +85,8 @@ export default function OrderHistory() {
         return { text: `Refunded (${method})`, color: 'text-blue-600 dark:text-blue-400' };
       case 'timeout':
         return { text: 'Payment expired', color: 'text-red-600 dark:text-red-400' };
+      case 'failed':
+        return { text: 'Payment failed', color: 'text-red-600 dark:text-red-400' };
       default:
         return { text: `${method}`, color: 'text-gray-500 dark:text-gray-400' };
     }
@@ -275,6 +277,11 @@ export default function OrderHistory() {
                       {order.payment_status === 'timeout' && (
                         <span className="block text-red-600 dark:text-red-400 mt-0.5">
                           Order auto-cancelled
+                        </span>
+                      )}
+                      {order.payment_status === 'failed' && (
+                        <span className="block text-red-600 dark:text-red-400 mt-0.5">
+                          Payment failed
                         </span>
                       )}
                       {/* Show refund note for cancelled + paid orders */}

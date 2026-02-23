@@ -1048,7 +1048,7 @@ export default function StaffDashboard() {
   
   // Check if payment is expired
   const isPaymentExpired = (paymentDueAt: string | null, paymentStatus?: string) => {
-    if (paymentStatus === 'timeout') return true;
+    if (paymentStatus === 'timeout' || paymentStatus === 'failed') return true;
     if (!paymentDueAt) return false;
     const due = new Date(paymentDueAt);
     return due.getTime() < Date.now();

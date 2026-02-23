@@ -51,6 +51,8 @@ export function useOrderSubscription() {
         showToastRef.current('💰 Payment confirmed!', 'success');
       } else if (newPaymentStatus === 'timeout') {
         showToastRef.current('⏰ Payment expired - order cancelled', 'error');
+      } else if (newPaymentStatus === 'failed') {
+        showToastRef.current('❌ Payment failed - order cancelled', 'error');
       } else if (newPaymentStatus === 'refunded') {
         showToastRef.current('💵 Refund processed', 'info');
       }

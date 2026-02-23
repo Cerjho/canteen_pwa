@@ -132,10 +132,17 @@ Parent orders for children.
 | `parent_id` | uuid | FOREIGN KEY → parents(id), NOT NULL | |
 | `child_id` | uuid | FOREIGN KEY → children(id), NOT NULL | |
 | `client_order_id` | uuid | UNIQUE, NOT NULL | Idempotency key |
-| `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "preparing", "ready", "completed", "cancelled" |
+| `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "preparing", "ready", "completed", "cancelled", "awaiting_payment" |
 | `total_amount` | numeric(10,2) | NOT NULL | |
-| `payment_method` | text | NOT NULL | "cash", "balance", "gcash" |
+| `payment_method` | text | NOT NULL | "cash", "balance", "gcash", "paymaya", "card", "paymongo" |
+| `payment_status` | payment_status | DEFAULT 'paid' | "awaiting_payment", "paid", "timeout", "refunded", "failed" |
+| `payment_due_at` | timestamptz | | Deadline for payment (cash: 4hrs, online: 30min) |
+| `payment_group_id` | uuid | | Groups batch orders for shared payment tracking |
+| `paymongo_checkout_id` | text | | PayMongo checkout session ID |
+| `paymongo_payment_id` | text | | PayMongo payment ID (set after payment confirmed) |
 | `notes` | text | | Special instructions |
+| `scheduled_for` | date | | Scheduled delivery date |
+| `meal_period` | text | | "morning_snack", "lunch", "afternoon_snack" |
 | `created_at` | timestamptz | DEFAULT now() | |
 | `updated_at` | timestamptz | DEFAULT now() | |
 | `completed_at` | timestamptz | | Fulfillment timestamp |
@@ -147,13 +154,25 @@ Parent orders for children.
 - `idx_orders_status` on `status`
 - `idx_orders_created_at` on `created_at` (DESC)
 - `idx_orders_client_order_id` on `client_order_id` (UNIQUE)
+- `idx_orders_payment_status` on `payment_status` WHERE `payment_status = 'awaiting_payment'`
+- `idx_orders_payment_group` on `payment_group_id` WHERE `payment_group_id IS NOT NULL`
+- `idx_orders_paymongo_checkout_id` on `paymongo_checkout_id` WHERE NOT NULL
 
 **RLS**: Parents see only their orders, staff see all.
 
 **Constraints**:
 
-- CHECK: `status IN ('pending', 'preparing', 'ready', 'completed', 'cancelled')`
-- CHECK: `payment_method IN ('cash', 'balance', 'gcash', 'paymongo')`
+- CHECK: `status IN ('awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled')`
+- CHECK: `payment_method IN ('cash', 'balance', 'gcash', 'paymaya', 'card', 'paymongo')`
+
+**Triggers**:
+
+- `validate_order_status_transition` — Enforces valid status transitions at DB level:
+  - `awaiting_payment` → `pending`, `cancelled`
+  - `pending` → `preparing`, `cancelled`
+  - `preparing` → `ready`, `cancelled`
+  - `ready` → `completed`, `cancelled`
+  - `completed` and `cancelled` are terminal states
 
 ---
 
@@ -236,6 +255,18 @@ INSERT INTO products (name, description, price, category, available, stock_quant
 - Foreign keys: `<table_singular>_id`
 - Timestamps: `_at` suffix
 - Boolean flags: `is_` or bare adjective (e.g., `available`)
+
+---
+
+## RPC Functions
+
+### `increment_stock(p_product_id UUID, p_quantity INTEGER)`
+
+Atomically increments a product's `stock_quantity`. Used when restoring stock for cancelled/failed/refunded orders. Raises exception if product not found.
+
+### `decrement_stock(p_product_id UUID, p_quantity INTEGER)`
+
+Atomically decrements a product's `stock_quantity` with `FOR UPDATE` row lock to prevent concurrent deductions. Raises exception if product not found or insufficient stock. Used during order creation to reserve inventory.
 
 ---
 

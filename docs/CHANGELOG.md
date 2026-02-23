@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ordering Flow Overhaul**: Comprehensive backend + frontend reliability improvements
+  - Atomic `increment_stock`/`decrement_stock` RPC functions with `FOR UPDATE` row locks (eliminates stock race conditions)
+  - `payment_group_id` UUID column on orders table for batch order tracking
+  - `'failed'` value added to `payment_status` ENUM (for PayMongo payment rejections)
+  - `validate_order_status_transition` trigger enforcing valid order state machine at DB level
+  - Frontend support for `'failed'` payment status (toasts, badges, dashboard, order history)
+
+### Fixed
+
+- **Stock race conditions**: All edge functions now use atomic RPCs instead of read-then-write patterns
+- **Batch checkout**: `paymongo_checkout_id` now saved on ALL batch orders (was only first order)
+- **Batch payment failure**: Webhook now cancels ALL orders in a `payment_group_id` group (was only cancelling one)
+- **Batch self-healing**: `check-payment-status` now heals ALL batch siblings (was only the queried order)
+- **Balance refund on timeout**: `cleanup-timeout-orders` now refunds wallet for balance-paid orders that expire
+- **confirm-cash-payment**: Removed write to non-existent `updated_at` column on transactions table
+- **manage-order refund logic**: Wallet refund only applied when `payment_status === 'paid'` (no longer refunds unpaid orders)
+- **Cash order timeout**: Increased from 15 minutes to 4 hours
+- **Proper rollback**: All edge functions track reserved products and roll back stock on any failure path
+
 - **Student Management System**: Admin-only student registration
   - Admin can add students manually or via CSV import
   - Auto-generated Student IDs (YY-XXXXX format)
@@ -18,11 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `created_by` tracking for student records
 - CSV import with template download feature
 
+- Cart drawer animation glitch
+- Product price formatting
+
 ### Changed
 
 - `children.parent_id` is now nullable (students exist before parent links)
 - Profile page redesigned for linking flow instead of adding children
 - Admin nav updated with "Students" menu item
+- Improved mobile navigation
+- Updated color scheme
 
 ### Security
 
@@ -30,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Admins: Full CRUD on all students
   - Parents: View linked children, link unlinked students, update dietary info
   - Staff: View all students for order processing
+- Implemented RLS on all tables
+- Added input validation
+- HTTPS enforced
 
 ## [1.0.0] - 2026-01-15
 
@@ -44,12 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Push notifications
 - E2E testing suite
 
-### Security
-
-- Implemented RLS on all tables
-- Added input validation
-- HTTPS enforced
-
 ## [0.2.0] - 2026-01-08
 
 ### Added in 0.2.0
@@ -58,16 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Child selector component
 - Product cards with images
 - Responsive design
-
-### Changed
-
-- Improved mobile navigation
-- Updated color scheme
-
-### Fixed
-
-- Cart drawer animation glitch
-- Product price formatting
 
 ## [0.1.0] - 2026-01-01
 

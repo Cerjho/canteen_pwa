@@ -69,13 +69,13 @@ export default function OrderConfirmation() {
         try {
           const result = await checkPaymentStatus(orderIdParam);
           // Edge function returns: payment_status (order) or status (topup)
-          // For orders: 'paid' | 'awaiting_payment' | 'timeout' | 'refunded'
+          // For orders: 'paid' | 'awaiting_payment' | 'timeout' | 'refunded' | 'failed'
           // order_status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment'
           if (result.payment_status === 'paid' || result.order_status === 'preparing' || result.order_status === 'ready') {
             if (!cancelled) setVerificationStatus('confirmed');
             return;
           }
-          if (result.payment_status === 'timeout' || result.order_status === 'cancelled') {
+          if (result.payment_status === 'timeout' || result.payment_status === 'failed' || result.order_status === 'cancelled') {
             if (!cancelled) setVerificationStatus('failed');
             return;
           }

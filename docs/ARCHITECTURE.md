@@ -47,8 +47,13 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 │                      │                                       │
 │  ┌───────────────────▼─────────────────────────────────┐   │
 │  │   Edge Functions (Deno)                             │   │
-│  │   - process-order (idempotent)                       │   │
-│  │   - refund-order                                     │   │
+│  │   - process-order (atomic stock, rollback)           │   │
+│  │   - create-batch-checkout (PayMongo batch)           │   │
+│  │   - paymongo-webhook (batch-aware)                   │   │
+│  │   - check-payment-status (batch self-heal)           │   │
+│  │   - cleanup-timeout-orders (wallet refund)           │   │
+│  │   - confirm-cash-payment                             │   │
+│  │   - manage-order (atomic stock restore)              │   │
 │  │   - notify (push/SMS)                                │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
@@ -68,13 +73,14 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 
 1. Parent selects child and adds items to cart
 2. Cart generates `client_order_id` (UUID v4)
-3. Frontend calls Supabase Edge Function `process-order`
+3. Frontend calls Supabase Edge Function `process-order` (cash/balance) or `create-batch-checkout` (online payment)
 4. Edge Function:
    - Validates parent owns child
-   - Checks inventory
-   - Creates order + order_items in transaction
-   - Deducts stock
-   - Returns order confirmation
+   - Reserves stock via atomic `decrement_stock` RPC (with `FOR UPDATE` row lock)
+   - Creates order + order_items
+   - On any failure: rolls back reserved stock via `increment_stock` RPC
+   - For online payments: creates PayMongo checkout session, saves `paymongo_checkout_id` on ALL batch orders via `payment_group_id`
+   - Returns order confirmation (or checkout URL for online payments)
 5. Frontend updates UI and clears cart
 
 ### Order Creation (Offline)
@@ -148,6 +154,7 @@ Child/Student (represented as data, no auth - managed by admin)
 ```
 
 **Student Management Flow**:
+
 1. Admin adds students (individually or CSV import)
 2. System generates unique Student ID (YY-XXXXX format)
 3. School provides Student ID to parents

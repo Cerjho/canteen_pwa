@@ -249,6 +249,7 @@ Admin-only student management (add, update, delete, unlink, import).
 - **400 Constraint Error**: Cannot delete student with orders
 
 **Security**:
+
 - Validates admin role from JWT token
 - Sanitizes all input strings
 - Server-side student ID generation
@@ -301,6 +302,7 @@ Parent linking/unlinking students.
 - **403 Forbidden**: Attempting to unlink other's child
 
 **Security**:
+
 - Verifies parent role from JWT
 - Prevents linking already-linked students
 - Race condition protection on link operation
@@ -342,6 +344,7 @@ Parent updates child's dietary restrictions.
 - **404 Not Found**: Child not found
 
 **Security**:
+
 - Verifies parent owns the child
 - Sanitizes input (max 500 chars, strips HTML)
 - Only allows dietary_restrictions update
@@ -528,11 +531,57 @@ Clients should implement exponential backoff on 429 responses.
 
 ---
 
-## Webhooks (Future)
+## Webhooks
 
-Placeholder for payment provider webhooks:
+### POST /functions/v1/paymongo-webhook
 
-- **POST /functions/v1/webhook/gcash**
-- **POST /functions/v1/webhook/paymongo**
+Receives PayMongo webhook events. Verifies HMAC-SHA256 signature.
 
-TODO: Implement webhook signature verification.
+**Handled Events**:
+
+| Event | Action |
+| ----- | ------ |
+| `checkout_session.payment.paid` | Marks order(s) as paid, creates transaction record |
+| `payment.failed` | Cancels ALL orders in batch via `payment_group_id`, restores stock |
+| `payment.refunded` | Confirms refund completed |
+
+**Batch Handling**: When a payment fails, the webhook queries all orders sharing the same `payment_group_id` and cancels each one, restoring stock via atomic `increment_stock` RPC.
+
+---
+
+## RPC Functions (Database)
+
+### `decrement_stock(p_product_id UUID, p_quantity INTEGER)`
+
+Atomically decrements product stock with `FOR UPDATE` row lock. Raises exception on insufficient stock or missing product. Used by `process-order` and `create-batch-checkout`.
+
+### `increment_stock(p_product_id UUID, p_quantity INTEGER)`
+
+Atomically increments product stock. Used by `paymongo-webhook`, `cleanup-timeout-orders`, and `manage-order` for stock restoration on cancellation/failure.
+
+---
+
+## Order Payment Status Values
+
+| Status | Description |
+| ------ | ----------- |
+| `awaiting_payment` | Order created, waiting for payment (cash or online) |
+| `paid` | Payment confirmed |
+| `timeout` | Payment deadline expired (set by cleanup-timeout-orders cron) |
+| `failed` | Payment explicitly failed (set by PayMongo webhook on payment.failed) |
+| `refunded` | Payment was refunded |
+
+---
+
+## Order Status Transitions (DB-Enforced)
+
+The `validate_order_status_transition` trigger enforces:
+
+```text
+awaiting_payment → pending, cancelled
+pending → preparing, cancelled
+preparing → ready, cancelled
+ready → completed, cancelled
+completed → (terminal)
+cancelled → (terminal)
+```

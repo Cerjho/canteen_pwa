@@ -159,7 +159,7 @@ export default function ParentDashboard() {
         .eq('parent_id', user.id)
         .eq('scheduled_for', todayStr)
         .eq('status', 'cancelled')
-        .eq('payment_status', 'timeout')
+        .in('payment_status', ['timeout', 'failed'])
         .gte('updated_at', oneHourAgo)
         .order('created_at', { ascending: false });
       
@@ -320,12 +320,12 @@ export default function ParentDashboard() {
 
   const getStatusDetails = (status: string, paymentStatus?: string, paymentMethod?: string) => {
     // Check for timeout first
-    if (paymentStatus === 'timeout') {
+    if (paymentStatus === 'timeout' || paymentStatus === 'failed') {
       return {
         icon: XCircle,
-        label: 'Timed Out',
+        label: paymentStatus === 'timeout' ? 'Timed Out' : 'Payment Failed',
         color: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
-        message: 'Payment expired - Order cancelled',
+        message: paymentStatus === 'timeout' ? 'Payment expired - Order cancelled' : 'Payment failed - Order cancelled',
         progress: 0
       };
     }
@@ -492,7 +492,7 @@ export default function ParentDashboard() {
                 const hasAwaitingPayment = group.orders.some(o =>
                   o.status === 'awaiting_payment' || o.payment_status === 'awaiting_payment'
                 );
-                const hasTimedOut = group.orders.some(o => o.payment_status === 'timeout');
+                const hasTimedOut = group.orders.some(o => o.payment_status === 'timeout' || o.payment_status === 'failed');
                 const hasPreparing = group.orders.some(o => o.status === 'preparing');
 
                 const primaryStatus = hasReadyOrder ? 'ready'
@@ -616,7 +616,7 @@ export default function ParentDashboard() {
                                   )}
                                   {group.orders.length > 1 && (
                                     <span className={`inline-flex items-center gap-1 text-xs ${
-                                      order.payment_status === 'timeout' ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'
+                                      (order.payment_status === 'timeout' || order.payment_status === 'failed') ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'
                                     }`}>
                                       <MealStatusIcon size={12} />
                                       {mealStatus.label}
