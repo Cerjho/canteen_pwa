@@ -597,20 +597,21 @@ serve(async (req) => {
       );
     }
 
-    // Deduct balance if payment method is 'balance'
+    // Deduct balance if payment method is 'balance' — atomic RPC
     if (payment_method === 'balance') {
-      const newBalance = currentBalance - totalAmount;
-      // Use optimistic locking to prevent race conditions
-      const { data: balanceResult, error: balanceError } = await supabaseAdmin
-        .from('wallets')
-        .update({ balance: newBalance, updated_at: new Date().toISOString() })
-        .eq('user_id', parent_id)
-        .eq('balance', currentBalance) // Only update if balance hasn't changed
-        .select('balance')
-        .single();
+      const { data: rpcPaymentId, error: rpcError } = await supabaseAdmin.rpc(
+        'deduct_balance_with_payment',
+        {
+          p_parent_id: parent_id,
+          p_expected_balance: currentBalance,
+          p_amount: totalAmount,
+          p_order_ids: [order.id],
+          p_order_amounts: [totalAmount],
+        }
+      );
 
-      if (balanceError || !balanceResult) {
-        console.error('Balance deduction error:', balanceError);
+      if (rpcError) {
+        console.error('Atomic balance deduction error:', rpcError);
         // Rollback: restore stock and delete order
         await supabaseAdmin.from('order_items').delete().eq('order_id', order.id);
         await supabaseAdmin.from('orders').delete().eq('id', order.id);
@@ -623,28 +624,30 @@ serve(async (req) => {
       }
     }
 
-    // Insert payment record (payment-centric model)
-    const { data: payment } = await supabaseAdmin
-      .from('payments')
-      .insert({
-        parent_id,
-        type: 'payment',
-        amount_total: totalAmount,
-        method: payment_method,
-        status: payment_method === 'cash' ? 'pending' : 'completed',
-      })
-      .select('id')
-      .single();
-
-    // Link payment to order via allocation
-    if (payment) {
-      await supabaseAdmin
-        .from('payment_allocations')
+    // Insert payment record for non-balance methods (cash/online create pending payment)
+    if (payment_method !== 'balance') {
+      const { data: payment } = await supabaseAdmin
+        .from('payments')
         .insert({
-          payment_id: payment.id,
-          order_id: order.id,
-          allocated_amount: totalAmount,
-        });
+          parent_id,
+          type: 'payment',
+          amount_total: totalAmount,
+          method: payment_method,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      // Link payment to order via allocation
+      if (payment) {
+        await supabaseAdmin
+          .from('payment_allocations')
+          .insert({
+            payment_id: payment.id,
+            order_id: order.id,
+            allocated_amount: totalAmount,
+          });
+      }
     }
 
     // Return success response with payment info

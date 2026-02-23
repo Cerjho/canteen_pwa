@@ -99,86 +99,39 @@ serve(async (req) => {
       );
     }
 
-    // Get or create wallet
-    let { data: wallet, error: walletError } = await supabaseAdmin
+    // Get current balance for the response (before atomic topup)
+    const { data: walletBefore } = await supabaseAdmin
       .from('wallets')
-      .select('id, balance')
-      .eq('user_id', user_id)
-      .single();
-
-    if (walletError && walletError.code === 'PGRST116') {
-      // Wallet doesn't exist, create it
-      const { data: newWallet, error: createError } = await supabaseAdmin
-        .from('wallets')
-        .insert({ user_id, balance: 0 })
-        .select('id, balance')
-        .single();
-
-      if (createError) {
-        console.error('Wallet creation error:', createError);
-        return new Response(
-          JSON.stringify({ error: 'WALLET_ERROR', message: 'Failed to create wallet' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      wallet = newWallet;
-    } else if (walletError) {
-      console.error('Wallet fetch error:', walletError);
-      return new Response(
-        JSON.stringify({ error: 'WALLET_ERROR', message: 'Failed to fetch wallet' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const previousBalance = wallet!.balance;
-    const newBalance = previousBalance + amount;
-
-    // Update wallet balance with optimistic locking to prevent race conditions
-    const { data: updateResult, error: updateError } = await supabaseAdmin
-      .from('wallets')
-      .update({ 
-        balance: newBalance, 
-        updated_at: new Date().toISOString() 
-      })
-      .eq('user_id', user_id)
-      .eq('balance', previousBalance) // Optimistic lock - only update if balance hasn't changed
       .select('balance')
+      .eq('user_id', user_id)
       .single();
-    
-    // If no rows updated, balance was modified by concurrent transaction
-    if (!updateResult && !updateError) {
-      return new Response(
-        JSON.stringify({ error: 'CONCURRENT_MODIFICATION', message: 'Balance was modified by another transaction. Please retry.' }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const previousBalance = walletBefore?.balance ?? 0;
 
-    if (updateError) {
-      console.error('Balance update error:', updateError);
+    // Atomic: wallet credit + topup payment record in one DB transaction
+    const referenceId = notes
+      ? `TOPUP-${Date.now()}-${user.id.slice(-6)}: ${notes}`
+      : `TOPUP-${Date.now()}-${user.id.slice(-6)}`;
+
+    const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
+      'credit_balance_with_payment',
+      {
+        p_parent_id: user_id,
+        p_amount: amount,
+        p_type: 'topup',
+        p_method: 'cash',
+        p_reference_id: referenceId,
+      }
+    );
+
+    if (rpcError) {
+      console.error('Atomic topup error:', rpcError);
       return new Response(
-        JSON.stringify({ error: 'UPDATE_ERROR', message: 'Failed to update balance' }),
+        JSON.stringify({ error: 'TOPUP_FAILED', message: 'Failed to process top-up. Please retry.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create payment record
-    const { error: txError } = await supabaseAdmin
-      .from('payments')
-      .insert({
-        parent_id: user_id,
-        type: 'topup',
-        amount_total: amount,
-        method: 'cash',
-        status: 'completed',
-        reference_id: notes
-          ? `TOPUP-${Date.now()}-${user.id.slice(-6)}: ${notes}`
-          : `TOPUP-${Date.now()}-${user.id.slice(-6)}`,
-      });
-
-    if (txError) {
-      console.error('Transaction record error:', txError);
-      // Don't fail the request, balance is already updated
-    }
+    const newBalance = previousBalance + amount;
 
     // Log admin action
     console.log(`Admin ${user.email} topped up ${targetUser.first_name} ${targetUser.last_name} (${user_id}) by ₱${amount}. Previous: ₱${previousBalance}, New: ₱${newBalance}`);

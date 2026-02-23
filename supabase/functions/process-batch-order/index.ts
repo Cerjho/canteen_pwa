@@ -403,59 +403,63 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
     }
 
-    // Insert ONE payment row for the entire batch (payment-centric model)
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('payments')
-      .insert({
-        parent_id,
-        type: 'payment',
-        amount_total: grandTotal,
-        method: payment_method,
-        status: isCash ? 'pending' : 'completed',
-      })
-      .select('id')
-      .single();
-
-    if (paymentError || !payment) {
-      console.error('Payment insert error (non-fatal):', paymentError);
-      // Non-fatal — orders are already created, payment can be reconciled
-    } else {
-      // Link payment to each order via allocations
-      const allAllocations = createdOrders.map(o => ({
-        payment_id: payment.id,
-        order_id: o.id,
-        allocated_amount: o.total_amount,
-      }));
-
-      const { error: allocError } = await supabaseAdmin
-        .from('payment_allocations')
-        .insert(allAllocations);
-      if (allocError) {
-        console.error('Payment allocations insert error (non-fatal):', allocError);
-      }
-    }
-
-    // ── Deduct balance ONCE for grand total ──
+    // ── Payment handling ──
     if (payment_method === 'balance') {
-      const newBalance = currentBalance - grandTotal;
-      const { error: balanceError } = await supabaseAdmin
-        .from('wallets')
-        .update({ balance: newBalance, updated_at: new Date().toISOString() })
-        .eq('user_id', parent_id)
-        .eq('balance', currentBalance); // Optimistic locking
+      // Atomic RPC: deduct wallet + create payment + allocations in one DB transaction
+      const orderIds = createdOrders.map(o => o.id);
+      const orderAmounts = createdOrders.map(o => o.total_amount);
 
-      if (balanceError) {
-        console.error('Balance deduction error:', balanceError);
-        // Rollback: delete orders (cascade), restore stock, clean up payment
-        await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
-        if (payment) {
-          await supabaseAdmin.from('payment_allocations').delete().eq('payment_id', payment.id);
-          await supabaseAdmin.from('payments').delete().eq('id', payment.id);
+      const { data: rpcPaymentId, error: rpcError } = await supabaseAdmin.rpc(
+        'deduct_balance_with_payment',
+        {
+          p_parent_id: parent_id,
+          p_expected_balance: currentBalance,
+          p_amount: grandTotal,
+          p_order_ids: orderIds,
+          p_order_amounts: orderAmounts,
         }
+      );
+
+      if (rpcError) {
+        console.error('Atomic balance deduction error:', rpcError);
+        // Rollback: delete orders (cascade), restore stock
+        await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
         await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
         await rollbackStock();
         return errorResponse(corsHeaders, 409, 'BALANCE_DEDUCTION_FAILED',
           'Failed to deduct balance. Balance may have changed. Please retry.');
+      }
+    } else {
+      // Cash: create pending payment + allocations (no wallet deduction)
+      const { data: payment, error: paymentError } = await supabaseAdmin
+        .from('payments')
+        .insert({
+          parent_id,
+          type: 'payment',
+          amount_total: grandTotal,
+          method: payment_method,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (paymentError || !payment) {
+        console.error('Payment insert error (non-fatal):', paymentError);
+        // Non-fatal — orders are already created, payment can be reconciled
+      } else {
+        // Link payment to each order via allocations
+        const allAllocations = createdOrders.map(o => ({
+          payment_id: payment.id,
+          order_id: o.id,
+          allocated_amount: o.total_amount,
+        }));
+
+        const { error: allocError } = await supabaseAdmin
+          .from('payment_allocations')
+          .insert(allAllocations);
+        if (allocError) {
+          console.error('Payment allocations insert error (non-fatal):', allocError);
+        }
       }
     }
 

@@ -205,21 +205,29 @@ Replaces the legacy `transactions` table (renamed to `transactions_legacy`).
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
 | `id` | uuid | PRIMARY KEY | |
-| `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | |
-| `type` | text | NOT NULL | "payment", "refund", "topup" |
-| `amount_total` | numeric(10,2) | NOT NULL | Total payment amount |
+| `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | **Immutable** after insert |
+| `type` | text | NOT NULL | "payment", "refund", "topup" — **immutable** after insert |
+| `amount_total` | numeric(10,2) | NOT NULL | Total payment amount — **immutable** after insert |
 | `method` | text | NOT NULL | "cash", "gcash", "paymaya", "card", "paymongo", "balance" |
-| `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "completed", "failed" |
+| `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "completed", "failed" — guarded transitions only |
 | `external_ref` | text | | External reference (e.g. PAYMONGO-xxx) |
-| `paymongo_checkout_id` | text | | PayMongo checkout session ID |
-| `paymongo_payment_id` | text | | PayMongo payment ID |
-| `paymongo_refund_id` | text | | PayMongo refund ID |
+| `paymongo_checkout_id` | text | UNIQUE (partial, non-null) | PayMongo checkout session ID |
+| `paymongo_payment_id` | text | UNIQUE (partial, non-null) | PayMongo payment ID |
+| `paymongo_refund_id` | text | UNIQUE (partial, non-null) | PayMongo refund ID |
 | `payment_group_id` | text | | Groups payments from batch checkout |
 | `reference_id` | text | | Internal reference ID |
+| `original_payment_id` | uuid | FOREIGN KEY → payments(id) | For refunds: links back to original payment |
 | `metadata` | jsonb | DEFAULT '{}' | Flexible key-value data |
 | `created_at` | timestamptz | DEFAULT now() | |
 
-**Indexes**: `parent_id`, `status`, `type`, `payment_group_id`, `paymongo_checkout_id`, `paymongo_payment_id`, `created_at`
+**Indexes**: `parent_id`, `status`, `type`, `payment_group_id`, `paymongo_checkout_id`, `paymongo_payment_id`, `original_payment_id`, `created_at`
+
+**Unique indexes**: `paymongo_payment_id`, `paymongo_checkout_id`, `paymongo_refund_id` (partial, WHERE NOT NULL — prevents webhook double-insert)
+
+**Triggers**:
+
+- `trg_prevent_amount_mutation`: blocks UPDATE of `amount_total`, `type`, `parent_id`
+- `trg_guard_payment_status`: only allows `pending → completed` or `pending → failed`
 
 **RLS**: Parents see only their own payments. Staff/admin can view all.
 
@@ -232,14 +240,28 @@ Links a payment to one or more orders. Enables batch payments (1 payment → N o
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
 | `id` | uuid | PRIMARY KEY | |
-| `payment_id` | uuid | FOREIGN KEY → payments(id) ON DELETE CASCADE, NOT NULL | |
-| `order_id` | uuid | FOREIGN KEY → orders(id) ON DELETE CASCADE, NOT NULL | |
-| `allocated_amount` | numeric(10,2) | NOT NULL | Amount allocated to this order |
+| `payment_id` | uuid | FOREIGN KEY → payments(id) ON DELETE CASCADE, NOT NULL | **Immutable** after insert |
+| `order_id` | uuid | FOREIGN KEY → orders(id) ON DELETE CASCADE, NOT NULL | **Immutable** after insert |
+| `allocated_amount` | numeric(10,2) | NOT NULL | Amount allocated to this order — **immutable** after insert |
 | `created_at` | timestamptz | DEFAULT now() | |
 
 **Indexes**: `payment_id`, `order_id`
 
+**Triggers**:
+
+- `trg_check_allocation_integrity`: `SUM(allocated_amount) ≤ payment.amount_total` (deferred constraint)
+- `trg_prevent_allocation_amount_mutation`: blocks UPDATE of `allocated_amount`, `payment_id`, `order_id`
+
 **RLS**: Parents see allocations for their own payments. Staff/admin can view all.
+
+---
+
+### **Atomic Wallet RPCs**
+
+| Function | Purpose |
+| -------- | ------- |
+| `deduct_balance_with_payment(parent_id, expected_balance, amount, order_ids[], order_amounts[])` | Atomically deducts wallet + creates completed payment + allocations in one DB transaction |
+| `credit_balance_with_payment(parent_id, amount, type, method, ...)` | Atomically credits wallet + creates payment record + optional allocation (used for refunds & top-ups) |
 
 ---
 

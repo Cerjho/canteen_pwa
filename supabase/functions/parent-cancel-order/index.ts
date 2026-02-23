@@ -206,115 +206,43 @@ serve(async (req) => {
     let refundMessage = 'Order cancelled successfully.';
     
     if (order.total_amount > 0) {
-      // Get or create wallet for user
-      let wallet = null;
-      const { data: existingWallet } = await supabaseAdmin
-        .from('wallets')
-        .select('id, balance')
-        .eq('user_id', user.id)
+      // Look up original payment for refund lineage
+      let originalPaymentId: string | null = null;
+      const { data: origAlloc } = await supabaseAdmin
+        .from('payment_allocations')
+        .select('payment_id')
+        .eq('order_id', order_id)
+        .limit(1)
         .single();
-
-      if (existingWallet) {
-        wallet = existingWallet;
-      } else {
-        // Create wallet if it doesn't exist
-        const { data: newWallet, error: createError } = await supabaseAdmin
-          .from('wallets')
-          .insert({ user_id: user.id, balance: 0 })
-          .select('id, balance')
+      if (origAlloc) {
+        const { data: origPay } = await supabaseAdmin
+          .from('payments')
+          .select('id, type')
+          .eq('id', origAlloc.payment_id)
+          .eq('type', 'payment')
           .single();
-        
-        if (!createError && newWallet) {
-          wallet = newWallet;
-        }
+        if (origPay) originalPaymentId = origPay.id;
       }
 
-      if (wallet) {
-        // Add refund to wallet with optimistic locking
-        const previousBalance = wallet.balance || 0;
-        const { data: walletResult, error: refundError } = await supabaseAdmin
-          .from('wallets')
-          .update({
-            balance: previousBalance + order.total_amount,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id)
-          .eq('balance', previousBalance) // Optimistic lock
-          .select('balance')
-          .single();
-
-        if (!refundError && walletResult) {
-          refundApplied = true;
-          refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
-
-          // Record the refund in payments table
-          const { data: refundPayment } = await supabaseAdmin
-            .from('payments')
-            .insert({
-              parent_id: user.id,
-              type: 'refund',
-              amount_total: order.total_amount,
-              method: order.payment_method,
-              status: 'completed',
-              reference_id: `CANCEL-${order_id.substring(0, 8)}`
-            })
-            .select('id')
-            .single();
-
-          if (refundPayment) {
-            await supabaseAdmin.from('payment_allocations').insert({
-              payment_id: refundPayment.id,
-              order_id: order_id,
-              allocated_amount: order.total_amount,
-            });
-          }
-        } else {
-          // Retry once with fresh balance if optimistic lock failed
-          const { data: freshWallet } = await supabaseAdmin
-            .from('wallets')
-            .select('balance')
-            .eq('user_id', user.id)
-            .single();
-          
-          if (freshWallet) {
-            const { data: retryResult, error: retryError } = await supabaseAdmin
-              .from('wallets')
-              .update({
-                balance: freshWallet.balance + order.total_amount,
-                updated_at: new Date().toISOString()
-              })
-              .eq('user_id', user.id)
-              .eq('balance', freshWallet.balance)
-              .select('balance')
-              .single();
-
-            if (!retryError && retryResult) {
-              refundApplied = true;
-              refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
-
-              const { data: retryRefundPayment } = await supabaseAdmin
-                .from('payments')
-                .insert({
-                  parent_id: user.id,
-                  type: 'refund',
-                  amount_total: order.total_amount,
-                  method: order.payment_method,
-                  status: 'completed',
-                  reference_id: `CANCEL-${order_id.substring(0, 8)}`
-                })
-                .select('id')
-                .single();
-
-              if (retryRefundPayment) {
-                await supabaseAdmin.from('payment_allocations').insert({
-                  payment_id: retryRefundPayment.id,
-                  order_id: order_id,
-                  allocated_amount: order.total_amount,
-                });
-              }
-            }
-          }
+      // Atomic: wallet credit + refund payment record + allocation in one DB transaction
+      const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
+        'credit_balance_with_payment',
+        {
+          p_parent_id: user.id,
+          p_amount: order.total_amount,
+          p_type: 'refund',
+          p_method: order.payment_method,
+          p_reference_id: `CANCEL-${order_id.substring(0, 8)}`,
+          p_order_id: order_id,
+          p_original_payment_id: originalPaymentId,
         }
+      );
+
+      if (!rpcError && rpcId) {
+        refundApplied = true;
+        refundMessage = `Order cancelled. ₱${order.total_amount.toFixed(2)} has been added to your wallet balance.`;
+      } else {
+        console.error('Atomic refund error:', rpcError);
       }
     }
 

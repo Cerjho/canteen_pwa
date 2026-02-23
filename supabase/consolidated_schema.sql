@@ -84,6 +84,144 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================
+-- FINANCIAL HARDENING FUNCTIONS
+-- ============================================
+
+-- Allocation integrity: SUM(allocated) ≤ payment.amount_total
+CREATE OR REPLACE FUNCTION check_allocation_integrity()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_payment_id UUID;
+  v_alloc_sum  NUMERIC(10,2);
+  v_total      NUMERIC(10,2);
+BEGIN
+  IF TG_OP = 'DELETE' THEN v_payment_id := OLD.payment_id;
+  ELSE v_payment_id := NEW.payment_id; END IF;
+
+  SELECT COALESCE(SUM(allocated_amount), 0) INTO v_alloc_sum
+  FROM payment_allocations WHERE payment_id = v_payment_id;
+
+  SELECT amount_total INTO v_total FROM payments WHERE id = v_payment_id;
+
+  IF v_alloc_sum > v_total THEN
+    RAISE EXCEPTION 'Allocation integrity violation: SUM=% > amount_total=% (payment %)',
+      v_alloc_sum, v_total, v_payment_id;
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Prevent mutation of core payment fields
+CREATE OR REPLACE FUNCTION prevent_amount_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.amount_total IS DISTINCT FROM NEW.amount_total THEN
+    RAISE EXCEPTION 'amount_total cannot be modified (payment %).', OLD.id;
+  END IF;
+  IF OLD.type IS DISTINCT FROM NEW.type THEN
+    RAISE EXCEPTION 'type cannot be modified (payment %).', OLD.id;
+  END IF;
+  IF OLD.parent_id IS DISTINCT FROM NEW.parent_id THEN
+    RAISE EXCEPTION 'parent_id cannot be modified (payment %).', OLD.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Prevent mutation of allocation fields
+CREATE OR REPLACE FUNCTION prevent_allocation_amount_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.allocated_amount IS DISTINCT FROM NEW.allocated_amount THEN
+    RAISE EXCEPTION 'allocated_amount cannot be modified (allocation %).', OLD.id;
+  END IF;
+  IF OLD.payment_id IS DISTINCT FROM NEW.payment_id THEN
+    RAISE EXCEPTION 'payment_id cannot be modified (allocation %).', OLD.id;
+  END IF;
+  IF OLD.order_id IS DISTINCT FROM NEW.order_id THEN
+    RAISE EXCEPTION 'order_id cannot be modified (allocation %).', OLD.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Status transition guard: only pending → completed | failed
+CREATE OR REPLACE FUNCTION guard_payment_status_transition()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.status = NEW.status THEN RETURN NEW; END IF;
+  IF OLD.status = 'pending' AND NEW.status IN ('completed', 'failed') THEN RETURN NEW; END IF;
+  RAISE EXCEPTION 'Invalid payment status transition: % → % (payment %)',
+    OLD.status, NEW.status, OLD.id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Atomic wallet debit + payment + allocations
+CREATE OR REPLACE FUNCTION deduct_balance_with_payment(
+  p_parent_id UUID, p_expected_balance NUMERIC(10,2), p_amount NUMERIC(10,2),
+  p_order_ids UUID[], p_order_amounts NUMERIC(10,2)[]
+) RETURNS UUID AS $$
+DECLARE v_payment_id UUID; v_new_balance NUMERIC(10,2); v_rows INT; i INT;
+BEGIN
+  IF array_length(p_order_ids,1) != array_length(p_order_amounts,1) THEN
+    RAISE EXCEPTION 'order_ids and order_amounts must match'; END IF;
+  v_new_balance := p_expected_balance - p_amount;
+  IF v_new_balance < 0 THEN RAISE EXCEPTION 'Insufficient balance'; END IF;
+  UPDATE wallets SET balance = v_new_balance, updated_at = NOW()
+    WHERE user_id = p_parent_id AND balance = p_expected_balance;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows = 0 THEN RAISE EXCEPTION 'Balance changed concurrently'; END IF;
+  INSERT INTO payments (parent_id, type, amount_total, method, status)
+    VALUES (p_parent_id, 'payment', p_amount, 'balance', 'completed')
+    RETURNING id INTO v_payment_id;
+  FOR i IN 1..array_length(p_order_ids,1) LOOP
+    INSERT INTO payment_allocations (payment_id, order_id, allocated_amount)
+      VALUES (v_payment_id, p_order_ids[i], p_order_amounts[i]);
+  END LOOP;
+  RETURN v_payment_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Atomic wallet credit + payment record (refund/topup)
+CREATE OR REPLACE FUNCTION credit_balance_with_payment(
+  p_parent_id UUID, p_amount NUMERIC(10,2), p_type TEXT, p_method TEXT,
+  p_reference_id TEXT DEFAULT NULL, p_order_id UUID DEFAULT NULL,
+  p_external_ref TEXT DEFAULT NULL, p_paymongo_refund_id TEXT DEFAULT NULL,
+  p_paymongo_payment_id TEXT DEFAULT NULL, p_paymongo_checkout_id TEXT DEFAULT NULL,
+  p_original_payment_id UUID DEFAULT NULL
+) RETURNS UUID AS $$
+DECLARE v_payment_id UUID; v_current NUMERIC(10,2);
+BEGIN
+  SELECT balance INTO v_current FROM wallets WHERE user_id = p_parent_id FOR UPDATE;
+  IF NOT FOUND THEN
+    INSERT INTO wallets (user_id, balance) VALUES (p_parent_id, 0); v_current := 0;
+  END IF;
+  UPDATE wallets SET balance = v_current + p_amount, updated_at = NOW()
+    WHERE user_id = p_parent_id;
+  INSERT INTO payments (parent_id, type, amount_total, method, status,
+    reference_id, external_ref, paymongo_refund_id, paymongo_payment_id,
+    paymongo_checkout_id, original_payment_id)
+  VALUES (p_parent_id, p_type, p_amount, p_method, 'completed',
+    p_reference_id, p_external_ref, p_paymongo_refund_id, p_paymongo_payment_id,
+    p_paymongo_checkout_id, p_original_payment_id)
+  RETURNING id INTO v_payment_id;
+  IF p_order_id IS NOT NULL THEN
+    INSERT INTO payment_allocations (payment_id, order_id, allocated_amount)
+      VALUES (v_payment_id, p_order_id, p_amount);
+  END IF;
+  RETURN v_payment_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Legacy table lockdown
+CREATE OR REPLACE FUNCTION block_legacy_writes()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'transactions_legacy is read-only. Use payments + payment_allocations.';
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
 -- TABLES
 -- ============================================
 
@@ -197,6 +335,7 @@ CREATE TABLE IF NOT EXISTS payments (
   paymongo_refund_id TEXT,
   payment_group_id TEXT,
   reference_id TEXT,
+  original_payment_id UUID REFERENCES payments(id),
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -414,6 +553,16 @@ CREATE INDEX IF NOT EXISTS idx_payments_paymongo_checkout_id
 CREATE INDEX IF NOT EXISTS idx_payments_paymongo_payment_id
   ON payments(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at);
+CREATE INDEX IF NOT EXISTS idx_payments_original_payment_id
+  ON payments(original_payment_id) WHERE original_payment_id IS NOT NULL;
+
+-- Unique indexes for webhook idempotency
+CREATE UNIQUE INDEX IF NOT EXISTS ux_payments_paymongo_payment_id
+  ON payments(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_payments_paymongo_checkout_id
+  ON payments(paymongo_checkout_id) WHERE paymongo_checkout_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_payments_paymongo_refund_id
+  ON payments(paymongo_refund_id) WHERE paymongo_refund_id IS NOT NULL;
 
 -- payment_allocations
 CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment_id ON payment_allocations(payment_id);
@@ -1078,6 +1227,38 @@ CREATE TRIGGER validate_cart_item_max_advance_trigger
   BEFORE INSERT OR UPDATE OF scheduled_for ON cart_items
   FOR EACH ROW
   EXECUTE FUNCTION validate_cart_item_max_advance();
+
+-- ── Financial hardening triggers ──
+
+-- Allocation integrity
+DROP TRIGGER IF EXISTS trg_check_allocation_integrity ON payment_allocations;
+CREATE CONSTRAINT TRIGGER trg_check_allocation_integrity
+  AFTER INSERT OR UPDATE OR DELETE ON payment_allocations
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION check_allocation_integrity();
+
+-- Amount immutability
+DROP TRIGGER IF EXISTS trg_prevent_amount_mutation ON payments;
+CREATE TRIGGER trg_prevent_amount_mutation
+  BEFORE UPDATE ON payments FOR EACH ROW
+  EXECUTE FUNCTION prevent_amount_mutation();
+
+DROP TRIGGER IF EXISTS trg_prevent_allocation_amount_mutation ON payment_allocations;
+CREATE TRIGGER trg_prevent_allocation_amount_mutation
+  BEFORE UPDATE ON payment_allocations FOR EACH ROW
+  EXECUTE FUNCTION prevent_allocation_amount_mutation();
+
+-- Payment status transition guard
+DROP TRIGGER IF EXISTS trg_guard_payment_status ON payments;
+CREATE TRIGGER trg_guard_payment_status
+  BEFORE UPDATE OF status ON payments FOR EACH ROW
+  EXECUTE FUNCTION guard_payment_status_transition();
+
+-- Legacy table lockdown
+DROP TRIGGER IF EXISTS trg_block_legacy_writes ON transactions_legacy;
+CREATE TRIGGER trg_block_legacy_writes
+  BEFORE INSERT OR UPDATE OR DELETE ON transactions_legacy
+  FOR EACH ROW EXECUTE FUNCTION block_legacy_writes();
 
 -- ============================================
 -- ENABLE ROW LEVEL SECURITY ON ALL TABLES

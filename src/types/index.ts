@@ -169,6 +169,7 @@ export interface Payment {
   paymongo_refund_id?: string;
   payment_group_id?: string;
   reference_id?: string;
+  original_payment_id?: string;
   metadata?: Record<string, unknown>;
   created_at: string;
 }

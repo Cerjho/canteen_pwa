@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Financial Hardening**: DB-level invariants for payment integrity
+  - Allocation integrity trigger: `SUM(allocated_amount) ≤ amount_total` enforced on every insert/update/delete
+  - Amount immutability triggers: `amount_total`, `type`, `parent_id` cannot be modified after insert
+  - Allocation immutability triggers: `allocated_amount`, `payment_id`, `order_id` cannot be modified
+  - Payment status transition guard: only `pending → completed` or `pending → failed` allowed
+  - Webhook idempotency: UNIQUE partial indexes on `paymongo_payment_id`, `paymongo_checkout_id`, `paymongo_refund_id`
+  - Refund lineage: `original_payment_id` column on `payments` table for refund-to-payment traceability
+  - Atomic wallet RPCs: `deduct_balance_with_payment()` and `credit_balance_with_payment()` wrap wallet+payment+allocation in a single DB transaction
+  - Legacy table lockdown: `transactions_legacy` is now read-only (trigger + REVOKE)
+  - All edge functions updated to use atomic RPCs for balance operations (process-order, process-batch-order, refund-order, parent-cancel-order, manage-order, cleanup-timeout-orders, admin-topup)
+  - All refund functions now populate `original_payment_id` for full audit trail
+
 - **Payment-centric data model**: Replaced per-order `transactions` table with `payments` + `payment_allocations`
   - `payments` table: one row per real money movement (payment, refund, top-up)
   - `payment_allocations` table: links a payment to one or more orders (enables batch payments)

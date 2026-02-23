@@ -122,43 +122,44 @@ serve(async (req) => {
         // (Balance is deducted immediately at order creation, must be returned on timeout)
         if (order.payment_method === 'balance' && order.total_amount > 0) {
           const refundAmount = Number(order.total_amount);
-          const { data: wallet } = await supabaseAdmin
-            .from('wallets')
-            .select('balance')
-            .eq('user_id', order.parent_id)
+
+          // Look up original payment for refund lineage
+          let originalPaymentId: string | null = null;
+          const { data: origAlloc } = await supabaseAdmin
+            .from('payment_allocations')
+            .select('payment_id')
+            .eq('order_id', order.id)
+            .limit(1)
             .single();
+          if (origAlloc) {
+            const { data: origPay } = await supabaseAdmin
+              .from('payments')
+              .select('id, type')
+              .eq('id', origAlloc.payment_id)
+              .eq('type', 'payment')
+              .single();
+            if (origPay) originalPaymentId = origPay.id;
+          }
 
-          if (wallet) {
-            const currentBalance = Number(wallet.balance);
-            const { error: refundError } = await supabaseAdmin
-              .from('wallets')
-              .update({ balance: currentBalance + refundAmount, updated_at: now })
-              .eq('user_id', order.parent_id)
-              .eq('balance', wallet.balance); // Optimistic lock
-
-            if (!refundError) {
-              // Record refund payment
-              const { data: refundPayment } = await supabaseAdmin.from('payments').insert({
-                parent_id: order.parent_id,
-                type: 'refund',
-                amount_total: refundAmount,
-                method: 'balance',
-                status: 'completed',
-                reference_id: `TIMEOUT-${order.id.substring(0, 8)}`,
-              }).select('id').single();
-
-              if (refundPayment) {
-                await supabaseAdmin.from('payment_allocations').insert({
-                  payment_id: refundPayment.id,
-                  order_id: order.id,
-                  allocated_amount: refundAmount,
-                });
-              }
-              console.log(`[CLEANUP] Refunded ₱${refundAmount} to wallet for balance-paid order ${order.id}`);
-            } else {
-              console.error(`[CLEANUP] CRITICAL: Failed to refund wallet for order ${order.id}:`, refundError);
-              errors.push(`Order ${order.id}: Wallet refund failed`);
+          // Atomic: wallet credit + refund payment + allocation in one DB transaction
+          const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
+            'credit_balance_with_payment',
+            {
+              p_parent_id: order.parent_id,
+              p_amount: refundAmount,
+              p_type: 'refund',
+              p_method: 'balance',
+              p_reference_id: `TIMEOUT-${order.id.substring(0, 8)}`,
+              p_order_id: order.id,
+              p_original_payment_id: originalPaymentId,
             }
+          );
+
+          if (!rpcError) {
+            console.log(`[CLEANUP] Refunded ₱${refundAmount} to wallet for balance-paid order ${order.id}`);
+          } else {
+            console.error(`[CLEANUP] CRITICAL: Failed to refund wallet for order ${order.id}:`, rpcError);
+            errors.push(`Order ${order.id}: Wallet refund failed`);
           }
         }
 

@@ -183,72 +183,77 @@ serve(async (req) => {
       console.log('No PayMongo payment ID — order was likely unpaid, no refund needed');
     }
 
-    // Create refund payment record
-    const { data: refundPayment, error: txError } = await supabaseAdmin
-      .from('payments')
-      .insert({
-        parent_id: order.parent_id,
-        type: 'refund',
-        amount_total: order.total_amount,
-        method: order.payment_method,
-        status: refundStatus,
-        reference_id: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : `REFUND-${order_id.substring(0, 8)}`,
-        external_ref: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : null,
-        paymongo_refund_id: paymongoRefundId,
-      })
-      .select()
+    // ── Look up original payment for refund lineage ──
+    let originalPaymentId: string | null = null;
+    const { data: origAlloc } = await supabaseAdmin
+      .from('payment_allocations')
+      .select('payment_id')
+      .eq('order_id', order.id)
+      .limit(1)
       .single();
-
-    if (refundPayment) {
-      await supabaseAdmin.from('payment_allocations').insert({
-        payment_id: refundPayment.id,
-        order_id: order.id,
-        allocated_amount: order.total_amount,
-      });
+    if (origAlloc) {
+      // Verify the linked payment is type='payment' (not another refund)
+      const { data: origPay } = await supabaseAdmin
+        .from('payments')
+        .select('id, type')
+        .eq('id', origAlloc.payment_id)
+        .eq('type', 'payment')
+        .single();
+      if (origPay) originalPaymentId = origPay.id;
     }
 
-    if (txError) {
-      console.error('Transaction insert error:', txError);
-    }
+    // ── Create refund: use atomic RPC for balance refunds ──
+    let refundPaymentId: string | null = null;
 
-    // If payment was from balance, restore parent balance with optimistic locking
     if (order.payment_method === 'balance') {
-      const { data: wallet } = await supabaseAdmin
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', order.parent_id)
+      // Atomic: wallet credit + payment record + allocation in one DB transaction
+      const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
+        'credit_balance_with_payment',
+        {
+          p_parent_id: order.parent_id,
+          p_amount: order.total_amount,
+          p_type: 'refund',
+          p_method: 'balance',
+          p_reference_id: `REFUND-${order_id.substring(0, 8)}`,
+          p_order_id: order.id,
+          p_original_payment_id: originalPaymentId,
+        }
+      );
+
+      if (rpcError) {
+        console.error('Atomic refund error:', rpcError);
+      } else {
+        refundPaymentId = rpcId;
+      }
+    } else {
+      // Non-balance refund: create payment record + allocation (no wallet credit)
+      const { data: refundPayment, error: txError } = await supabaseAdmin
+        .from('payments')
+        .insert({
+          parent_id: order.parent_id,
+          type: 'refund',
+          amount_total: order.total_amount,
+          method: order.payment_method,
+          status: refundStatus,
+          reference_id: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : `REFUND-${order_id.substring(0, 8)}`,
+          external_ref: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : null,
+          paymongo_refund_id: paymongoRefundId,
+          original_payment_id: originalPaymentId,
+        })
+        .select()
         .single();
 
-      if (wallet) {
-        const previousBalance = wallet.balance;
-        const { error: walletError } = await supabaseAdmin
-          .from('wallets')
-          .update({ 
-            balance: previousBalance + order.total_amount,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', order.parent_id)
-          .eq('balance', previousBalance); // Optimistic lock
+      if (refundPayment) {
+        refundPaymentId = refundPayment.id;
+        await supabaseAdmin.from('payment_allocations').insert({
+          payment_id: refundPayment.id,
+          order_id: order.id,
+          allocated_amount: order.total_amount,
+        });
+      }
 
-        if (walletError) {
-          // Retry once with fresh balance
-          const { data: freshWallet } = await supabaseAdmin
-            .from('wallets')
-            .select('balance')
-            .eq('user_id', order.parent_id)
-            .single();
-          
-          if (freshWallet) {
-            await supabaseAdmin
-              .from('wallets')
-              .update({ 
-                balance: freshWallet.balance + order.total_amount,
-                updated_at: new Date().toISOString()
-              })
-              .eq('user_id', order.parent_id)
-              .eq('balance', freshWallet.balance);
-          }
-        }
+      if (txError) {
+        console.error('Transaction insert error:', txError);
       }
     }
 
@@ -256,7 +261,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         refunded_amount: order.total_amount,
-        transaction_id: refundPayment?.id || null,
+        transaction_id: refundPaymentId,
         paymongo_refund_id: paymongoRefundId,
         refund_estimate: refundEstimate || undefined,
         message: refundEstimate
