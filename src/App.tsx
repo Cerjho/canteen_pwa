@@ -22,6 +22,7 @@ import Register from './pages/Register';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { BottomNav } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { InstallPrompt } from './components/InstallPrompt';
 import { MaintenancePage } from './components/MaintenancePage';
 
 // Admin pages
@@ -140,6 +141,7 @@ function App() {
   return (
     <>
       <OfflineIndicator />
+      <InstallPrompt />
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={!user ? <Login /> : <Navigate to={getDefaultRoute(userRole)} />} />
