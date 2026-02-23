@@ -6,6 +6,16 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+// Extend Navigator for iOS standalone check
+interface NavigatorStandalone extends Navigator {
+  standalone?: boolean;
+}
+
+// Extend Window for legacy IE/Edge MSStream
+interface WindowWithMSStream extends Window {
+  MSStream?: unknown;
+}
+
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
@@ -14,14 +24,14 @@ export function InstallPrompt() {
 
   useEffect(() => {
     // Check if already installed as PWA
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nav = window.navigator as NavigatorStandalone;
     const standalone = window.matchMedia('(display-mode: standalone)').matches
-      || (window.navigator as any).standalone === true;
+      || nav.standalone === true;
     setIsStandalone(standalone);
 
     // Detect iOS
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const win = window as WindowWithMSStream;
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !win.MSStream;
     setIsIOS(ios);
 
     // Check if user dismissed the prompt recently (24h cooldown)
