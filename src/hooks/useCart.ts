@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { createOrder } from '../services/orders';
+import { createBatchOrder } from '../services/orders';
 import { createBatchCheckout } from '../services/payments';
 import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
@@ -806,8 +806,6 @@ export function useCart() {
         }
       }
 
-      const results: Array<{ order_id?: string; checkout_url?: string; student_id: string; scheduled_for: string; meal_period: MealPeriod; error?: string }> = [];
-
       const effectiveMethod = method || currentPaymentMethod;
       const isOnline = isOnlinePaymentMethod(effectiveMethod);
 
@@ -835,25 +833,22 @@ export function useCart() {
         });
 
         // Clear all cart items before redirect
-        setItems(prev => {
-          const checkoutKeys = new Set(
-            groupsArray.map(g => `${g.student_id}_${g.scheduled_for}_${g.meal_period}`)
-          );
-          return prev.filter(item => {
-            const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
-            return !checkoutKeys.has(key);
-          });
-        });
+        const checkoutKeys = new Set(
+          groupsArray.map(g => `${g.student_id}_${g.scheduled_for}_${g.meal_period}`)
+        );
+        setItems(prev => prev.filter(item => {
+          const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
+          return !checkoutKeys.has(key);
+        }));
 
-        // Delete from DB
-        for (const group of groupsArray) {
+        // Batch delete from DB — single query using cart item IDs
+        const cartItemIdsToDelete = currentItems.map(item => item.id);
+        if (cartItemIdsToDelete.length > 0) {
           await supabase
             .from('cart_items')
             .delete()
             .eq('user_id', user.id)
-            .eq('student_id', group.student_id)
-            .eq('scheduled_for', group.scheduled_for)
-            .eq('meal_period', group.meal_period);
+            .in('id', cartItemIdsToDelete);
         }
 
         // Redirect to PayMongo checkout page
@@ -873,68 +868,51 @@ export function useCart() {
         };
       }
 
-      // ── Cash / Balance: create one order per group via process-order ──
-      for (const group of groupsArray) {
-        try {
-          const orderData = {
-            parent_id: user.id,
-            student_id: group.student_id,
-            client_order_id: crypto.randomUUID(),
-            items: group.items.map((item) => ({
-              product_id: item.product_id,
-              quantity: item.quantity,
-              price_at_order: item.price
-            })),
-            payment_method: effectiveMethod,
-            notes: orderNotes || currentNotes,
-            scheduled_for: group.scheduled_for,
-            meal_period: group.meal_period
-          };
+      // ── Cash / Balance: batch all groups into a SINGLE edge function call ──
+      const batchOrders = groupsArray.map(group => ({
+        student_id: group.student_id,
+        client_order_id: crypto.randomUUID(),
+        items: group.items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price_at_order: item.price
+        })),
+        scheduled_for: group.scheduled_for,
+        meal_period: group.meal_period
+      }));
 
-          const result = await createOrder(orderData);
-          results.push({ 
-            order_id: result?.order_id, 
-            student_id: group.student_id, 
-            scheduled_for: group.scheduled_for,
-            meal_period: group.meal_period
-          });
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to create order';
-          results.push({ 
-            student_id: group.student_id, 
-            scheduled_for: group.scheduled_for,
-            meal_period: group.meal_period,
-            error: errorMsg
-          });
-        }
-      }
+      const batchResult = await createBatchOrder({
+        parent_id: user.id,
+        orders: batchOrders,
+        payment_method: effectiveMethod as 'cash' | 'balance',
+        notes: orderNotes || currentNotes,
+      });
 
-      // Check if any orders failed
-      const failedOrders = results.filter(r => r.error);
-      if (failedOrders.length > 0 && failedOrders.length === results.length) {
-        throw new Error(friendlyError(failedOrders[0].error, 'place your order'));
-      }
+      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; meal_period: MealPeriod; error?: string }> =
+        batchResult.orders.map((o, i) => ({
+          order_id: o.order_id,
+          student_id: groupsArray[i]?.student_id || '',
+          scheduled_for: groupsArray[i]?.scheduled_for || '',
+          meal_period: (groupsArray[i]?.meal_period || 'lunch') as MealPeriod,
+        }));
 
-      // Clear only successfully ordered items
+      // Clear all checked-out items from local state
       const successfulKeys = new Set(
-        results.filter(r => !r.error).map(r => `${r.student_id}_${r.scheduled_for}_${r.meal_period}`)
+        groupsArray.map(g => `${g.student_id}_${g.scheduled_for}_${g.meal_period}`)
       );
-      
-      // Remove successful items from local state
       setItems(prev => prev.filter(item => {
         const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
         return !successfulKeys.has(key);
       }));
 
-      // Delete from database
-      for (const result of results.filter(r => !r.error)) {
+      // Batch delete from DB — single query using cart item IDs
+      const cartItemIdsToDelete = currentItems.map(item => item.id);
+      if (cartItemIdsToDelete.length > 0) {
         await supabase
           .from('cart_items')
           .delete()
           .eq('user_id', user.id)
-          .eq('student_id', result.student_id)
-          .eq('scheduled_for', result.scheduled_for)
-          .eq('meal_period', result.meal_period);
+          .in('id', cartItemIdsToDelete);
       }
 
       // If all items were checked out, reset notes and payment method
@@ -945,9 +923,9 @@ export function useCart() {
 
       return { 
         orders: results, 
-        total: currentItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-        successCount: results.filter(r => !r.error).length,
-        failCount: failedOrders.length
+        total: batchResult.total_amount,
+        successCount: results.length,
+        failCount: 0
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? friendlyError(err.message, 'complete checkout') : 'Checkout failed. Please try again.';

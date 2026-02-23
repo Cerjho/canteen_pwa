@@ -17,6 +17,40 @@ export interface CreateOrderRequest {
   meal_period?: string;
 }
 
+export interface BatchOrderGroup {
+  student_id: string;
+  client_order_id: string;
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    price_at_order: number;
+  }>;
+  scheduled_for?: string;
+  meal_period?: string;
+}
+
+export interface CreateBatchOrderRequest {
+  parent_id: string;
+  orders: BatchOrderGroup[];
+  payment_method: 'cash' | 'balance';
+  notes?: string;
+}
+
+export interface BatchOrderResponse {
+  success: boolean;
+  order_ids: string[];
+  orders: Array<{
+    order_id: string;
+    client_order_id: string;
+    total_amount: number;
+    status: string;
+    payment_status: string;
+    payment_due_at: string | null;
+  }>;
+  total_amount: number;
+  message: string;
+}
+
 export interface OrderError {
   code: string;
   message: string;
@@ -172,6 +206,112 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
   }
 
   throw lastError || new Error('Failed to create order after multiple retries');
+}
+
+/**
+ * Create multiple orders in a single request (cash/balance payments).
+ * Replaces the sequential per-order createOrder loop, reducing N HTTP calls to 1.
+ */
+export async function createBatchOrder(batchData: CreateBatchOrderRequest): Promise<BatchOrderResponse> {
+  // Validate input
+  if (!batchData.parent_id) {
+    throw new Error('Please sign in to continue.');
+  }
+  if (!batchData.orders || batchData.orders.length === 0) {
+    throw new Error('Your cart is empty. Please add items before checking out.');
+  }
+
+  // Offline queueing — fallback to queuing each order individually
+  if (!isOnline()) {
+    for (const order of batchData.orders) {
+      await queueOrder({
+        parent_id: batchData.parent_id,
+        student_id: order.student_id,
+        client_order_id: order.client_order_id,
+        items: order.items,
+        payment_method: batchData.payment_method,
+        notes: batchData.notes,
+        scheduled_for: order.scheduled_for,
+        meal_period: order.meal_period,
+      });
+    }
+    return {
+      success: true,
+      order_ids: [],
+      orders: [],
+      total_amount: 0,
+      message: 'Orders saved offline. Will sync when connected.',
+    };
+  }
+
+  await ensureValidSession();
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke('process-batch-order', {
+        body: batchData,
+      });
+
+      if (error) {
+        let errorMessage = error.message;
+
+        if (error.message === 'Edge Function returned a non-2xx status code') {
+          if (data?.message) {
+            errorMessage = data.message;
+          } else if (data?.error) {
+            errorMessage = data.error;
+          }
+        }
+
+        if (data?.message && errorMessage === error.message) {
+          errorMessage = data.message;
+        } else if (data?.error && errorMessage === error.message) {
+          errorMessage = data.error;
+        }
+
+        const isRetryable = errorMessage?.includes('network') ||
+          errorMessage?.includes('timeout') ||
+          errorMessage?.includes('503') ||
+          errorMessage?.includes('502');
+
+        if (isRetryable && attempt < MAX_RETRIES - 1) {
+          lastError = new Error(errorMessage);
+          await delay(RETRY_DELAY_MS * (attempt + 1));
+          continue;
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (data?.error) {
+        throw new Error(data.message || data.error);
+      }
+
+      return data as BatchOrderResponse;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      if (attempt === MAX_RETRIES - 1) {
+        throw lastError;
+      }
+
+      const errMsg = lastError.message?.toLowerCase() || '';
+      const isRetryable = errMsg.includes('network') ||
+        errMsg.includes('timeout') ||
+        errMsg.includes('503') ||
+        errMsg.includes('502') ||
+        errMsg.includes('fetch') ||
+        errMsg.includes('unable to connect');
+      if (!isRetryable) {
+        throw lastError;
+      }
+
+      await delay(RETRY_DELAY_MS * (attempt + 1));
+    }
+  }
+
+  throw lastError || new Error('Failed to create batch orders after multiple retries');
 }
 
 export async function getOrderHistory(parentId: string) {

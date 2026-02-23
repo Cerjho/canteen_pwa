@@ -1,23 +1,39 @@
-// Create Batch Checkout Edge Function
-// Creates multiple orders and a SINGLE PayMongo Checkout Session for all of them.
-// This saves on transaction fees (one fee instead of N fees per order group).
+// Process Batch Order Edge Function
+// Handles multiple cash/balance orders in a SINGLE request.
+// This eliminates the N×D sequential edge function calls from the frontend.
+//
+// Key optimisations vs calling process-order N times:
+//   1. Auth, settings, holidays, products fetched ONCE
+//   2. Stock decremented per unique product (aggregated demand)
+//   3. Orders, order_items, transactions inserted in batches
+//   4. Balance checked & deducted ONCE (total across all orders)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
-import {
-  createCheckoutSession,
-  toCentavos,
-  mapPaymentMethodTypes,
-  buildCheckoutUrls,
-} from '../_shared/paymongo.ts';
 
-// Helper to get today's date in Philippines timezone (UTC+8)
+// ── Helpers ──
+
 function getTodayPhilippines(): string {
   const now = new Date();
-  const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  const phTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
   return phTime.toISOString().split('T')[0];
 }
+
+function errorResponse(
+  corsHeaders: Record<string, string>,
+  status: number,
+  code: string,
+  message: string,
+  extra?: Record<string, unknown>,
+) {
+  return new Response(
+    JSON.stringify({ error: code, message, ...extra }),
+    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
+}
+
+// ── Interfaces ──
 
 interface OrderItem {
   product_id: string;
@@ -33,21 +49,14 @@ interface OrderGroup {
   meal_period?: string;
 }
 
-interface BatchCheckoutRequest {
+interface BatchOrderRequest {
   parent_id: string;
   orders: OrderGroup[];
-  payment_method: 'gcash' | 'paymaya' | 'card';
+  payment_method: 'cash' | 'balance';
   notes?: string;
 }
 
-const ONLINE_PAYMENT_TIMEOUT_MINUTES = 30;
-
-function errorResponse(corsHeaders: Record<string, string>, status: number, code: string, message: string, extra?: Record<string, unknown>) {
-  return new Response(
-    JSON.stringify({ error: code, message, ...extra }),
-    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-  );
-}
+const CASH_PAYMENT_TIMEOUT_MINUTES = 240; // 4 hours
 
 serve(async (req) => {
   const origin = req.headers.get('Origin');
@@ -85,8 +94,8 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 403, 'FORBIDDEN', 'Only parents can place orders');
     }
 
-    // ── Parse request ──
-    const body: BatchCheckoutRequest = await req.json();
+    // ── Parse & validate request ──
+    const body: BatchOrderRequest = await req.json();
     const { parent_id, orders, payment_method, notes } = body;
 
     if (parent_id !== user.id) {
@@ -101,12 +110,14 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', 'Too many orders in a single batch (max 20)');
     }
 
-    const validOnlineMethods = ['gcash', 'paymaya', 'card'];
-    if (!validOnlineMethods.includes(payment_method)) {
-      return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', `Invalid online payment method: ${payment_method}. Use process-order for cash/balance.`);
+    const validMethods = ['cash', 'balance'];
+    if (!validMethods.includes(payment_method)) {
+      return errorResponse(
+        corsHeaders, 400, 'INVALID_PAYMENT_METHOD',
+        `Invalid payment method '${payment_method}'. For online payments, use create-batch-checkout.`,
+      );
     }
 
-    // Validate each order group has required fields
     for (const order of orders) {
       if (!order.student_id || !order.client_order_id || !order.items || order.items.length === 0) {
         return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', 'Each order must have student_id, client_order_id, and items');
@@ -118,35 +129,52 @@ serve(async (req) => {
       }
     }
 
-    console.log('Creating batch checkout:', { parent_id, order_count: orders.length, payment_method });
+    console.log('Processing batch order:', { parent_id, order_count: orders.length, payment_method });
 
-    // ── System settings checks ──
-    const { data: settingsData } = await supabaseAdmin.from('system_settings').select('key, value');
+    // ================================================================
+    // STEP 1 — Fetch shared context ONCE (settings, holidays, products)
+    // ================================================================
+
+    const todayStr = getTodayPhilippines();
+    const now = new Date();
+    const phTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const currentTimeStr = phTime.toISOString().substring(11, 16); // HH:MM
+
+    // Parallel fetch: settings, holidays, products, student links, idempotency check
+    const allProductIds = [...new Set(orders.flatMap(o => o.items.map(i => i.product_id)))];
+    const uniqueStudentIds = [...new Set(orders.map(o => o.student_id))];
+    const allClientOrderIds = orders.map(o => o.client_order_id);
+
+    const [settingsResult, holidaysResult, productsResult, studentLinksResult, existingOrdersResult] = await Promise.all([
+      supabaseAdmin.from('system_settings').select('key, value'),
+      supabaseAdmin.from('holidays').select('id, name, date, is_recurring'),
+      supabaseAdmin.from('products').select('id, name, price, stock_quantity, available').in('id', allProductIds),
+      supabaseAdmin.from('parent_students').select('student_id').eq('parent_id', parent_id).in('student_id', uniqueStudentIds),
+      supabaseAdmin.from('orders').select('id, client_order_id, status').in('client_order_id', allClientOrderIds),
+    ]);
+
+    // ── Settings ──
     const settings = new Map<string, unknown>();
-    settingsData?.forEach(s => settings.set(s.key, s.value));
+    settingsResult.data?.forEach(s => settings.set(s.key, s.value));
 
     if (settings.get('maintenance_mode') === true) {
       return errorResponse(corsHeaders, 503, 'MAINTENANCE_MODE', 'The canteen is currently under maintenance.');
     }
-
-    const now = new Date();
-    const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const currentTimeStr = phTime.toISOString().substring(11, 16);
-    const todayStr = getTodayPhilippines();
 
     const operatingHours = settings.get('operating_hours') as { open?: string; close?: string } | undefined;
     const orderCutoffTime = settings.get('order_cutoff_time') as string | undefined;
     const allowFutureOrders = settings.get('allow_future_orders') !== false;
     const maxFutureDays = (settings.get('max_future_days') as number) || 5;
 
-    // Get holidays once
-    const { data: holidays } = await supabaseAdmin.from('holidays').select('id, name, date, is_recurring');
+    const holidays = holidaysResult.data || [];
 
-    // ── Validate dates for all orders ──
+    // ── Validate all unique dates ONCE ──
     const uniqueDates = [...new Set(orders.map(o => o.scheduled_for || todayStr))];
+
     for (const orderDate of uniqueDates) {
       const isToday = orderDate === todayStr;
 
+      // Operating hours — same-day only
       if (isToday && operatingHours?.open && operatingHours?.close) {
         if (currentTimeStr < operatingHours.open || currentTimeStr > operatingHours.close) {
           return errorResponse(corsHeaders, 400, 'OUTSIDE_HOURS', `Orders can only be placed between ${operatingHours.open} and ${operatingHours.close}.`);
@@ -167,7 +195,7 @@ serve(async (req) => {
         }
       }
 
-      const holiday = holidays?.find(h => {
+      const holiday = holidays.find(h => {
         const hd = h.date.split('T')[0];
         return h.is_recurring ? hd.slice(5) === orderDate.slice(5) : hd === orderDate;
       });
@@ -194,100 +222,39 @@ serve(async (req) => {
       }
     }
 
-    // ── Verify parent-student links ──
-    const uniqueStudentIds = [...new Set(orders.map(o => o.student_id))];
-    const { data: studentLinks, error: linkError } = await supabaseAdmin
-      .from('parent_students')
-      .select('student_id')
-      .eq('parent_id', parent_id)
-      .in('student_id', uniqueStudentIds);
-
-    if (linkError) {
-      return errorResponse(corsHeaders, 500, 'SERVER_ERROR', 'Failed to verify student links');
-    }
-
-    const linkedStudents = new Set(studentLinks?.map(l => l.student_id) || []);
+    // ── Verify parent–student links ──
+    const linkedStudents = new Set(studentLinksResult.data?.map(l => l.student_id) || []);
     for (const sid of uniqueStudentIds) {
       if (!linkedStudents.has(sid)) {
         return errorResponse(corsHeaders, 401, 'UNAUTHORIZED', 'Parent is not linked to this student');
       }
     }
 
-    // ── Idempotency: check for existing client_order_ids ──
-    const allClientOrderIds = orders.map(o => o.client_order_id);
-    const { data: existingOrders } = await supabaseAdmin
-      .from('orders')
-      .select('id, client_order_id, status, paymongo_checkout_id, payment_group_id')
-      .in('client_order_id', allClientOrderIds);
-
-    if (existingOrders && existingOrders.length > 0) {
-      // If all existing orders share a payment_group_id and are awaiting payment, return existing checkout
-      const awaitingOrders = existingOrders.filter(o => o.status === 'awaiting_payment' && o.payment_group_id);
-      if (awaitingOrders.length > 0) {
-        const groupId = awaitingOrders[0].payment_group_id;
-        // Find one with a checkout ID
-        const withCheckout = awaitingOrders.find(o => o.paymongo_checkout_id);
-        if (withCheckout) {
-          try {
-            const { getCheckoutSession: getSession } = await import('../_shared/paymongo.ts');
-            const session = await getSession(withCheckout.paymongo_checkout_id!);
-            return new Response(
-              JSON.stringify({
-                success: true,
-                payment_group_id: groupId,
-                order_ids: awaitingOrders.map(o => o.id),
-                checkout_url: session.attributes.checkout_url,
-                payment_due_at: new Date(Date.now() + ONLINE_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString(),
-              }),
-              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
-          } catch {
-            // Session expired — fall through
-          }
-        }
-      }
-
-      // Some orders already exist with different states
+    // ── Idempotency check ──
+    if (existingOrdersResult.data && existingOrdersResult.data.length > 0) {
       return errorResponse(corsHeaders, 409, 'DUPLICATE_ORDER', 'One or more orders already exist', {
-        existing_order_ids: existingOrders.map(o => o.id),
+        existing_order_ids: existingOrdersResult.data.map(o => o.id),
       });
     }
 
-    // ── Validate all products and stock across all orders ──
-    const allProductIds = [...new Set(orders.flatMap(o => o.items.map(i => i.product_id)))];
-    const { data: products, error: productsError } = await supabaseAdmin
-      .from('products')
-      .select('id, name, price, stock_quantity, available')
-      .in('id', allProductIds);
+    // ================================================================
+    // STEP 2 — Validate products, prices, stock (all at once)
+    // ================================================================
 
-    if (productsError || !products) {
+    if (productsResult.error || !productsResult.data) {
       return errorResponse(corsHeaders, 500, 'SERVER_ERROR', 'Failed to fetch products');
     }
 
-    const productMap = new Map(products.map(p => [p.id, p]));
+    const productMap = new Map(productsResult.data.map(p => [p.id, p]));
 
-    // Aggregate demand per product across all orders
+    // Aggregate demand per product across ALL orders
     const totalDemand = new Map<string, number>();
-    for (const order of orders) {
-      for (const item of order.items) {
-        totalDemand.set(item.product_id, (totalDemand.get(item.product_id) || 0) + item.quantity);
-      }
-    }
-
-    // Build combined line items for PayMongo
     let grandTotal = 0;
-    const lineItems: Array<{ name: string; quantity: number; amount: number; currency: string }> = [];
-
-    // Per-order line item tracking for DB insert
-    const orderLineItems: Map<string, Array<{ name: string; quantity: number; amount: number }>> = new Map();
 
     for (const order of orders) {
-      const key = order.client_order_id;
-      orderLineItems.set(key, []);
-      let orderTotal = 0;
-
       for (const item of order.items) {
         const product = productMap.get(item.product_id);
+
         if (!product) {
           return errorResponse(corsHeaders, 400, 'PRODUCT_NOT_FOUND', 'Product not found', { product_id: item.product_id });
         }
@@ -297,18 +264,13 @@ serve(async (req) => {
         if (Math.abs(item.price_at_order - product.price) > 0.01) {
           return errorResponse(corsHeaders, 400, 'PRICE_MISMATCH', `Price changed for '${product.name}'. Please refresh.`);
         }
-        orderTotal += product.price * item.quantity;
-        orderLineItems.get(key)!.push({
-          name: product.name,
-          quantity: item.quantity,
-          amount: toCentavos(product.price),
-        });
-      }
 
-      grandTotal += orderTotal;
+        totalDemand.set(item.product_id, (totalDemand.get(item.product_id) || 0) + item.quantity);
+        grandTotal += product.price * item.quantity;
+      }
     }
 
-    // Check per-product stock against aggregate demand
+    // Check aggregated stock
     for (const [productId, demand] of totalDemand) {
       const product = productMap.get(productId)!;
       if (product.stock_quantity < demand) {
@@ -317,34 +279,28 @@ serve(async (req) => {
       }
     }
 
-    // PayMongo minimum
-    if (grandTotal < 20) {
-      return errorResponse(corsHeaders, 400, 'MINIMUM_AMOUNT', 'Minimum order amount is ₱20 for online payment.');
-    }
+    // ── Balance validation (ONCE for total) ──
+    let currentBalance = 0;
+    if (payment_method === 'balance') {
+      const { data: wallet, error: walletError } = await supabaseAdmin
+        .from('wallets').select('balance').eq('user_id', parent_id).single();
 
-    // Build combined line items for PayMongo (aggregate by product name)
-    const combinedItems = new Map<string, { name: string; quantity: number; amount: number }>();
-    for (const order of orders) {
-      for (const item of order.items) {
-        const product = productMap.get(item.product_id)!;
-        const existing = combinedItems.get(product.id);
-        if (existing) {
-          existing.quantity += item.quantity;
-        } else {
-          combinedItems.set(product.id, {
-            name: product.name,
-            quantity: item.quantity,
-            amount: toCentavos(product.price),
-          });
-        }
+      if (walletError || !wallet) {
+        return errorResponse(corsHeaders, 400, 'NO_WALLET', 'No wallet found. Please top up your balance first.');
+      }
+
+      currentBalance = wallet.balance;
+      if (currentBalance < grandTotal) {
+        return errorResponse(corsHeaders, 400, 'INSUFFICIENT_BALANCE',
+          `Insufficient balance. Required: ₱${grandTotal.toFixed(2)}, Available: ₱${currentBalance.toFixed(2)}`,
+          { required: grandTotal, available: currentBalance });
       }
     }
 
-    for (const item of combinedItems.values()) {
-      lineItems.push({ ...item, currency: 'PHP' });
-    }
+    // ================================================================
+    // STEP 3 — Reserve stock (one RPC per unique product, not per item)
+    // ================================================================
 
-    // ── Reserve stock atomically using RPC ──
     const reservedProducts: Array<{ product_id: string; quantity: number }> = [];
     for (const [productId, demand] of totalDemand) {
       const { error: stockError } = await supabaseAdmin.rpc('decrement_stock', {
@@ -354,7 +310,6 @@ serve(async (req) => {
 
       if (stockError) {
         console.error('Stock reservation failed:', productId, stockError);
-        // Rollback previously reserved stock
         for (const reserved of reservedProducts) {
           await supabaseAdmin.rpc('increment_stock', {
             p_product_id: reserved.product_id,
@@ -368,7 +323,6 @@ serve(async (req) => {
       reservedProducts.push({ product_id: productId, quantity: demand });
     }
 
-    // Helper to rollback all reserved stock
     const rollbackStock = async () => {
       for (const reserved of reservedProducts) {
         await supabaseAdmin.rpc('increment_stock', {
@@ -378,16 +332,16 @@ serve(async (req) => {
       }
     };
 
-    // ── Create all orders in DB (batch insert) ──
-    const paymentGroupId = crypto.randomUUID();
-    const paymentDueAt = new Date(Date.now() + ONLINE_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString();
+    // ================================================================
+    // STEP 4 — Create orders, order_items, transactions in BATCHES
+    // ================================================================
 
-    // Get student names for PayMongo description
-    const { data: studentsData } = await supabaseAdmin
-      .from('students')
-      .select('id, first_name')
-      .in('id', uniqueStudentIds);
-    const studentNameMap = new Map(studentsData?.map(s => [s.id, s.first_name]) || []);
+    const isCash = payment_method === 'cash';
+    const paymentStatus = isCash ? 'awaiting_payment' : 'paid';
+    const orderStatus = isCash ? 'awaiting_payment' : 'pending';
+    const paymentDueAt = isCash
+      ? new Date(Date.now() + CASH_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString()
+      : null;
 
     // Build all order rows for batch insert
     const orderRows = orders.map(order => {
@@ -400,19 +354,18 @@ serve(async (req) => {
         parent_id,
         student_id: order.student_id,
         client_order_id: order.client_order_id,
-        status: 'awaiting_payment',
-        payment_status: 'awaiting_payment',
+        status: orderStatus,
+        payment_status: paymentStatus,
         payment_due_at: paymentDueAt,
         total_amount: orderTotal,
         payment_method,
         notes: notes || null,
         scheduled_for: order.scheduled_for || todayStr,
         meal_period: order.meal_period || 'lunch',
-        payment_group_id: paymentGroupId,
       };
     });
 
-    // Single batch insert for all orders
+    // Batch insert all orders at once
     const { data: createdOrders, error: ordersError } = await supabaseAdmin
       .from('orders')
       .insert(orderRows)
@@ -424,6 +377,7 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 500, 'ORDER_CREATION_FAILED', 'Failed to create orders');
     }
 
+    // Map client_order_id → DB order id for linking items
     const orderIdMap = new Map(createdOrders.map(o => [o.client_order_id, o.id]));
     const createdOrderIds = createdOrders.map(o => o.id);
 
@@ -440,9 +394,10 @@ serve(async (req) => {
     });
 
     const { error: itemsError } = await supabaseAdmin.from('order_items').insert(allOrderItems);
+
     if (itemsError) {
       console.error('Batch order items insert error:', itemsError);
-      // Rollback: delete all created orders (cascade) and restore stock
+      // Rollback: delete all created orders (cascade deletes items) and restore stock
       await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
       await rollbackStock();
       return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
@@ -455,83 +410,63 @@ serve(async (req) => {
       type: 'payment',
       amount: o.total_amount,
       method: payment_method,
-      status: 'pending',
+      status: isCash ? 'pending' : 'completed',
     }));
 
     const { error: txError } = await supabaseAdmin.from('transactions').insert(allTransactions);
     if (txError) {
       console.error('Batch transactions insert error (non-fatal):', txError);
+      // Non-fatal — orders are already created, transactions can be reconciled
     }
 
-    // ── Create SINGLE PayMongo Checkout Session for all orders ──
-    let checkoutSession;
-    try {
-      // Use the payment_group_id as the reference for success/cancel URLs
-      const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173';
-      const successUrl = `${appUrl}/order-confirmation?payment=success&payment_group=${paymentGroupId}&order_id=${createdOrderIds[0]}`;
-      const cancelUrl = `${appUrl}/order-confirmation?payment=cancelled&payment_group=${paymentGroupId}&order_id=${createdOrderIds[0]}`;
+    // ── Deduct balance ONCE for grand total ──
+    if (payment_method === 'balance') {
+      const newBalance = currentBalance - grandTotal;
+      const { error: balanceError } = await supabaseAdmin
+        .from('wallets')
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq('user_id', parent_id)
+        .eq('balance', currentBalance); // Optimistic locking
 
-      // Build description
-      const studentNames = uniqueStudentIds.map(id => studentNameMap.get(id) || 'Student').join(', ');
-      const description = orders.length === 1
-        ? 'School Canteen Order'
-        : `School Canteen — ${orders.length} orders for ${studentNames}`;
-
-      checkoutSession = await createCheckoutSession({
-        lineItems,
-        paymentMethodTypes: mapPaymentMethodTypes(payment_method),
-        description,
-        metadata: {
-          type: 'order',
-          order_id: createdOrderIds[0], // Primary order for backwards compat
-          parent_id,
-          client_order_id: orders[0].client_order_id,
-          payment_group_id: paymentGroupId,
-        },
-        successUrl,
-        cancelUrl,
-      });
-
-      // Save checkout ID on ALL orders in the batch (not just the first)
-      await supabaseAdmin
-        .from('orders')
-        .update({ paymongo_checkout_id: checkoutSession.id })
-        .eq('payment_group_id', paymentGroupId);
-
-    } catch (paymongoErr) {
-      console.error('PayMongo checkout creation failed:', paymongoErr);
-      // Rollback everything using batch deletes
-      await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
-      await supabaseAdmin.from('transactions').delete().in('order_id', createdOrderIds);
-      await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
-      await rollbackStock();
-      return errorResponse(corsHeaders, 502, 'PAYMENT_ERROR', 'Online payments are temporarily unavailable. Please use Cash or Wallet Balance.');
+      if (balanceError) {
+        console.error('Balance deduction error:', balanceError);
+        // Rollback: delete orders (cascade), restore stock
+        await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
+        await supabaseAdmin.from('transactions').delete().in('order_id', createdOrderIds);
+        await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
+        await rollbackStock();
+        return errorResponse(corsHeaders, 409, 'BALANCE_DEDUCTION_FAILED',
+          'Failed to deduct balance. Balance may have changed. Please retry.');
+      }
     }
 
-    console.log('Batch checkout created:', {
-      payment_group_id: paymentGroupId,
+    console.log('Batch order processed:', {
       order_count: createdOrderIds.length,
-      checkout_id: checkoutSession.id,
       total: grandTotal,
+      payment_method,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        payment_group_id: paymentGroupId,
         order_ids: createdOrderIds,
-        checkout_url: checkoutSession.attributes.checkout_url,
-        payment_due_at: paymentDueAt,
+        orders: createdOrders.map(o => ({
+          order_id: o.id,
+          client_order_id: o.client_order_id,
+          total_amount: o.total_amount,
+          status: orderStatus,
+          payment_status: paymentStatus,
+          payment_due_at: paymentDueAt,
+        })),
         total_amount: grandTotal,
+        message: isCash
+          ? `Please pay ₱${grandTotal.toFixed(2)} at the cashier within ${CASH_PAYMENT_TIMEOUT_MINUTES} minutes`
+          : `${orders.length} orders placed successfully`,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-
   } catch (error) {
     console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'SERVER_ERROR', message: 'An unexpected error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
+    return errorResponse(corsHeaders, 500, 'SERVER_ERROR', 'An unexpected error occurred');
   }
 });
