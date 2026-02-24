@@ -358,23 +358,23 @@ export default function Profile() {
               <ChevronRight size={20} className="text-gray-400 dark:text-gray-500" />
             </button>
 
-            <div className="flex items-center gap-3 px-2 py-2">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full">
-                <Clock size={18} className="text-purple-600 dark:text-purple-400" />
+            <div className="flex justify-between items-center -mx-2 px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                  <Clock size={18} className="text-purple-600 dark:text-purple-400" />
+                </div>
+                <span className="text-gray-600 dark:text-gray-400">Member Since</span>
               </div>
-              <div className="flex-1">
-                <span className="text-gray-600 dark:text-gray-400 text-sm">Member Since</span>
-                <p className="font-medium text-gray-900 dark:text-gray-100">
-                  {profile?.created_at 
-                    ? new Date(profile.created_at).toLocaleDateString('en-PH', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })
-                    : 'N/A'
-                  }
-                </p>
-              </div>
+              <span className="text-gray-900 dark:text-gray-100 font-medium">
+                {profile?.created_at 
+                  ? new Date(profile.created_at).toLocaleDateString('en-PH', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })
+                  : 'N/A'
+                }
+              </span>
             </div>
           </div>
         </section>
