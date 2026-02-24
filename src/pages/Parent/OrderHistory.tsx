@@ -169,9 +169,11 @@ export default function OrderHistory() {
           totalAmount: 0,
         });
       }
-      const group = groups.get(key)!;
-      group.orders.push(order);
-      group.totalAmount += order.total_amount;
+      const group = groups.get(key);
+      if (group) {
+        group.orders.push(order);
+        group.totalAmount += order.total_amount;
+      }
     }
 
     // Sort sub-orders within each group by meal period
@@ -260,8 +262,8 @@ export default function OrderHistory() {
 
               // Find the earliest completion time (for completed groups)
               const latestCompletion = group.orders
-                .filter(o => o.status === 'completed' && o.completed_at)
-                .map(o => o.completed_at!)
+                .filter((o): o is typeof o & { completed_at: string } => o.status === 'completed' && !!o.completed_at)
+                .map(o => o.completed_at)
                 .sort()
                 .pop();
 
