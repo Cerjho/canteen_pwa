@@ -10,10 +10,12 @@ export interface CreateOrderRequest {
     product_id: string;
     quantity: number;
     price_at_order: number;
+    meal_period?: string;
   }>;
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  /** @deprecated Use items[].meal_period instead */
   meal_period?: string;
 }
 
@@ -24,9 +26,9 @@ export interface BatchOrderGroup {
     product_id: string;
     quantity: number;
     price_at_order: number;
+    meal_period?: string;
   }>;
   scheduled_for?: string;
-  meal_period?: string;
 }
 
 export interface CreateBatchOrderRequest {
@@ -39,6 +41,9 @@ export interface CreateBatchOrderRequest {
 export interface BatchOrderResponse {
   success: boolean;
   order_ids: string[];
+  merged_order_ids?: string[];
+  new_order_ids?: string[];
+  merged?: boolean;
   orders: Array<{
     order_id: string;
     client_order_id: string;
@@ -232,7 +237,6 @@ export async function createBatchOrder(batchData: CreateBatchOrderRequest): Prom
         payment_method: batchData.payment_method,
         notes: batchData.notes,
         scheduled_for: order.scheduled_for,
-        meal_period: order.meal_period,
       });
     }
     return {

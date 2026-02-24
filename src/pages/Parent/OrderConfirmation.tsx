@@ -18,6 +18,8 @@ interface OrderConfirmationState {
   scheduledDates?: string[]; // Multi-day support
   orderCount?: number; // Number of orders created
   isFutureOrder?: boolean;
+  merged?: boolean;
+  mergedCount?: number;
 }
 
 export default function OrderConfirmation() {
@@ -340,6 +342,12 @@ export default function OrderConfirmation() {
             : `Your ${isMultiDay ? `${orderCount} orders have` : 'order has'} been received and ${isMultiDay ? 'are' : 'is'} being processed.`
           }
         </p>
+
+        {state?.merged && (
+          <p className="text-blue-600 dark:text-blue-400 text-sm mt-2 mb-4">
+            Items were added to {state.mergedCount || 1} existing order(s)
+          </p>
+        )}
 
         {/* Order Summary Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 text-left">

@@ -305,6 +305,8 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_group_id UUID,
   notes TEXT,
   scheduled_for DATE DEFAULT CURRENT_DATE,
+  meal_period TEXT NOT NULL DEFAULT 'lunch'
+    CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ
@@ -317,6 +319,10 @@ CREATE TABLE IF NOT EXISTS order_items (
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   price_at_order NUMERIC(10,2) NOT NULL CHECK (price_at_order >= 0),
+  status TEXT NOT NULL DEFAULT 'confirmed'
+    CHECK (status IN ('confirmed', 'unavailable')),
+  meal_period TEXT DEFAULT 'lunch'
+    CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -474,10 +480,12 @@ CREATE TABLE IF NOT EXISTS cart_items (
   student_id UUID REFERENCES students(id) ON DELETE CASCADE,
   quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
   scheduled_for DATE NOT NULL DEFAULT CURRENT_DATE,
+  meal_period TEXT NOT NULL DEFAULT 'lunch'
+    CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT cart_items_user_student_product_date_key
-    UNIQUE (user_id, student_id, product_id, scheduled_for)
+  CONSTRAINT cart_items_user_student_product_date_meal_key
+    UNIQUE (user_id, student_id, product_id, scheduled_for, meal_period)
 );
 
 -- Cart state (selected student, notes, payment method per user)
@@ -537,6 +545,17 @@ CREATE INDEX IF NOT EXISTS idx_orders_payment_status
   ON orders(payment_status) WHERE payment_status = 'awaiting_payment';
 CREATE INDEX IF NOT EXISTS idx_orders_payment_due_at
   ON orders(payment_due_at) WHERE payment_due_at IS NOT NULL;
+
+-- Unique partial index: prevent duplicate active orders per student+date
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_order_per_student_date
+  ON orders(student_id, scheduled_for)
+  WHERE status NOT IN ('cancelled');
+
+-- Composite lookup index for fast slot queries
+CREATE INDEX IF NOT EXISTS idx_orders_student_date
+  ON orders(student_id, scheduled_for);
+
+-- DEPRECATED: orders.meal_period — use order_items.meal_period instead
 
 -- order_items
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);

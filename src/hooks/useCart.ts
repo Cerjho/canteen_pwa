@@ -310,7 +310,7 @@ export function useCart() {
   const summary = useMemo((): CartSummary => {
     const uniqueDates = new Set(items.map(i => i.scheduled_for));
     const uniqueStudents = new Set(items.map(i => i.student_id));
-    const orderCombinations = new Set(items.map(i => `${i.student_id}_${i.scheduled_for}_${i.meal_period}`));
+    const orderCombinations = new Set(items.map(i => `${i.student_id}_${i.scheduled_for}`));
     
     return {
       totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -787,16 +787,15 @@ export function useCart() {
       const currentPaymentMethod = paymentMethodRef.current;
       const currentNotes = notesRef.current;
 
-      // Group items by student AND scheduled_for date AND meal_period
-      const groups = new Map<string, { student_id: string; scheduled_for: string; meal_period: MealPeriod; items: CartItem[] }>();
+      // Group items by student AND scheduled_for date (meal_period is per-item)
+      const groups = new Map<string, { student_id: string; scheduled_for: string; items: CartItem[] }>();
       
       for (const item of currentItems) {
-        const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
+        const key = `${item.student_id}_${item.scheduled_for}`;
         if (!groups.has(key)) {
           groups.set(key, {
             student_id: item.student_id,
             scheduled_for: item.scheduled_for,
-            meal_period: item.meal_period,
             items: []
           });
         }
@@ -819,10 +818,10 @@ export function useCart() {
           items: group.items.map(item => ({
             product_id: item.product_id,
             quantity: item.quantity,
-            price_at_order: item.price
+            price_at_order: item.price,
+            meal_period: item.meal_period
           })),
-          scheduled_for: group.scheduled_for,
-          meal_period: group.meal_period
+          scheduled_for: group.scheduled_for
         }));
 
         const batchResult = await createBatchCheckout({
@@ -834,10 +833,10 @@ export function useCart() {
 
         // Clear all cart items before redirect
         const checkoutKeys = new Set(
-          groupsArray.map(g => `${g.student_id}_${g.scheduled_for}_${g.meal_period}`)
+          groupsArray.map(g => `${g.student_id}_${g.scheduled_for}`)
         );
         setItems(prev => prev.filter(item => {
-          const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
+          const key = `${item.student_id}_${item.scheduled_for}`;
           return !checkoutKeys.has(key);
         }));
 
@@ -851,8 +850,27 @@ export function useCart() {
             .in('id', cartItemIdsToDelete);
         }
 
+        // If all orders were merged into existing ones, no checkout redirect needed
+        if (batchResult.merged && !batchResult.checkout_url) {
+          // All orders were merged — no checkout needed
+          // Clear the appropriate cart items and return success without redirect
+          return {
+            redirecting: false,
+            orders: batchResult.order_ids.map((oid, i) => ({
+              order_id: oid,
+              student_id: groupsArray[i]?.student_id || '',
+              scheduled_for: groupsArray[i]?.scheduled_for || '',
+            })),
+            total: 0,
+            successCount: batchResult.order_ids.length,
+            failCount: 0,
+            merged: true,
+            mergedCount: batchResult.merged_order_ids?.length || 0,
+          };
+        }
+
         // Redirect to PayMongo checkout page
-        window.location.href = batchResult.checkout_url;
+        window.location.href = batchResult.checkout_url!;
         return {
           redirecting: true,
           orders: batchResult.order_ids.map((oid, i) => ({
@@ -860,11 +878,12 @@ export function useCart() {
             checkout_url: batchResult.checkout_url,
             student_id: groupsArray[i]?.student_id || '',
             scheduled_for: groupsArray[i]?.scheduled_for || '',
-            meal_period: groupsArray[i]?.meal_period || 'lunch' as MealPeriod,
           })),
           total: currentItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
           successCount: groupsArray.length,
           failCount: 0,
+          merged: batchResult.merged || false,
+          mergedCount: batchResult.merged_order_ids?.length || 0,
         };
       }
 
@@ -875,10 +894,10 @@ export function useCart() {
         items: group.items.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
-          price_at_order: item.price
+          price_at_order: item.price,
+          meal_period: item.meal_period
         })),
-        scheduled_for: group.scheduled_for,
-        meal_period: group.meal_period
+        scheduled_for: group.scheduled_for
       }));
 
       const batchResult = await createBatchOrder({
@@ -888,20 +907,24 @@ export function useCart() {
         notes: orderNotes || currentNotes,
       });
 
-      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; meal_period: MealPeriod; error?: string }> =
+      // Notify parent if items were merged into existing orders
+      if (batchResult.merged) {
+        // The merged info will be used in the order confirmation
+      }
+
+      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; error?: string }> =
         batchResult.orders.map((o, i) => ({
           order_id: o.order_id,
           student_id: groupsArray[i]?.student_id || '',
           scheduled_for: groupsArray[i]?.scheduled_for || '',
-          meal_period: (groupsArray[i]?.meal_period || 'lunch') as MealPeriod,
         }));
 
       // Clear all checked-out items from local state
       const successfulKeys = new Set(
-        groupsArray.map(g => `${g.student_id}_${g.scheduled_for}_${g.meal_period}`)
+        groupsArray.map(g => `${g.student_id}_${g.scheduled_for}`)
       );
       setItems(prev => prev.filter(item => {
-        const key = `${item.student_id}_${item.scheduled_for}_${item.meal_period}`;
+        const key = `${item.student_id}_${item.scheduled_for}`;
         return !successfulKeys.has(key);
       }));
 
@@ -925,7 +948,9 @@ export function useCart() {
         orders: results, 
         total: batchResult.total_amount,
         successCount: results.length,
-        failCount: 0
+        failCount: 0,
+        merged: batchResult.merged || false,
+        mergedCount: batchResult.merged_order_ids?.length || 0,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? friendlyError(err.message, 'complete checkout') : 'Checkout failed. Please try again.';

@@ -11,10 +11,12 @@ interface QueuedOrder {
     product_id: string;
     quantity: number;
     price_at_order: number;
+    meal_period?: string;
   }>;
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  /** @deprecated Use items[].meal_period instead */
   meal_period?: string;
   queued_at: Date;
   retry_count: number;

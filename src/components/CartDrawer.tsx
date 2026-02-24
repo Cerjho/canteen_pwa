@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Minus, CreditCard, Wallet, Banknote, Smartphone, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check, Globe } from 'lucide-react';
+import { X, Plus, Minus, CreditCard, Wallet, Banknote, Smartphone, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check, Globe, PlusCircle } from 'lucide-react';
 import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod, type PaymentMethod, isOnlinePaymentMethod } from '../types';
@@ -22,6 +22,7 @@ interface CartDrawerProps {
   onCopyDateItems?: (fromDate: string, toDate: string) => Promise<void>;
   onError?: (error: Error) => void;
   parentBalance?: number;
+  existingOrders?: Array<{ student_id: string; scheduled_for: string; order_id: string }>;
 }
 
 export function CartDrawer({
@@ -35,7 +36,8 @@ export function CartDrawer({
   onClearDate,
   onCopyDateItems,
   onError,
-  parentBalance = 0
+  parentBalance = 0,
+  existingOrders
 }: CartDrawerProps) {
   const [paymentMethod, setPaymentMethod] = useState<CartPaymentMethod>('cash');
   const [notes, setNotes] = useState('');
@@ -61,14 +63,14 @@ export function CartDrawer({
   const uniqueDates = [...new Set(items.map(i => i.scheduled_for))].sort();
   const dateCount = uniqueDates.length;
 
-  // Count distinct order groups (student × date × meal_period)
+  // Count distinct order groups (student × date)
   const orderGroupCount = (() => {
     const keys = new Set<string>();
     const activeItems = selectedDates.size > 0
       ? items.filter(i => selectedDates.has(i.scheduled_for))
       : items;
     for (const item of activeItems) {
-      keys.add(`${item.student_id}_${item.scheduled_for}_${item.meal_period}`);
+      keys.add(`${item.student_id}_${item.scheduled_for}`);
     }
     return keys.size;
   })();
@@ -448,6 +450,15 @@ export function CartDrawer({
                                         <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded mt-0.5">
                                           {MEAL_PERIOD_ICONS[item.meal_period]} {MEAL_PERIOD_LABELS[item.meal_period]}
                                         </span>
+                                      )}
+                                      {existingOrders?.some(o =>
+                                        o.student_id === item.student_id &&
+                                        o.scheduled_for === item.scheduled_for
+                                      ) && (
+                                        <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded px-2 py-0.5 mt-1">
+                                          <PlusCircle className="w-3 h-3" />
+                                          Will be added to existing order
+                                        </div>
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2">

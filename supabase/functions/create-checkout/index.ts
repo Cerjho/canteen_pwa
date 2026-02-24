@@ -23,6 +23,7 @@ interface OrderItem {
   product_id: string;
   quantity: number;
   price_at_order: number;
+  meal_period?: string;
 }
 
 interface CheckoutRequest {
@@ -33,6 +34,7 @@ interface CheckoutRequest {
   payment_method: 'gcash' | 'paymaya' | 'card';
   notes?: string;
   scheduled_for?: string;
+  /** @deprecated meal_period moved to individual items (Phase 3) */
   meal_period?: string;
 }
 
@@ -88,7 +90,7 @@ serve(async (req) => {
 
     // ── Parse request ──
     const body: CheckoutRequest = await req.json();
-    const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for, meal_period } = body;
+    const { parent_id, student_id, client_order_id, items, payment_method, notes, scheduled_for } = body;
 
     if (parent_id !== user.id) {
       return new Response(
@@ -255,6 +257,142 @@ serve(async (req) => {
       );
     }
 
+    // ── Duplicate slot check → auto-merge (Phase 4) ──
+    const slotDate = scheduled_for || todayStr;
+
+    const { data: slotConflicts } = await supabaseAdmin
+      .from('orders')
+      .select('id, status, total_amount, scheduled_for')
+      .eq('student_id', student_id)
+      .eq('scheduled_for', slotDate)
+      .not('status', 'eq', 'cancelled');
+
+    if (slotConflicts && slotConflicts.length > 0) {
+      const existingOrder = slotConflicts[0];
+
+      // If existing order is not in a mergeable state, return ORDER_LOCKED
+      if (!['pending', 'awaiting_payment'].includes(existingOrder.status)) {
+        return new Response(
+          JSON.stringify({
+            error: 'ORDER_LOCKED',
+            message: 'An active order exists for this student and date but cannot be modified.',
+            existing_order_ids: slotConflicts.map(c => c.id),
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // ── Merge path: validate products, reserve stock, insert items ──
+      const mergeProductIds = items.map(i => i.product_id);
+      const { data: mergeProducts, error: mergeProductsError } = await supabaseAdmin
+        .from('products').select('id, name, price, stock_quantity, available').in('id', mergeProductIds);
+
+      if (mergeProductsError || !mergeProducts) {
+        return new Response(
+          JSON.stringify({ error: 'SERVER_ERROR', message: 'Failed to fetch products' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const mergeProductMap = new Map(mergeProducts.map(p => [p.id, p]));
+
+      for (const item of items) {
+        const product = mergeProductMap.get(item.product_id);
+        if (!product) {
+          return new Response(
+            JSON.stringify({ error: 'PRODUCT_NOT_FOUND', message: 'Product not found', product_id: item.product_id }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+        if (!product.available) {
+          return new Response(
+            JSON.stringify({ error: 'PRODUCT_UNAVAILABLE', message: `'${product.name}' is not available` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+        if (product.stock_quantity < item.quantity) {
+          return new Response(
+            JSON.stringify({ error: 'INSUFFICIENT_STOCK', message: `'${product.name}' has insufficient stock (available: ${product.stock_quantity})` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+        if (Math.abs(item.price_at_order - product.price) > 0.01) {
+          return new Response(
+            JSON.stringify({ error: 'PRICE_MISMATCH', message: `Price changed for '${product.name}'. Please refresh.` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
+
+      // Reserve stock for merged items
+      for (const item of items) {
+        const product = mergeProductMap.get(item.product_id)!;
+        const { error: stockError } = await supabaseAdmin
+          .from('products')
+          .update({ stock_quantity: product.stock_quantity - item.quantity })
+          .eq('id', item.product_id)
+          .gte('stock_quantity', item.quantity);
+
+        if (stockError) {
+          return new Response(
+            JSON.stringify({ error: 'STOCK_UPDATE_FAILED', message: 'Failed to reserve stock, please retry' }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
+
+      // Insert new items into existing order
+      const mergeOrderItems = items.map(item => ({
+        order_id: existingOrder.id,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price_at_order: item.price_at_order,
+        meal_period: item.meal_period || 'lunch',
+      }));
+
+      const { error: mergeItemsError } = await supabaseAdmin.from('order_items').insert(mergeOrderItems);
+      if (mergeItemsError) {
+        console.error('Merge items insert error:', mergeItemsError);
+        // Restore stock on failure
+        for (const item of items) {
+          const product = mergeProductMap.get(item.product_id)!;
+          await supabaseAdmin.from('products').update({ stock_quantity: product.stock_quantity }).eq('id', item.product_id);
+        }
+        return new Response(
+          JSON.stringify({ error: 'MERGE_FAILED', message: 'Failed to merge items into existing order' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // Recalculate total from all items in the order
+      const { data: allItems } = await supabaseAdmin
+        .from('order_items')
+        .select('quantity, price_at_order')
+        .eq('order_id', existingOrder.id);
+
+      const newTotal = (allItems || []).reduce((sum, i) => sum + i.quantity * i.price_at_order, 0);
+
+      await supabaseAdmin
+        .from('orders')
+        .update({ total_amount: newTotal })
+        .eq('id', existingOrder.id);
+
+      console.log('Order merged:', { existing_order_id: existingOrder.id, new_items: items.length, new_total: newTotal });
+
+      // For online payments the merged items aren't covered by a checkout session yet;
+      // return success so the frontend can handle accordingly.
+      return new Response(
+        JSON.stringify({
+          success: true,
+          merged: true,
+          order_id: existingOrder.id,
+          merged_order_ids: [existingOrder.id],
+          total_amount: newTotal,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // ── Validate products and stock ──
     const productIds = items.map(i => i.product_id);
     const { data: products, error: productsError } = await supabaseAdmin
@@ -348,7 +486,7 @@ serve(async (req) => {
         payment_method,
         notes: notes || null,
         scheduled_for: scheduled_for || getTodayPhilippines(),
-        meal_period: meal_period || 'lunch',
+        meal_period: null, // deprecated: meal_period moved to order_items (Phase 3)
       })
       .select()
       .single();
@@ -372,6 +510,7 @@ serve(async (req) => {
       product_id: item.product_id,
       quantity: item.quantity,
       price_at_order: item.price_at_order,
+      meal_period: item.meal_period || 'lunch',
     }));
 
     const { error: itemsError } = await supabaseAdmin.from('order_items').insert(orderItems);

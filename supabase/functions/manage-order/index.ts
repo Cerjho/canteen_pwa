@@ -19,12 +19,13 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
 }
 
 type OrderStatus = 'awaiting_payment' | 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
-type Action = 'update-status' | 'cancel' | 'add-notes' | 'bulk-update-status';
+type Action = 'update-status' | 'cancel' | 'add-notes' | 'bulk-update-status' | 'mark-item-unavailable';
 
 interface ManageOrderRequest {
   action: Action;
   order_id?: string;
   order_ids?: string[]; // For bulk operations
+  item_id?: string; // For mark-item-unavailable
   status?: OrderStatus;
   notes?: string;
   reason?: string; // For cancellation
@@ -85,10 +86,10 @@ serve(async (req) => {
     }
 
     const body: ManageOrderRequest = await req.json();
-    const { action, order_id, order_ids, status, notes, reason } = body;
+    const { action, order_id, order_ids, item_id, status, notes, reason } = body;
 
     // Validate action
-    const validActions: Action[] = ['update-status', 'cancel', 'add-notes', 'bulk-update-status'];
+    const validActions: Action[] = ['update-status', 'cancel', 'add-notes', 'bulk-update-status', 'mark-item-unavailable'];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid action. Must be: ${validActions.join(', ')}` }),
@@ -421,6 +422,162 @@ serve(async (req) => {
             new_status: 'cancelled',
             refund_applied: refundApplied,
             refund_amount: refundApplied ? order.total_amount : 0
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'mark-item-unavailable': {
+        if (!order_id || !item_id) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'order_id and item_id are required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Fetch the order
+        const { data: mOrder, error: mOrderError } = await supabaseAdmin
+          .from('orders')
+          .select('id, status, payment_status, parent_id, total_amount, payment_method')
+          .eq('id', order_id)
+          .single();
+
+        if (mOrderError || !mOrder) {
+          return new Response(
+            JSON.stringify({ error: 'ORDER_NOT_FOUND', message: 'Order not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Only allow marking items on pending or preparing orders
+        if (!['pending', 'preparing'].includes(mOrder.status)) {
+          return new Response(
+            JSON.stringify({ error: 'INVALID_STATUS', message: `Cannot mark items unavailable on an order with status '${mOrder.status}'` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Fetch the item and verify it belongs to this order
+        const { data: mItem, error: mItemError } = await supabaseAdmin
+          .from('order_items')
+          .select('id, order_id, product_id, quantity, price_at_order, status')
+          .eq('id', item_id)
+          .eq('order_id', order_id)
+          .single();
+
+        if (mItemError || !mItem) {
+          return new Response(
+            JSON.stringify({ error: 'ITEM_NOT_FOUND', message: 'Order item not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (mItem.status === 'unavailable') {
+          return new Response(
+            JSON.stringify({ error: 'ALREADY_UNAVAILABLE', message: 'This item is already marked as unavailable' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 1. Set item status to unavailable
+        const { error: itemUpdateError } = await supabaseAdmin
+          .from('order_items')
+          .update({ status: 'unavailable' })
+          .eq('id', item_id);
+
+        if (itemUpdateError) {
+          return new Response(
+            JSON.stringify({ error: 'UPDATE_FAILED', message: 'Failed to mark item unavailable' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 2. Restore stock for the unavailable item
+        await supabaseAdmin.rpc('increment_stock', {
+          p_product_id: mItem.product_id,
+          p_quantity: mItem.quantity,
+        }).catch(err => console.error(`Stock restore failed for product ${mItem.product_id}:`, err));
+
+        // 3. Recalculate order total from remaining confirmed items
+        const { data: confirmedItems } = await supabaseAdmin
+          .from('order_items')
+          .select('price_at_order, quantity, status')
+          .eq('order_id', order_id);
+
+        const newTotal = (confirmedItems || []) 
+          .filter(i => i.status === 'confirmed')
+          .reduce((sum, i) => sum + i.price_at_order * i.quantity, 0);
+
+        const allUnavailable = (confirmedItems || []).every(i => i.status === 'unavailable');
+
+        // 4. Update the order total (and cancel if all items unavailable)
+        const orderUpdate: Record<string, unknown> = {
+          total_amount: newTotal,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (allUnavailable) {
+          orderUpdate.status = 'cancelled';
+          orderUpdate.notes = 'Auto-cancelled: All items marked unavailable';
+        }
+
+        await supabaseAdmin.from('orders').update(orderUpdate).eq('id', order_id);
+
+        // 5. Partial refund if order was paid with balance
+        const refundAmount = mItem.price_at_order * mItem.quantity;
+        let refundApplied = false;
+
+        if (refundAmount > 0 && mOrder.payment_status === 'paid') {
+          // Look up original payment for refund lineage
+          let originalPaymentId: string | null = null;
+          const { data: origAlloc } = await supabaseAdmin
+            .from('payment_allocations')
+            .select('payment_id')
+            .eq('order_id', order_id)
+            .limit(1)
+            .single();
+          if (origAlloc) {
+            const { data: origPay } = await supabaseAdmin
+              .from('payments')
+              .select('id, type')
+              .eq('id', origAlloc.payment_id)
+              .eq('type', 'payment')
+              .single();
+            if (origPay) originalPaymentId = origPay.id;
+          }
+
+          const { error: rpcError } = await supabaseAdmin.rpc(
+            'credit_balance_with_payment',
+            {
+              p_parent_id: mOrder.parent_id,
+              p_amount: refundAmount,
+              p_type: 'refund',
+              p_method: mOrder.payment_method,
+              p_reference_id: `ITEM-UNAVAIL-${item_id.substring(0, 8)}`,
+              p_order_id: order_id,
+              p_original_payment_id: originalPaymentId,
+            }
+          );
+
+          if (!rpcError) {
+            refundApplied = true;
+          } else {
+            console.error('Partial refund error:', rpcError);
+          }
+        }
+
+        console.log(`[AUDIT] ${userRole} ${user.email} marked item ${item_id} unavailable on order ${order_id}. Refund: ${refundApplied ? '₱' + refundAmount : 'N/A'}. All unavailable: ${allUnavailable}`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            order_id,
+            item_id,
+            item_status: 'unavailable',
+            new_total: newTotal,
+            order_cancelled: allUnavailable,
+            refund_applied: refundApplied,
+            refund_amount: refundApplied ? refundAmount : 0,
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

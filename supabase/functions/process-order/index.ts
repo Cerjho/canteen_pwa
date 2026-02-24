@@ -17,6 +17,7 @@ interface OrderItem {
   product_id: string;
   quantity: number;
   price_at_order: number;
+  meal_period?: string;
 }
 
 interface OrderRequest {
@@ -27,6 +28,7 @@ interface OrderRequest {
   payment_method: string;
   notes?: string;
   scheduled_for?: string;
+  /** @deprecated Phase 3: meal_period moved to item level. Kept for backward compat. */
   meal_period?: string;
 }
 
@@ -388,6 +390,152 @@ serve(async (req) => {
       );
     }
 
+    // ── Duplicate slot check (student_id × scheduled_for) ── Phase 4: auto-merge
+    const slotDate = scheduled_for || todayStr;
+
+    const { data: slotConflicts } = await supabaseAdmin
+      .from('orders')
+      .select('id, student_id, scheduled_for, status, total_amount')
+      .eq('student_id', student_id)
+      .eq('scheduled_for', slotDate)
+      .not('status', 'eq', 'cancelled');
+
+    if (slotConflicts && slotConflicts.length > 0) {
+      const existingOrder = slotConflicts[0];
+      const mergeableStatuses = ['pending', 'awaiting_payment'];
+
+      // If order is not in a mergeable state, reject
+      if (!mergeableStatuses.includes(existingOrder.status)) {
+        console.log('Order locked, cannot merge:', existingOrder);
+        return new Response(
+          JSON.stringify({
+            error: 'ORDER_LOCKED',
+            message: `Order for this student and date is already ${existingOrder.status}. Cannot add items.`,
+            order_id: existingOrder.id,
+            status: existingOrder.status,
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // ── MERGE MODE: append items to existing order ──
+      console.log('Merge mode: appending items to existing order', existingOrder.id);
+
+      // Insert new items into existing order
+      const mergeItems = items.map(item => ({
+        order_id: existingOrder.id,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price_at_order: item.price_at_order,
+        meal_period: item.meal_period || 'lunch',
+      }));
+
+      const { error: mergeItemsError } = await supabaseAdmin
+        .from('order_items')
+        .insert(mergeItems);
+
+      if (mergeItemsError) {
+        console.error('Merge items insert error:', mergeItemsError);
+        return new Response(
+          JSON.stringify({ error: 'MERGE_ITEMS_FAILED', message: 'Failed to add items to existing order' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Recalculate total from all confirmed items
+      const { data: allItems, error: allItemsError } = await supabaseAdmin
+        .from('order_items')
+        .select('price_at_order, quantity')
+        .eq('order_id', existingOrder.id)
+        .eq('status', 'confirmed');
+
+      if (allItemsError || !allItems) {
+        console.error('Failed to recalculate total:', allItemsError);
+        return new Response(
+          JSON.stringify({ error: 'MERGE_TOTAL_FAILED', message: 'Failed to recalculate order total' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const newTotal = allItems.reduce((sum, i) => sum + i.price_at_order * i.quantity, 0);
+      const delta = newTotal - (existingOrder.total_amount || 0);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('orders')
+        .update({ total_amount: newTotal })
+        .eq('id', existingOrder.id);
+
+      if (updateError) {
+        console.error('Failed to update order total:', updateError);
+        return new Response(
+          JSON.stringify({ error: 'MERGE_UPDATE_FAILED', message: 'Failed to update order total' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // If payment_method is 'balance', deduct delta from wallet
+      if (payment_method === 'balance' && delta > 0) {
+        const { data: wallet, error: walletError } = await supabaseAdmin
+          .from('wallets')
+          .select('balance')
+          .eq('user_id', parent_id)
+          .single();
+
+        if (walletError || !wallet) {
+          console.error('No wallet found for merge balance deduction');
+          return new Response(
+            JSON.stringify({ error: 'NO_WALLET', message: 'No wallet found. Please top up your balance first.' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (wallet.balance < delta) {
+          return new Response(
+            JSON.stringify({
+              error: 'INSUFFICIENT_BALANCE',
+              message: `Insufficient balance for merge. Required: ₱${delta.toFixed(2)}, Available: ₱${wallet.balance.toFixed(2)}`,
+              required: delta,
+              available: wallet.balance,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: rpcError } = await supabaseAdmin.rpc(
+          'deduct_balance_with_payment',
+          {
+            p_parent_id: parent_id,
+            p_expected_balance: wallet.balance,
+            p_amount: delta,
+            p_order_ids: [existingOrder.id],
+            p_order_amounts: [delta],
+          }
+        );
+
+        if (rpcError) {
+          console.error('Merge balance deduction error:', rpcError);
+          return new Response(
+            JSON.stringify({ error: 'BALANCE_DEDUCTION_FAILED', message: 'Failed to deduct balance for merged items. Please retry.' }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      // Return success with merge info — skip normal order creation
+      console.log('Merge successful:', { order_id: existingOrder.id, newTotal, delta });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          merged: true,
+          order_id: existingOrder.id,
+          merged_order_ids: [existingOrder.id],
+          total_amount: newTotal,
+          message: 'Items merged into existing order successfully',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Fetch products and validate stock
     const productIds = items.map(item => item.product_id);
     console.log('Validating products:', productIds);
@@ -560,7 +708,7 @@ serve(async (req) => {
         payment_method,
         notes: notes || null,
         scheduled_for: scheduled_for || getTodayPhilippines(),
-        meal_period: meal_period || 'lunch'
+        meal_period: null  // Phase 3: deprecated at order level, kept for backward compat
       })
       .select()
       .single();
@@ -579,7 +727,8 @@ serve(async (req) => {
       order_id: order.id,
       product_id: item.product_id,
       quantity: item.quantity,
-      price_at_order: item.price_at_order
+      price_at_order: item.price_at_order,
+      meal_period: item.meal_period || 'lunch'
     }));
 
     const { error: itemsError } = await supabaseAdmin

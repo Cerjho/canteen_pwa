@@ -82,6 +82,20 @@ export default function Menu() {
   });
 
   const parentBalance = walletData?.balance || 0;
+
+  // Query active orders for the CartDrawer (merge detection)
+  const { data: activeOrders } = useQuery({
+    queryKey: ['active-orders-for-cart'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, student_id, scheduled_for')
+        .eq('parent_id', user!.id)
+        .not('status', 'in', '("cancelled","completed")');
+      return data || [];
+    },
+    enabled: !!user?.id && cartOpen,
+  });
   
   // Get weekdays with status (including holidays)
   const { data: weekdaysInfo } = useQuery({
@@ -258,7 +272,9 @@ export default function Menu() {
           isOffline: false,
           paymentMethod,
           scheduledDates: scheduledDates,
-          isFutureOrder: hasFutureOrders
+          isFutureOrder: hasFutureOrders,
+          merged: result?.merged || false,
+          mergedCount: result?.mergedCount || 0,
         }
       });
     } catch (error) {
@@ -634,6 +650,7 @@ export default function Menu() {
         onClearDate={clearDate}
         onCopyDateItems={copyDateItems}
         parentBalance={parentBalance}
+        existingOrders={activeOrders?.map(o => ({ student_id: o.student_id, scheduled_for: o.scheduled_for, order_id: o.id }))}
       />
     </div>
   );

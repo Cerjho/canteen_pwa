@@ -124,6 +124,7 @@ export interface Order {
   payment_group_id?: string;
   notes?: string;
   scheduled_for?: string;
+  /** @deprecated Use items[].meal_period instead */
   meal_period?: MealPeriod;
   created_at: string;
   updated_at: string;
@@ -136,6 +137,8 @@ export interface OrderItem {
   product_id: string;
   quantity: number;
   price_at_order: number;
+  status?: 'confirmed' | 'unavailable';
+  meal_period?: MealPeriod;
   created_at: string;
 }
 
@@ -187,9 +190,11 @@ export interface PaymentAllocation {
 export interface CreateCheckoutResponse {
   success: boolean;
   order_id: string;
-  checkout_url: string;
-  payment_due_at: string;
+  checkout_url?: string;
+  payment_due_at?: string;
   total_amount: number;
+  merged?: boolean;
+  merged_order_ids?: string[];
 }
 
 /** Response from the create-batch-checkout edge function */
@@ -197,8 +202,11 @@ export interface BatchCheckoutResponse {
   success: boolean;
   payment_group_id: string;
   order_ids: string[];
-  checkout_url: string;
-  payment_due_at: string;
+  merged_order_ids?: string[];
+  new_order_ids?: string[];
+  merged?: boolean;
+  checkout_url?: string;
+  payment_due_at?: string;
   total_amount: number;
 }
 

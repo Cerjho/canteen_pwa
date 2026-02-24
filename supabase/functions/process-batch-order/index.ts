@@ -39,6 +39,7 @@ interface OrderItem {
   product_id: string;
   quantity: number;
   price_at_order: number;
+  meal_period?: string;
 }
 
 interface OrderGroup {
@@ -46,7 +47,6 @@ interface OrderGroup {
   client_order_id: string;
   items: OrderItem[];
   scheduled_for?: string;
-  meal_period?: string;
 }
 
 interface BatchOrderRequest {
@@ -237,6 +237,109 @@ serve(async (req) => {
       });
     }
 
+    // ── Duplicate slot check (student_id × scheduled_for) ──
+    const slotChecks = orders.map(o => ({
+      student_id: o.student_id,
+      scheduled_for: o.scheduled_for || todayStr,
+    }));
+
+    const { data: conflicting } = await supabaseAdmin
+      .from('orders')
+      .select('id, student_id, scheduled_for, meal_period, status')
+      .in('student_id', [...new Set(slotChecks.map(s => s.student_id))])
+      .in('scheduled_for', [...new Set(slotChecks.map(s => s.scheduled_for))])
+      .not('status', 'eq', 'cancelled');
+
+    const slotConflicts = conflicting?.filter(existing =>
+      slotChecks.some(s =>
+        s.student_id === existing.student_id &&
+        s.scheduled_for === existing.scheduled_for
+      )
+    );
+
+    // Phase 4: Auto-merge — instead of failing with DUPLICATE_SLOT, merge items into existing orders
+    const mergeableStatuses = ['pending', 'awaiting_payment'];
+    const mergedOrderIds: string[] = [];
+    const newOrders: typeof orders = [];
+    let mergeDeductedTotal = 0;
+
+    if (slotConflicts && slotConflicts.length > 0) {
+      // Check if any conflicting orders are NOT mergeable (preparing/ready/completed)
+      const unmergeable = slotConflicts.filter(c => !mergeableStatuses.includes(c.status));
+      if (unmergeable.length > 0) {
+        return errorResponse(corsHeaders, 409, 'ORDER_LOCKED',
+          `Order for this student and date is already ${unmergeable[0].status}. Cannot add items.`,
+          { order_id: unmergeable[0].id, status: unmergeable[0].status },
+        );
+      }
+
+      // Separate orders into merge vs new
+      for (const order of orders) {
+        const existingOrder = slotConflicts.find(c =>
+          c.student_id === order.student_id &&
+          c.scheduled_for === (order.scheduled_for || todayStr)
+        );
+
+        if (existingOrder) {
+          // MERGE: append items to existing order
+          const mergeItems = order.items.map(item => ({
+            order_id: existingOrder.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price_at_order: item.price_at_order,
+            meal_period: item.meal_period || 'lunch',
+          }));
+
+          const { error: mergeItemsErr } = await supabaseAdmin
+            .from('order_items').insert(mergeItems);
+
+          if (mergeItemsErr) {
+            console.error('Error merging items:', mergeItemsErr);
+            return errorResponse(corsHeaders, 500, 'MERGE_FAILED',
+              'Failed to add items to existing order.');
+          }
+
+          // Recalculate total from all order items
+          const { data: allExistingItems } = await supabaseAdmin
+            .from('order_items')
+            .select('price_at_order, quantity')
+            .eq('order_id', existingOrder.id);
+
+          const recalcTotal = (allExistingItems || []).reduce(
+            (s: number, i: any) => s + Number(i.price_at_order) * i.quantity, 0
+          );
+
+          await supabaseAdmin.from('orders')
+            .update({ total_amount: recalcTotal })
+            .eq('id', existingOrder.id);
+
+          // Deduct delta from wallet if balance payment
+          if (payment_method === 'balance') {
+            const delta = order.items.reduce(
+              (s, i) => s + i.price_at_order * i.quantity, 0
+            );
+            if (delta > 0) {
+              const { error: balErr } = await supabaseAdmin.rpc('deduct_balance', {
+                p_user_id: parent_id,
+                p_amount: delta,
+              });
+              if (balErr) {
+                console.error('Error deducting balance for merge:', balErr);
+              }
+              mergeDeductedTotal += delta;
+            }
+          }
+
+          mergedOrderIds.push(existingOrder.id);
+        } else {
+          newOrders.push(order);
+        }
+      }
+    } else {
+      // No conflicts — all orders are new
+      newOrders.push(...orders);
+    }
+
     // ================================================================
     // STEP 2 — Validate products, prices, stock (all at once)
     // ================================================================
@@ -247,9 +350,11 @@ serve(async (req) => {
 
     const productMap = new Map(productsResult.data.map(p => [p.id, p]));
 
-    // Aggregate demand per product across ALL orders
+    // Aggregate demand per product across ALL orders (including merged — they still need stock)
     const totalDemand = new Map<string, number>();
     let grandTotal = 0;
+    let newOrdersGrandTotal = 0;
+    const newOrderClientIds = new Set(newOrders.map(o => o.client_order_id));
 
     for (const order of orders) {
       for (const item of order.items) {
@@ -267,6 +372,9 @@ serve(async (req) => {
 
         totalDemand.set(item.product_id, (totalDemand.get(item.product_id) || 0) + item.quantity);
         grandTotal += product.price * item.quantity;
+        if (newOrderClientIds.has(order.client_order_id)) {
+          newOrdersGrandTotal += product.price * item.quantity;
+        }
       }
     }
 
@@ -290,10 +398,10 @@ serve(async (req) => {
       }
 
       currentBalance = wallet.balance;
-      if (currentBalance < grandTotal) {
+      if (currentBalance < newOrdersGrandTotal) {
         return errorResponse(corsHeaders, 400, 'INSUFFICIENT_BALANCE',
-          `Insufficient balance. Required: ₱${grandTotal.toFixed(2)}, Available: ₱${currentBalance.toFixed(2)}`,
-          { required: grandTotal, available: currentBalance });
+          `Insufficient balance. Required: ₱${newOrdersGrandTotal.toFixed(2)}, Available: ₱${currentBalance.toFixed(2)}`,
+          { required: newOrdersGrandTotal, available: currentBalance });
       }
     }
 
@@ -343,128 +451,139 @@ serve(async (req) => {
       ? new Date(Date.now() + CASH_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString()
       : null;
 
-    // Build all order rows for batch insert
-    const orderRows = orders.map(order => {
-      const orderTotal = order.items.reduce((sum, item) => {
-        const product = productMap.get(item.product_id)!;
-        return sum + product.price * item.quantity;
-      }, 0);
+    // Build new orders (skip merged ones)
+    let createdOrders: Array<{ id: string; client_order_id: string; total_amount: number }> = [];
+    let createdOrderIds: string[] = [];
 
-      return {
-        parent_id,
-        student_id: order.student_id,
-        client_order_id: order.client_order_id,
-        status: orderStatus,
-        payment_status: paymentStatus,
-        payment_due_at: paymentDueAt,
-        total_amount: orderTotal,
-        payment_method,
-        notes: notes || null,
-        scheduled_for: order.scheduled_for || todayStr,
-        meal_period: order.meal_period || 'lunch',
-      };
-    });
+    if (newOrders.length > 0) {
+      const orderRows = newOrders.map(order => {
+        const orderTotal = order.items.reduce((sum, item) => {
+          const product = productMap.get(item.product_id)!;
+          return sum + product.price * item.quantity;
+        }, 0);
 
-    // Batch insert all orders at once
-    const { data: createdOrders, error: ordersError } = await supabaseAdmin
-      .from('orders')
-      .insert(orderRows)
-      .select('id, client_order_id, total_amount');
+        return {
+          parent_id,
+          student_id: order.student_id,
+          client_order_id: order.client_order_id,
+          status: orderStatus,
+          payment_status: paymentStatus,
+          payment_due_at: paymentDueAt,
+          total_amount: orderTotal,
+          payment_method,
+          notes: notes || null,
+          scheduled_for: order.scheduled_for || todayStr,
+          meal_period: null, // deprecated: meal_period moved to order_items (backward compat)
+        };
+      });
 
-    if (ordersError || !createdOrders || createdOrders.length === 0) {
-      console.error('Batch order insert error:', ordersError);
-      await rollbackStock();
-      return errorResponse(corsHeaders, 500, 'ORDER_CREATION_FAILED', 'Failed to create orders');
-    }
+      // Batch insert all new orders at once
+      const { data: insertedOrders, error: ordersError } = await supabaseAdmin
+        .from('orders')
+        .insert(orderRows)
+        .select('id, client_order_id, total_amount');
 
-    // Map client_order_id → DB order id for linking items
-    const orderIdMap = new Map(createdOrders.map(o => [o.client_order_id, o.id]));
-    const createdOrderIds = createdOrders.map(o => o.id);
+      if (ordersError || !insertedOrders || insertedOrders.length === 0) {
+        console.error('Batch order insert error:', ordersError);
+        await rollbackStock();
+        return errorResponse(corsHeaders, 500, 'ORDER_CREATION_FAILED', 'Failed to create orders');
+      }
 
-    // Build all order_items rows for batch insert
-    const allOrderItems = orders.flatMap(order => {
-      const dbOrderId = orderIdMap.get(order.client_order_id);
-      if (!dbOrderId) return [];
-      return order.items.map(item => ({
-        order_id: dbOrderId,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price_at_order: item.price_at_order,
-      }));
-    });
+      createdOrders = insertedOrders;
+      createdOrderIds = insertedOrders.map(o => o.id);
 
-    const { error: itemsError } = await supabaseAdmin.from('order_items').insert(allOrderItems);
+      // Map client_order_id → DB order id for linking items
+      const orderIdMap = new Map(insertedOrders.map(o => [o.client_order_id, o.id]));
 
-    if (itemsError) {
-      console.error('Batch order items insert error:', itemsError);
-      // Rollback: delete all created orders (cascade deletes items) and restore stock
-      await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
-      await rollbackStock();
-      return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
-    }
+      // Build all order_items rows for batch insert
+      const allOrderItems = newOrders.flatMap(order => {
+        const dbOrderId = orderIdMap.get(order.client_order_id);
+        if (!dbOrderId) return [];
+        return order.items.map(item => ({
+          order_id: dbOrderId,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price_at_order: item.price_at_order,
+          meal_period: item.meal_period || 'lunch',
+        }));
+      });
 
-    // ── Payment handling ──
-    if (payment_method === 'balance') {
-      // Atomic RPC: deduct wallet + create payment + allocations in one DB transaction
-      const orderIds = createdOrders.map(o => o.id);
-      const orderAmounts = createdOrders.map(o => o.total_amount);
+      const { error: itemsError } = await supabaseAdmin.from('order_items').insert(allOrderItems);
 
-      const { data: rpcPaymentId, error: rpcError } = await supabaseAdmin.rpc(
-        'deduct_balance_with_payment',
-        {
-          p_parent_id: parent_id,
-          p_expected_balance: currentBalance,
-          p_amount: grandTotal,
-          p_order_ids: orderIds,
-          p_order_amounts: orderAmounts,
-        }
-      );
-
-      if (rpcError) {
-        console.error('Atomic balance deduction error:', rpcError);
-        // Rollback: delete orders (cascade), restore stock
-        await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
+      if (itemsError) {
+        console.error('Batch order items insert error:', itemsError);
+        // Rollback: delete all created orders (cascade deletes items) and restore stock
         await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
         await rollbackStock();
-        return errorResponse(corsHeaders, 409, 'BALANCE_DEDUCTION_FAILED',
-          'Failed to deduct balance. Balance may have changed. Please retry.');
+        return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
       }
-    } else {
-      // Cash: create pending payment + allocations (no wallet deduction)
-      const { data: payment, error: paymentError } = await supabaseAdmin
-        .from('payments')
-        .insert({
-          parent_id,
-          type: 'payment',
-          amount_total: grandTotal,
-          method: payment_method,
-          status: 'pending',
-        })
-        .select('id')
-        .single();
 
-      if (paymentError || !payment) {
-        console.error('Payment insert error (non-fatal):', paymentError);
-        // Non-fatal — orders are already created, payment can be reconciled
+      // ── Payment handling ──
+      if (payment_method === 'balance') {
+        // Atomic RPC: deduct wallet + create payment + allocations in one DB transaction
+        const orderIds = insertedOrders.map(o => o.id);
+        const orderAmounts = insertedOrders.map(o => o.total_amount);
+
+        const { data: rpcPaymentId, error: rpcError } = await supabaseAdmin.rpc(
+          'deduct_balance_with_payment',
+          {
+            p_parent_id: parent_id,
+            p_expected_balance: currentBalance,
+            p_amount: newOrdersGrandTotal,
+            p_order_ids: orderIds,
+            p_order_amounts: orderAmounts,
+          }
+        );
+
+        if (rpcError) {
+          console.error('Atomic balance deduction error:', rpcError);
+          // Rollback: delete orders (cascade), restore stock
+          await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
+          await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
+          await rollbackStock();
+          return errorResponse(corsHeaders, 409, 'BALANCE_DEDUCTION_FAILED',
+            'Failed to deduct balance. Balance may have changed. Please retry.');
+        }
       } else {
-        // Link payment to each order via allocations
-        const allAllocations = createdOrders.map(o => ({
-          payment_id: payment.id,
-          order_id: o.id,
-          allocated_amount: o.total_amount,
-        }));
+        // Cash: create pending payment + allocations (no wallet deduction)
+        const { data: payment, error: paymentError } = await supabaseAdmin
+          .from('payments')
+          .insert({
+            parent_id,
+            type: 'payment',
+            amount_total: newOrdersGrandTotal,
+            method: payment_method,
+            status: 'pending',
+          })
+          .select('id')
+          .single();
 
-        const { error: allocError } = await supabaseAdmin
-          .from('payment_allocations')
-          .insert(allAllocations);
-        if (allocError) {
-          console.error('Payment allocations insert error (non-fatal):', allocError);
+        if (paymentError || !payment) {
+          console.error('Payment insert error (non-fatal):', paymentError);
+          // Non-fatal — orders are already created, payment can be reconciled
+        } else {
+          // Link payment to each order via allocations
+          const allAllocations = insertedOrders.map(o => ({
+            payment_id: payment.id,
+            order_id: o.id,
+            allocated_amount: o.total_amount,
+          }));
+
+          const { error: allocError } = await supabaseAdmin
+            .from('payment_allocations')
+            .insert(allAllocations);
+          if (allocError) {
+            console.error('Payment allocations insert error (non-fatal):', allocError);
+          }
         }
       }
     }
+
+    const allOrderIds = [...mergedOrderIds, ...createdOrderIds];
 
     console.log('Batch order processed:', {
       order_count: createdOrderIds.length,
+      merged_count: mergedOrderIds.length,
       total: grandTotal,
       payment_method,
     });
@@ -472,7 +591,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        order_ids: createdOrderIds,
+        order_ids: allOrderIds,
+        merged_order_ids: mergedOrderIds,
+        merged: mergedOrderIds.length > 0,
         orders: createdOrders.map(o => ({
           order_id: o.id,
           client_order_id: o.client_order_id,
@@ -483,8 +604,8 @@ serve(async (req) => {
         })),
         total_amount: grandTotal,
         message: isCash
-          ? `Please pay ₱${grandTotal.toFixed(2)} at the cashier within ${CASH_PAYMENT_TIMEOUT_MINUTES} minutes`
-          : `${orders.length} orders placed successfully`,
+          ? `Please pay ₱${newOrdersGrandTotal.toFixed(2)} at the cashier within ${CASH_PAYMENT_TIMEOUT_MINUTES} minutes`
+          : `${allOrderIds.length} orders processed (${mergedOrderIds.length} merged, ${createdOrderIds.length} new)`,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

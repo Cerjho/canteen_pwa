@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOrderHistory, createOrder } from '../services/orders';
+import { supabase } from '../services/supabaseClient';
 import { useAuth } from './useAuth';
 import { useToast } from '../components/Toast';
 import { friendlyError } from '../utils/friendlyError';
@@ -36,12 +37,34 @@ export function useOrders() {
     }
   });
 
+  const markItemUnavailableMutation = useMutation({
+    mutationFn: async ({ orderId, itemId }: { orderId: string; itemId: string }) => {
+      const { data, error } = await supabase.functions.invoke('manage-order', {
+        body: { action: 'mark-item-unavailable', order_id: orderId, item_id: itemId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message || data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order-history'] });
+      queryClient.invalidateQueries({ queryKey: ['staff-orders'] });
+      showToast('Item marked as unavailable', 'success');
+    },
+    onError: (error: Error) => {
+      showToast(friendlyError(error.message, 'mark item unavailable'), 'error');
+    },
+  });
+
   return {
     orders: ordersQuery.data,
     isLoading: ordersQuery.isLoading,
     isError: ordersQuery.isError,
     refetch: ordersQuery.refetch,
     createOrder: createOrderMutation.mutate,
-    isCreating: createOrderMutation.isPending
+    isCreating: createOrderMutation.isPending,
+    markItemUnavailable: markItemUnavailableMutation.mutate,
+    isMarkingUnavailable: markItemUnavailableMutation.isPending,
   };
 }

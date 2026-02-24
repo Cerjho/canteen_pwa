@@ -23,6 +23,7 @@ interface OrderItem {
   product_id: string;
   quantity: number;
   price_at_order: number;
+  meal_period?: string;
 }
 
 interface OrderGroup {
@@ -30,7 +31,6 @@ interface OrderGroup {
   client_order_id: string;
   items: OrderItem[];
   scheduled_for?: string;
-  meal_period?: string;
 }
 
 interface BatchCheckoutRequest {
@@ -253,7 +253,87 @@ serve(async (req) => {
       });
     }
 
-    // ── Validate all products and stock across all orders ──
+    // ── Duplicate slot check (student_id × scheduled_for) ──
+    const slotChecks = orders.map(o => ({
+      student_id: o.student_id,
+      scheduled_for: o.scheduled_for || todayStr,
+    }));
+
+    const { data: conflicting } = await supabaseAdmin
+      .from('orders')
+      .select('id, student_id, scheduled_for, status')
+      .in('student_id', [...new Set(slotChecks.map(s => s.student_id))])
+      .in('scheduled_for', [...new Set(slotChecks.map(s => s.scheduled_for))])
+      .not('status', 'eq', 'cancelled');
+
+    const slotConflicts = conflicting?.filter(existing =>
+      slotChecks.some(s =>
+        s.student_id === existing.student_id &&
+        s.scheduled_for === existing.scheduled_for
+      )
+    ) || [];
+
+    // Phase 4: Auto-merge — instead of DUPLICATE_SLOT, merge items into existing orders
+    const mergedOrderIds: string[] = [];
+    let newOrders = [...orders];
+
+    if (slotConflicts.length > 0) {
+      const mergeableStatuses = ['pending', 'awaiting_payment'];
+      const unmergeable = slotConflicts.filter(c => !mergeableStatuses.includes(c.status));
+      if (unmergeable.length > 0) {
+        return errorResponse(corsHeaders, 409, 'ORDER_LOCKED',
+          `Order for this student and date is already ${unmergeable[0].status}. Cannot add items.`,
+          { order_id: unmergeable[0].id, status: unmergeable[0].status }
+        );
+      }
+
+      const mergeNewOrders: typeof orders = [];
+      for (const order of orders) {
+        const existingOrder = slotConflicts.find(c =>
+          c.student_id === order.student_id &&
+          c.scheduled_for === (order.scheduled_for || todayStr)
+        );
+
+        if (existingOrder) {
+          // MERGE: append items to existing order
+          const newItems = order.items.map(item => ({
+            order_id: existingOrder.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price_at_order: item.price_at_order,
+            meal_period: item.meal_period || 'lunch',
+          }));
+
+          const { error: itemsErr } = await supabaseAdmin
+            .from('order_items').insert(newItems);
+
+          if (itemsErr) {
+            console.error('Error merging items:', itemsErr);
+            return errorResponse(corsHeaders, 500, 'MERGE_FAILED', 'Failed to add items to existing order.');
+          }
+
+          // Recalculate total from all confirmed items
+          const { data: allItems } = await supabaseAdmin
+            .from('order_items')
+            .select('price_at_order, quantity')
+            .eq('order_id', existingOrder.id)
+            .eq('status', 'confirmed');
+
+          const newTotal = (allItems || []).reduce((s: number, i: any) => s + Number(i.price_at_order) * i.quantity, 0);
+
+          await supabaseAdmin.from('orders')
+            .update({ total_amount: newTotal })
+            .eq('id', existingOrder.id);
+
+          mergedOrderIds.push(existingOrder.id);
+        } else {
+          mergeNewOrders.push(order);
+        }
+      }
+      newOrders = mergeNewOrders;
+    }
+
+    // ── Validate all products and stock across all orders (including merged) ──
     const allProductIds = [...new Set(orders.flatMap(o => o.items.map(i => i.product_id)))];
     const { data: products, error: productsError } = await supabaseAdmin
       .from('products')
@@ -266,22 +346,22 @@ serve(async (req) => {
 
     const productMap = new Map(products.map(p => [p.id, p]));
 
-    // Aggregate demand per product across all orders
+    // Aggregate demand per product across all orders (including merged — stock was already reserved for merged items above)
     const totalDemand = new Map<string, number>();
-    for (const order of orders) {
+    for (const order of newOrders) {
       for (const item of order.items) {
         totalDemand.set(item.product_id, (totalDemand.get(item.product_id) || 0) + item.quantity);
       }
     }
 
-    // Build combined line items for PayMongo
+    // Build combined line items for PayMongo (only new orders)
     let grandTotal = 0;
     const lineItems: Array<{ name: string; quantity: number; amount: number; currency: string }> = [];
 
     // Per-order line item tracking for DB insert
     const orderLineItems: Map<string, Array<{ name: string; quantity: number; amount: number }>> = new Map();
 
-    for (const order of orders) {
+    for (const order of newOrders) {
       const key = order.client_order_id;
       orderLineItems.set(key, []);
       let orderTotal = 0;
@@ -317,14 +397,30 @@ serve(async (req) => {
       }
     }
 
+    // If ALL orders were merged, no PayMongo checkout needed — return success immediately
+    if (newOrders.length === 0) {
+      console.log('All orders merged into existing orders:', { merged_order_ids: mergedOrderIds });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          order_ids: mergedOrderIds,
+          merged_order_ids: mergedOrderIds,
+          merged: true,
+          total_amount: 0,
+          message: `Items merged into ${mergedOrderIds.length} existing order(s).`,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // PayMongo minimum
     if (grandTotal < 20) {
       return errorResponse(corsHeaders, 400, 'MINIMUM_AMOUNT', 'Minimum order amount is ₱20 for online payment.');
     }
 
-    // Build combined line items for PayMongo (aggregate by product name)
+    // Build combined line items for PayMongo (aggregate by product name, new orders only)
     const combinedItems = new Map<string, { name: string; quantity: number; amount: number }>();
-    for (const order of orders) {
+    for (const order of newOrders) {
       for (const item of order.items) {
         const product = productMap.get(item.product_id)!;
         const existing = combinedItems.get(product.id);
@@ -389,8 +485,8 @@ serve(async (req) => {
       .in('id', uniqueStudentIds);
     const studentNameMap = new Map(studentsData?.map(s => [s.id, s.first_name]) || []);
 
-    // Build all order rows for batch insert
-    const orderRows = orders.map(order => {
+    // Build all order rows for batch insert (new orders only)
+    const orderRows = newOrders.map(order => {
       const orderTotal = order.items.reduce((sum, item) => {
         const product = productMap.get(item.product_id)!;
         return sum + product.price * item.quantity;
@@ -407,7 +503,7 @@ serve(async (req) => {
         payment_method,
         notes: notes || null,
         scheduled_for: order.scheduled_for || todayStr,
-        meal_period: order.meal_period || 'lunch',
+        meal_period: null, // deprecated: meal_period moved to order_items (kept for backward compat)
         payment_group_id: paymentGroupId,
       };
     });
@@ -427,8 +523,8 @@ serve(async (req) => {
     const orderIdMap = new Map(createdOrders.map(o => [o.client_order_id, o.id]));
     const createdOrderIds = createdOrders.map(o => o.id);
 
-    // Build all order_items rows for batch insert
-    const allOrderItems = orders.flatMap(order => {
+    // Build all order_items rows for batch insert (new orders only)
+    const allOrderItems = newOrders.flatMap(order => {
       const dbOrderId = orderIdMap.get(order.client_order_id);
       if (!dbOrderId) return [];
       return order.items.map(item => ({
@@ -436,6 +532,7 @@ serve(async (req) => {
         product_id: item.product_id,
         quantity: item.quantity,
         price_at_order: item.price_at_order,
+        meal_period: item.meal_period || 'lunch',
       }));
     });
 
@@ -531,15 +628,21 @@ serve(async (req) => {
     console.log('Batch checkout created:', {
       payment_group_id: paymentGroupId,
       order_count: createdOrderIds.length,
+      merged_count: mergedOrderIds.length,
       checkout_id: checkoutSession.id,
       total: grandTotal,
     });
+
+    const allOrderIds = [...mergedOrderIds, ...createdOrderIds];
 
     return new Response(
       JSON.stringify({
         success: true,
         payment_group_id: paymentGroupId,
-        order_ids: createdOrderIds,
+        order_ids: allOrderIds,
+        merged_order_ids: mergedOrderIds.length > 0 ? mergedOrderIds : undefined,
+        new_order_ids: createdOrderIds,
+        merged: mergedOrderIds.length > 0,
         checkout_url: checkoutSession.attributes.checkout_url,
         payment_due_at: paymentDueAt,
         total_amount: grandTotal,

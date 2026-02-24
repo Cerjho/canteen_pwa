@@ -39,6 +39,8 @@ interface OrderItem {
   id: string;
   quantity: number;
   price_at_order: number;
+  status?: 'confirmed' | 'unavailable';
+  meal_period?: MealPeriod;
   product: {
     name: string;
     image_url: string;
@@ -54,6 +56,7 @@ interface StaffOrder {
   total_amount: number;
   created_at: string;
   scheduled_for: string;
+  /** @deprecated Use items[].meal_period instead */
   meal_period?: MealPeriod;
   notes?: string;
   staff_notes?: string;
@@ -406,15 +409,16 @@ export default function StaffDashboard() {
       .filter(o => o.status === 'pending' || o.status === 'preparing')
       .forEach(order => {
         const gradeLevel = order.child?.grade_level || 'Unknown';
-        const mealPeriod: MealPeriod = order.meal_period || 'lunch';
 
         if (!gradeMap.has(gradeLevel)) gradeMap.set(gradeLevel, new Map());
         const mealMap = gradeMap.get(gradeLevel) ?? new Map();
 
-        if (!mealMap.has(mealPeriod)) mealMap.set(mealPeriod, new Map());
-        const itemMap = mealMap.get(mealPeriod) ?? new Map();
-
         order.items.forEach(item => {
+          const mealPeriod: MealPeriod = item.meal_period || order.meal_period || 'lunch';
+
+          if (!mealMap.has(mealPeriod)) mealMap.set(mealPeriod, new Map());
+          const itemMap = mealMap.get(mealPeriod) ?? new Map();
+
           const existing = itemMap.get(item.product.name);
           if (existing) {
             existing.quantity += item.quantity;
@@ -864,6 +868,45 @@ export default function StaffDashboard() {
       refetch();
     } catch (error) {
       showToast(friendlyError(error instanceof Error ? error.message : '', 'cancel order'), 'error');
+    }
+  };
+
+  const handleMarkItemUnavailable = async (orderId: string, itemId: string) => {
+    try {
+      const accessToken = await ensureValidAccessToken();
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/manage-order`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'mark-item-unavailable',
+            order_id: orderId,
+            item_id: itemId,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to mark item unavailable');
+      }
+
+      showToast(
+        result.order_cancelled
+          ? 'All items unavailable — order cancelled'
+          : 'Item marked as unavailable',
+        'success'
+      );
+      refetch();
+    } catch (error) {
+      showToast(friendlyError(error instanceof Error ? error.message : '', 'mark item unavailable'), 'error');
     }
   };
 
@@ -1953,7 +1996,9 @@ export default function StaffDashboard() {
                             {/* Order Items */}
                             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 mb-4">
                               {order.items.map((item) => (
-                                <div key={item.id} className="flex justify-between py-1">
+                                <div key={item.id} className={`flex justify-between py-1 ${
+                                  item.status === 'unavailable' ? 'opacity-50 line-through' : ''
+                                }`}>
                                   <div className="flex items-center gap-2">
                                     {item.product.image_url && (
                                       <img 
@@ -1963,10 +2008,35 @@ export default function StaffDashboard() {
                                       />
                                     )}
                                     <span className="text-sm text-gray-900 dark:text-gray-100">{item.product.name}</span>
+                                    {item.meal_period && (
+                                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
+                                        {MEAL_PERIOD_ICONS[item.meal_period]} {MEAL_PERIOD_LABELS[item.meal_period]}
+                                      </span>
+                                    )}
+                                    {item.status === 'unavailable' && (
+                                      <span className="text-xs text-red-500 font-medium">Unavailable</span>
+                                    )}
                                   </div>
-                                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">x{item.quantity}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">x{item.quantity}</span>
+                                    {item.status !== 'unavailable' &&
+                                     (order.status === 'pending' || order.status === 'preparing') && (
+                                      <button
+                                        onClick={() => handleMarkItemUnavailable(order.id, item.id)}
+                                        className="text-red-400 hover:text-red-600 p-1"
+                                        title="Mark unavailable"
+                                      >
+                                        <XCircle className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
+                              {order.items.some(i => i.status === 'unavailable') && (
+                                <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
+                                  Total adjusted — some items unavailable
+                                </div>
+                              )}
                             </div>
 
                             {/* Action Buttons */}
@@ -2310,7 +2380,9 @@ export default function StaffDashboard() {
                   {/* Order Items */}
                   <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
                     {order.items.map((item) => (
-                      <div key={item.id} className="flex justify-between py-1">
+                      <div key={item.id} className={`flex justify-between py-1 ${
+                        item.status === 'unavailable' ? 'opacity-50 line-through' : ''
+                      }`}>
                         <div className="flex items-center gap-2">
                           {item.product.image_url && (
                             <img 
@@ -2320,10 +2392,35 @@ export default function StaffDashboard() {
                             />
                           )}
                           <span className="text-sm text-gray-900 dark:text-gray-100">{item.product.name}</span>
+                          {item.meal_period && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
+                              {MEAL_PERIOD_ICONS[item.meal_period]} {MEAL_PERIOD_LABELS[item.meal_period]}
+                            </span>
+                          )}
+                          {item.status === 'unavailable' && (
+                            <span className="text-xs text-red-500 font-medium">Unavailable</span>
+                          )}
                         </div>
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">x{item.quantity}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-gray-900 dark:text-gray-100">x{item.quantity}</span>
+                          {item.status !== 'unavailable' &&
+                           (order.status === 'pending' || order.status === 'preparing') && (
+                            <button
+                              onClick={() => handleMarkItemUnavailable(order.id, item.id)}
+                              className="text-red-400 hover:text-red-600 p-1"
+                              title="Mark unavailable"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
+                    {order.items.some(i => i.status === 'unavailable') && (
+                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
+                        Total adjusted — some items unavailable
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Buttons */}

@@ -67,10 +67,12 @@ export interface CreateCheckoutRequest {
     product_id: string;
     quantity: number;
     price_at_order: number;
+    meal_period?: string;
   }>;
   payment_method: 'gcash' | 'paymaya' | 'card';
   notes?: string;
   scheduled_for?: string;
+  /** @deprecated Use items[].meal_period instead */
   meal_period?: string;
 }
 
@@ -81,9 +83,9 @@ export interface BatchCheckoutOrderGroup {
     product_id: string;
     quantity: number;
     price_at_order: number;
+    meal_period?: string;
   }>;
   scheduled_for?: string;
-  meal_period?: string;
 }
 
 export interface CreateBatchCheckoutRequest {

@@ -347,7 +347,9 @@ export default function OrderHistory() {
                             {/* Items */}
                             <div className="px-3 py-2 space-y-1.5">
                               {order.items.map((item) => (
-                                <div key={item.id} className="flex items-center gap-3">
+                                <div key={item.id} className={`flex items-center gap-3 ${
+                                  item.status === 'unavailable' ? 'opacity-50' : ''
+                                }`}>
                                   {item.product.image_url && (
                                     <img
                                       src={item.product.image_url}
@@ -356,14 +358,29 @@ export default function OrderHistory() {
                                     />
                                   )}
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                    <p className={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${
+                                      item.status === 'unavailable' ? 'line-through' : ''
+                                    }`}>
                                       {item.product.name}
+                                      {item.meal_period && (
+                                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded ml-1">
+                                          {MEAL_PERIOD_ICONS[item.meal_period]} {MEAL_PERIOD_LABELS[item.meal_period]}
+                                        </span>
+                                      )}
                                     </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                      ₱{item.price_at_order.toFixed(2)} × {item.quantity}
-                                    </p>
+                                    {item.status === 'unavailable' ? (
+                                      <p className="text-xs text-red-500">Unavailable — refunded</p>
+                                    ) : (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        ₱{item.price_at_order.toFixed(2)} × {item.quantity}
+                                      </p>
+                                    )}
                                   </div>
-                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  <p className={`text-sm font-medium ${
+                                    item.status === 'unavailable'
+                                      ? 'text-gray-400 line-through'
+                                      : 'text-gray-900 dark:text-gray-100'
+                                  }`}>
                                     ₱{(item.price_at_order * item.quantity).toFixed(2)}
                                   </p>
                                 </div>
