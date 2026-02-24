@@ -33,8 +33,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Apply theme to document — reuse the global helper from index.html
     // so splash screen, status bar, and CSS vars all update in one place
-    if (typeof (window as any).__applyTheme === 'function') {
-      (window as any).__applyTheme(theme);
+    const win = window as unknown as Record<string, unknown>;
+    if (typeof win.__applyTheme === 'function') {
+      (win.__applyTheme as (t: Theme) => void)(theme);
     } else {
       // Fallback if helper isn't available
       const root = document.documentElement;
