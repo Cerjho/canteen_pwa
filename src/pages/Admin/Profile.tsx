@@ -1,31 +1,34 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  User, 
-  Mail, 
-  Shield, 
-  LogOut, 
-  Settings, 
+import { useNavigate } from 'react-router-dom';
+import {
+  LogOut,
+  Mail,
+  Phone,
+  Clock,
+  Shield,
   Bell,
   Moon,
   Sun,
-  ChevronRight,
   Key,
   HelpCircle,
-  FileText,
-  Phone,
-  Save,
-  X,
-  Edit2
+  Info,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
+import { ensureValidAccessToken } from '../../services/authSession';
+import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ChangePasswordModal } from '../../components/ChangePasswordModal';
-import { useToast } from '../../components/Toast';
+import { EditProfileModal } from '../../components/EditProfileModal';
+import { SettingsGroup, SettingsRow, ProfileHeader, ProfileSkeleton, ToggleSwitch } from '../../components/profile';
 import { useTheme } from '../../hooks/useTheme';
 import { friendlyError } from '../../utils/friendlyError';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const NOTIFICATION_PREFS_KEY = 'canteen_admin_notifications';
 
 interface AdminProfileData {
   id: string;
@@ -36,53 +39,29 @@ interface AdminProfileData {
   created_at: string;
 }
 
-// Notification preferences key for localStorage
-const NOTIFICATION_PREFS_KEY = 'canteen_admin_notifications';
-
 export default function AdminProfile() {
-  const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
-  
+
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    phone_number: ''
-  });
 
-  // Load preferences from localStorage
   const [notifications, setNotifications] = useState(() => {
     const saved = localStorage.getItem(NOTIFICATION_PREFS_KEY);
     return saved !== null ? JSON.parse(saved) : true;
   });
 
-  // Persist notification preference
-  const handleNotificationToggle = () => {
-    const newValue = !notifications;
-    setNotifications(newValue);
-    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(newValue));
-    showToast(newValue ? 'Notifications enabled' : 'Notifications disabled', 'success');
-    
-    // Request browser notification permission if enabling
-    if (newValue && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  };
+  const userRole = user?.app_metadata?.role || 'admin';
+  const roleLabel = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
-  // Handle theme toggle
-  const handleThemeToggle = () => {
-    toggleTheme();
-    showToast(theme === 'light' ? 'Dark mode enabled' : 'Light mode enabled', 'success');
-  };
+  // ── Query ────────────────────────────────────────────────
 
-  // Fetch admin profile
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading } = useQuery({
     queryKey: ['admin-profile', user?.id],
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
@@ -91,88 +70,63 @@ export default function AdminProfile() {
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
-      
-      if (error) {
-        console.error('Error fetching admin profile:', error);
-      }
-      
+
+      if (error) console.error('Error fetching admin profile:', error);
+
       if (!data) {
-        // Return basic info from auth user
         return {
           id: user.id,
           email: user.email || '',
           first_name: user.user_metadata?.first_name || '',
           last_name: user.user_metadata?.last_name || '',
           phone_number: user.user_metadata?.phone_number || '',
-          created_at: user.created_at
+          created_at: user.created_at,
         } as AdminProfileData;
       }
       return data as AdminProfileData;
     },
-    enabled: !!user
+    enabled: !!user,
   });
 
-  // Update profile mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (data: Partial<AdminProfileData>) => {
-      if (!user) throw new Error('User not authenticated');
-      // Update in user_profiles table
-      const { error: dbError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: user.id,
-          email: user.email,
-          ...data,
-          updated_at: new Date().toISOString()
-        });
-      
-      if (dbError) throw dbError;
+  // ── Mutation (via edge function for consistency) ─────────
 
-      // Also update user metadata
-      const { error: authError } = await supabase.auth.updateUser({
-        data: {
-          first_name: data.first_name,
-          last_name: data.last_name,
-          phone_number: data.phone_number
-        }
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { first_name: string; last_name: string; phone_number: string }) => {
+      const accessToken = await ensureValidAccessToken();
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-profile`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update',
+          data: { first_name: data.first_name, last_name: data.last_name, phone_number: data.phone_number || null },
+        }),
       });
-      
-      if (authError) throw authError;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to update profile');
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-profile'] });
-      setIsEditing(false);
+      setShowEditProfile(false);
       showToast('Profile updated successfully', 'success');
     },
-    onError: (error: Error) => {
-      showToast(friendlyError(error.message, 'update profile'), 'error');
-    }
+    onError: (error: Error) => showToast(friendlyError(error.message, 'update profile'), 'error'),
   });
 
-  const handleEdit = () => {
-    setFormData({
-      first_name: profile?.first_name || '',
-      last_name: profile?.last_name || '',
-      phone_number: profile?.phone_number || ''
-    });
-    setIsEditing(true);
-  };
+  // ── Handlers ─────────────────────────────────────────────
 
-  const handleSave = () => {
-    if (!formData.first_name.trim() || !formData.last_name.trim()) {
-      showToast('First and last name are required', 'error');
-      return;
+  const handleNotificationToggle = () => {
+    const newValue = !notifications;
+    setNotifications(newValue);
+    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(newValue));
+    showToast(newValue ? 'Notifications enabled' : 'Notifications disabled', 'success');
+    if (newValue && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
     }
-    updateProfileMutation.mutate(formData);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setFormData({
-      first_name: '',
-      last_name: '',
-      phone_number: ''
-    });
   };
 
   const handleLogout = async () => {
@@ -180,310 +134,189 @@ export default function AdminProfile() {
     navigate('/login');
   };
 
-  const adminInfo = {
-    name: profile?.first_name && profile?.last_name 
-      ? `${profile.first_name} ${profile.last_name}`
-      : user?.user_metadata?.first_name && user?.user_metadata?.last_name
-        ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-        : 'Administrator',
-    email: profile?.email || user?.email || 'admin@canteen.app',
-    role: user?.app_metadata?.role
-      ? (user.app_metadata.role as string).charAt(0).toUpperCase() + (user.app_metadata.role as string).slice(1)
-      : 'Administrator',
-    joinedDate: profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    }) : 'N/A',
-    phone: profile?.phone_number || 'Not set'
-  };
+  // ── Loading ──────────────────────────────────────────────
+
+  if (isLoading) return <ProfileSkeleton />;
+
+  // ── Derived ──────────────────────────────────────────────
+
+  const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Administrator';
+  const memberSince = profile?.created_at
+    ? new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : 'N/A';
+
+  // ── Render ───────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
-        {/* Profile Header */}
-        <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-6 text-white mb-6 shadow-lg relative">
-          {!isEditing && (
-            <button
-              onClick={handleEdit}
-              className="absolute top-4 right-4 p-2 bg-white/20 dark:bg-white/10 hover:bg-white/30 dark:hover:bg-white/20 rounded-lg transition-colors"
-              title="Edit profile"
-            >
-              <Edit2 size={18} />
-            </button>
-          )}
-          
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-white/20 dark:bg-white/10 flex items-center justify-center ring-4 ring-white/30 dark:ring-white/20">
-              <User size={40} className="text-white" />
-            </div>
-            <div className="flex-1">
-              {isEditing ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                      placeholder="First Name"
-                      className="flex-1 px-3 py-1.5 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-white"
-                    />
-                    <input
-                      type="text"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                      placeholder="Last Name"
-                      className="flex-1 px-3 py-1.5 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-white"
-                    />
-                  </div>
-                  <input
-                    type="tel"
-                    value={formData.phone_number}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone_number: e.target.value }))}
-                    placeholder="Phone Number (e.g., 09XX XXX XXXX)"
-                    className="w-full px-3 py-1.5 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-white"
-                  />
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={handleCancelEdit}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-white/20 dark:bg-white/10 hover:bg-white/30 dark:hover:bg-white/20 rounded-lg text-sm transition-colors"
-                    >
-                      <X size={14} />
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={updateProfileMutation.isPending}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-100 text-primary-600 dark:text-primary-700 rounded-lg text-sm font-medium hover:bg-white/90 dark:hover:bg-gray-200 transition-colors disabled:opacity-50"
-                    >
-                      <Save size={14} />
-                      {updateProfileMutation.isPending ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <h1 className="text-2xl font-bold">{adminInfo.name}</h1>
-                  <div className="flex items-center gap-2 mt-1 text-primary-100">
-                    <Mail size={14} />
-                    <span className="text-sm">{adminInfo.email}</span>
-                  </div>
-                  {adminInfo.phone !== 'Not set' && (
-                    <div className="flex items-center gap-2 mt-1 text-primary-100">
-                      <Phone size={14} />
-                      <span className="text-sm">{adminInfo.phone}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="px-2 py-0.5 bg-white/20 dark:bg-white/10 rounded-full text-xs font-medium flex items-center gap-1">
-                      <Shield size={12} />
-                      {adminInfo.role}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProfileHeader
+          name={fullName}
+          email={profile?.email || ''}
+          phone={profile?.phone_number || undefined}
+          role={roleLabel}
+          onEdit={() => setShowEditProfile(true)}
+        />
 
-        {/* Account Info Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <User size={18} className="text-gray-400 dark:text-gray-500" />
-              Account Information
-            </h2>
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Email</span>
-              <span className="text-gray-900 dark:text-gray-100 font-medium">{adminInfo.email}</span>
-            </div>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Phone</span>
-              <span className="text-gray-900 dark:text-gray-100 font-medium">{adminInfo.phone}</span>
-            </div>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Role</span>
-              <span className="text-primary-600 font-medium flex items-center gap-1">
-                <Shield size={14} />
-                {adminInfo.role}
-              </span>
-            </div>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Member Since</span>
-              <span className="text-gray-900 dark:text-gray-100">{adminInfo.joinedDate}</span>
-            </div>
-          </div>
-        </div>
+        {/* ── Account ───────────────────────────────────── */}
+        <SettingsGroup title="Account">
+          <SettingsRow
+            icon={Mail}
+            iconBg="bg-blue-100 dark:bg-blue-900/30"
+            iconColor="text-blue-600 dark:text-blue-400"
+            label="Email"
+            value={profile?.email || '—'}
+          />
+          <SettingsRow
+            icon={Phone}
+            iconBg="bg-green-100 dark:bg-green-900/30"
+            iconColor="text-green-600 dark:text-green-400"
+            label="Phone"
+            value={profile?.phone_number || 'Not set'}
+          />
+          <SettingsRow
+            icon={Shield}
+            iconBg="bg-primary-100 dark:bg-primary-900/30"
+            iconColor="text-primary-600 dark:text-primary-400"
+            label="Role"
+            value={<span className="text-primary-600 dark:text-primary-400 font-semibold">{roleLabel}</span>}
+          />
+          <SettingsRow
+            icon={Clock}
+            iconBg="bg-purple-100 dark:bg-purple-900/30"
+            iconColor="text-purple-600 dark:text-purple-400"
+            label="Member Since"
+            value={memberSince}
+          />
+        </SettingsGroup>
 
-        {/* Settings Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Settings size={18} className="text-gray-400 dark:text-gray-500" />
-              Settings
-            </h2>
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                  <Bell size={18} className="text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-gray-900 dark:text-gray-100 font-medium">Notifications</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Push notifications for orders</p>
-                </div>
-              </div>
-              <button
-                onClick={handleNotificationToggle}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  notifications ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-                }`}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-gray-200 rounded-full transition-transform ${
-                    notifications ? 'translate-x-5' : ''
-                  }`}
-                />
-              </button>
-            </div>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                  {theme === 'dark' ? <Moon size={18} className="text-indigo-600" /> : <Sun size={18} className="text-indigo-600" />}
-                </div>
-                <div>
-                  <p className="text-gray-900 dark:text-gray-100 font-medium">Dark Mode</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Toggle dark theme</p>
-                </div>
-              </div>
-              <button
-                onClick={handleThemeToggle}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  theme === 'dark' ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-                }`}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-gray-200 rounded-full transition-transform ${
-                    theme === 'dark' ? 'translate-x-5' : ''
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* ── Preferences ───────────────────────────────── */}
+        <SettingsGroup title="Preferences">
+          <SettingsRow
+            icon={Bell}
+            iconBg="bg-amber-100 dark:bg-amber-900/30"
+            iconColor="text-amber-600 dark:text-amber-400"
+            label="Notifications"
+            description="Push notifications for orders"
+            rightElement={
+              <ToggleSwitch
+                checked={notifications}
+                onChange={handleNotificationToggle}
+                label="Toggle notifications"
+              />
+            }
+          />
+          <SettingsRow
+            icon={theme === 'dark' ? Moon : Sun}
+            iconBg="bg-indigo-100 dark:bg-indigo-900/30"
+            iconColor="text-indigo-600 dark:text-indigo-400"
+            label="Dark Mode"
+            description="Toggle dark theme"
+            rightElement={
+              <ToggleSwitch
+                checked={theme === 'dark'}
+                onChange={() => {
+                  toggleTheme();
+                  showToast(theme === 'light' ? 'Dark mode enabled' : 'Light mode enabled', 'success');
+                }}
+                label="Toggle dark mode"
+              />
+            }
+          />
+        </SettingsGroup>
 
-        {/* Quick Actions */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Quick Actions</h2>
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            <button
-              onClick={() => navigate('/admin/users')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <User size={18} className="text-blue-600 dark:text-blue-400" />
-                </div>
-                <span className="text-gray-900 dark:text-gray-100 font-medium">Manage Users</span>
-              </div>
-              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-            </button>
-            <button
-              onClick={() => navigate('/admin/reports')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                  <FileText size={18} className="text-purple-600 dark:text-purple-400" />
-                </div>
-                <span className="text-gray-900 dark:text-gray-100 font-medium">View Reports</span>
-              </div>
-              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-            </button>
-            <button
-              onClick={() => setShowPasswordModal(true)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                  <Key size={18} className="text-green-600 dark:text-green-400" />
-                </div>
-                <span className="text-gray-900 dark:text-gray-100 font-medium">Change Password</span>
-              </div>
-              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-            </button>
-            <button
-              onClick={() => setShowHelpModal(true)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                  <HelpCircle size={18} className="text-gray-600 dark:text-gray-400" />
-                </div>
-                <span className="text-gray-900 dark:text-gray-100 font-medium">Help & Support</span>
-              </div>
-              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-            </button>
-          </div>
-        </div>
+        {/* ── Security ──────────────────────────────────── */}
+        <SettingsGroup title="Security">
+          <SettingsRow
+            icon={Key}
+            iconBg="bg-green-100 dark:bg-green-900/30"
+            iconColor="text-green-600 dark:text-green-400"
+            label="Change Password"
+            description="Update your account password"
+            onClick={() => setShowPasswordModal(true)}
+          />
+        </SettingsGroup>
 
-        {/* Logout Button */}
-        <button
-          onClick={() => setShowLogoutConfirm(true)}
-          className="w-full py-3 px-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl font-semibold hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors flex items-center justify-center gap-2"
-        >
-          <LogOut size={20} />
-          Sign Out
-        </button>
+        {/* ── About ─────────────────────────────────────── */}
+        <SettingsGroup title="About">
+          <SettingsRow
+            icon={Info}
+            iconBg="bg-gray-100 dark:bg-gray-700"
+            iconColor="text-gray-500 dark:text-gray-400"
+            label="Canteen PWA"
+            description="Version 1.0.0 · Admin Portal"
+          />
+          <SettingsRow
+            icon={HelpCircle}
+            iconBg="bg-gray-100 dark:bg-gray-700"
+            iconColor="text-gray-500 dark:text-gray-400"
+            label="Help & Support"
+            onClick={() => setShowHelpModal(true)}
+          />
+        </SettingsGroup>
 
-        {/* App Version */}
-        <p className="text-center text-gray-400 text-sm mt-6">
+        {/* ── Logout ────────────────────────────────────── */}
+        <SettingsGroup>
+          <SettingsRow
+            icon={LogOut}
+            iconBg="bg-red-50 dark:bg-red-900/30"
+            label="Sign Out"
+            variant="danger"
+            onClick={() => setShowLogoutConfirm(true)}
+          />
+        </SettingsGroup>
+
+        <p className="text-center text-gray-400 dark:text-gray-500 text-xs mt-4">
           Canteen Admin v1.0.0
         </p>
       </div>
 
-      {/* Logout Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={showLogoutConfirm}
-        onCancel={() => setShowLogoutConfirm(false)}
-        onConfirm={handleLogout}
-        title="Sign Out"
-        message="Are you sure you want to sign out of your admin account?"
-        confirmLabel="Sign Out"
-        type="danger"
+      {/* ── Modals ────────────────────────────────────────── */}
+
+      <EditProfileModal
+        isOpen={showEditProfile}
+        profile={{
+          first_name: profile?.first_name || '',
+          last_name: profile?.last_name || '',
+          phone_number: profile?.phone_number || '',
+        }}
+        onClose={() => setShowEditProfile(false)}
+        onSave={(data) => updateProfileMutation.mutate(data)}
+        isLoading={updateProfileMutation.isPending}
       />
 
-      {/* Change Password Modal */}
       <ChangePasswordModal
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
         onSuccess={() => showToast('Password changed successfully', 'success')}
       />
 
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out of your admin account?"
+        confirmLabel="Sign Out"
+        type="danger"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
+
       {/* Help & Support Modal */}
       {showHelpModal && (
         <>
-          <div 
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={() => setShowHelpModal(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowHelpModal(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div 
+            <div
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
-                  <HelpCircle size={24} className="text-primary-600 dark:text-primary-400" />
+                <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-full">
+                  <HelpCircle size={22} className="text-primary-600 dark:text-primary-400" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Help & Support</h2>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Contact Support</h3>
@@ -497,14 +330,14 @@ export default function AdminProfile() {
                     </a>
                   </p>
                 </div>
-                
+
                 <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Documentation</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     View the admin guide and documentation for detailed instructions on managing the canteen system.
                   </p>
                 </div>
-                
+
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">Quick Tips</h3>
                   <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
@@ -515,7 +348,7 @@ export default function AdminProfile() {
                   </ul>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => setShowHelpModal(false)}
                 className="w-full mt-6 py-2.5 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors"
