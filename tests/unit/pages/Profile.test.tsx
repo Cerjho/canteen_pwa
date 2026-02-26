@@ -35,6 +35,10 @@ vi.mock('../../../src/services/students', () => ({
   updateStudent: vi.fn()
 }));
 
+vi.mock('../../../src/services/authSession', () => ({
+  ensureValidAccessToken: vi.fn().mockResolvedValue('test-token')
+}));
+
 import { useAuth } from '../../../src/hooks/useAuth';
 import { supabase } from '../../../src/services/supabaseClient';
 import { getStudents, linkStudent, unlinkStudent, updateStudent } from '../../../src/services/students';
@@ -201,7 +205,8 @@ describe('Profile Page', () => {
 
       renderProfile();
       
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+      // ProfileSkeleton renders with animate-pulse
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
     });
   });
 
@@ -242,8 +247,8 @@ describe('Profile Page', () => {
         expect(screen.getByText('My Students')).toBeInTheDocument();
       });
       
-      // The link student button text should be in the DOM
-      expect(screen.getByText('Link Student')).toBeInTheDocument();
+      // The link student action row should be in the DOM
+      expect(screen.getByText('Link a Student')).toBeInTheDocument();
     });
 
     it('shows dietary restrictions when present', async () => {
@@ -269,8 +274,8 @@ describe('Profile Page', () => {
         expect(screen.getByText('My Students')).toBeInTheDocument();
       });
       
-      // Use getAllByText since "Link Student" appears multiple times
-      const linkStudentElements = screen.getAllByText(/Link Student/i);
+      // Use getAllByText since "Link a Student" may appear in multiple places
+      const linkStudentElements = screen.getAllByText(/Link.*Student/i);
       expect(linkStudentElements.length).toBeGreaterThan(0);
     });
   });
@@ -335,7 +340,7 @@ describe('Profile Page - Link Student Flow', () => {
     renderProfile();
     
     await waitFor(() => {
-      expect(screen.getByText(/Link Student/i)).toBeInTheDocument();
+      expect(screen.getByText(/Link.*Student/i)).toBeInTheDocument();
     });
   });
 });

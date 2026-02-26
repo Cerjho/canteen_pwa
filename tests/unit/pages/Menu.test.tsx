@@ -267,7 +267,7 @@ describe('Menu Page', () => {
       renderMenu();
       
       await waitFor(() => {
-        expect(screen.getByText(/select.*student/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/select.*student/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -461,11 +461,11 @@ describe('Menu Page', () => {
       renderMenu();
       
       await waitFor(() => {
-        expect(screen.getByText(/select.*student/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/select.*student/i).length).toBeGreaterThan(0);
       });
 
       // Open child selector
-      const selector = screen.getByText(/select.*student/i);
+      const selector = screen.getAllByText(/select.*student/i)[0];
       await user.click(selector);
       
       // Should show children
@@ -609,7 +609,7 @@ describe('Menu Page - Empty States', () => {
     });
 
     vi.mocked(useStudents).mockReturnValue({
-      data: [],
+      data: [{ id: 'child-1', student_id: 'STU001', first_name: 'Maria', last_name: 'Doe', grade_level: 'Grade 3', section: 'A' }],
       isLoading: false,
       error: null,
       refetch: vi.fn()

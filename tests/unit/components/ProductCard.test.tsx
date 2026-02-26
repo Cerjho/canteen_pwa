@@ -119,7 +119,7 @@ describe('ProductCard Component', () => {
       );
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('disabled:bg-gray-300');
+      expect(button).toHaveClass('bg-gray-300');
     });
   });
 

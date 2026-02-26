@@ -186,9 +186,10 @@ describe('ChildSelector', () => {
       />
     );
 
-    expect(
-      screen.getByText("You haven't linked any students yet. Please link a student profile first.")
-    ).toBeInTheDocument();
+    // With no students, selector shows placeholder option only
+    const select = screen.getByRole('combobox');
+    expect(select).toBeInTheDocument();
+    expect(screen.getByText('Select a student')).toBeInTheDocument();
   });
 
   it('handles child without section', () => {

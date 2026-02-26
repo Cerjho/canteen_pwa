@@ -94,10 +94,10 @@ describe('ConfirmDialog Component', () => {
     it('calls onCancel when backdrop clicked', () => {
       const { container } = render(<ConfirmDialog {...defaultProps} />);
 
-      // Find the backdrop (first fixed element)
-      const backdrop = container.querySelector('.fixed.inset-0.bg-black\\/50');
-      if (backdrop) {
-        fireEvent.click(backdrop);
+      // The dialog wrapper (with onClick={onCancel}) is a fixed inset-0 flex container
+      const wrapper = container.querySelector('.fixed.inset-0.flex');
+      if (wrapper) {
+        fireEvent.click(wrapper);
       }
 
       expect(mockOnCancel).toHaveBeenCalledTimes(1);
