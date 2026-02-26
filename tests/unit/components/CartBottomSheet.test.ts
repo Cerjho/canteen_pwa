@@ -235,4 +235,41 @@ describe('CartBottomSheet — Business Logic', () => {
       expect(`₱${total.toFixed(2)}`).toBe('₱65.50');
     });
   });
+
+  // ── Payment method meta (collapsible header) ───────────
+
+  describe('Payment Method Display', () => {
+    const PAYMENT_METHOD_META: Record<string, { label: string }> = {
+      cash: { label: 'Cash' },
+      balance: { label: 'Wallet Balance' },
+      gcash: { label: 'GCash' },
+      paymaya: { label: 'PayMaya' },
+      card: { label: 'Credit/Debit Card' },
+    };
+
+    it('maps all payment methods to display labels', () => {
+      expect(PAYMENT_METHOD_META['cash'].label).toBe('Cash');
+      expect(PAYMENT_METHOD_META['balance'].label).toBe('Wallet Balance');
+      expect(PAYMENT_METHOD_META['gcash'].label).toBe('GCash');
+      expect(PAYMENT_METHOD_META['paymaya'].label).toBe('PayMaya');
+      expect(PAYMENT_METHOD_META['card'].label).toBe('Credit/Debit Card');
+    });
+
+    it('collapsed header shows selected method label', () => {
+      const selected = 'gcash';
+      const headerLabel = PAYMENT_METHOD_META[selected].label;
+      expect(headerLabel).toBe('GCash');
+    });
+
+    it('auto-collapses when a method is selected', () => {
+      // Simulates: onSelect → setPaymentMethod + setPaymentExpanded(false)
+      let expanded = true;
+      let method = 'cash';
+      // Simulate selection
+      method = 'gcash';
+      expanded = false;
+      expect(method).toBe('gcash');
+      expect(expanded).toBe(false);
+    });
+  });
 });

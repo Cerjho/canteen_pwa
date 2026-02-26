@@ -12,6 +12,10 @@ import {
   Check,
   PlusCircle,
   ShoppingCart,
+  Banknote,
+  Wallet,
+  Smartphone,
+  CreditCard,
 } from 'lucide-react';
 import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem } from '../hooks/useCart';
@@ -26,112 +30,20 @@ import { getCheckoutButtonText } from '../services/payments';
 import { formatDateLocal } from '../services/products';
 import { friendlyError } from '../utils/friendlyError';
 import { useConfirm } from './ConfirmDialog';
+import { PaymentMethodSelector } from './PaymentMethodSelector';
+import { OrderNotes } from './OrderNotes';
 
 /* ================================================================
-   COMPACT SUB-COMPONENTS (bottom sheet footer)
+   PAYMENT METHOD DISPLAY HELPERS
    ================================================================ */
 
-const COMPACT_METHODS: {
-  value: PaymentMethod;
-  label: string;
-  icon: string;
-}[] = [
-  { value: 'cash', label: 'Cash', icon: '💵' },
-  { value: 'balance', label: 'Wallet', icon: '👛' },
-  { value: 'gcash', label: 'GCash', icon: '📱' },
-  { value: 'paymaya', label: 'Maya', icon: '📱' },
-  { value: 'card', label: 'Card', icon: '💳' },
-];
-
-function CompactPaymentSelector({
-  selected,
-  onSelect,
-  balance = 0,
-  orderTotal = 0,
-}: {
-  selected: PaymentMethod;
-  onSelect: (method: PaymentMethod) => void;
-  balance?: number;
-  orderTotal?: number;
-}) {
-  const isDisabled = (v: PaymentMethod) => {
-    if (v === 'balance' && (balance <= 0 || (orderTotal > 0 && balance < orderTotal))) return true;
-    return false;
-  };
-
-  return (
-    <div>
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Payment</p>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
-        {COMPACT_METHODS.map((m) => {
-          const active = selected === m.value;
-          const disabled = isDisabled(m.value);
-          return (
-            <button
-              key={m.value}
-              type="button"
-              disabled={disabled}
-              onClick={() => onSelect(m.value)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
-                active
-                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                  : disabled
-                    ? 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              <span className="text-sm leading-none">{m.icon}</span>
-              {m.label}
-              {m.value === 'balance' && !disabled && (
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">₱{balance.toFixed(0)}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function CompactNotes({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!expanded && !value) {
-    return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="text-xs text-primary-600 dark:text-primary-400 font-medium hover:underline"
-      >
-        + Add order notes
-      </button>
-    );
-  }
-
-  return (
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={() => {
-        if (!value.trim()) {
-          setExpanded(false);
-          onChange('');
-        }
-      }}
-      placeholder="Special instructions..."
-      rows={2}
-      maxLength={500}
-      autoFocus={expanded && !value}
-      className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 resize-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-    />
-  );
-}
+const PAYMENT_METHOD_META: Record<PaymentMethod, { label: string; icon: React.ReactNode }> = {
+  cash: { label: 'Cash', icon: <Banknote size={18} /> },
+  balance: { label: 'Wallet Balance', icon: <Wallet size={18} /> },
+  gcash: { label: 'GCash', icon: <Smartphone size={18} /> },
+  paymaya: { label: 'PayMaya', icon: <Smartphone size={18} /> },
+  card: { label: 'Credit/Debit Card', icon: <CreditCard size={18} /> },
+};
 
 /* ================================================================
    TYPES
@@ -186,6 +98,7 @@ export function CartBottomSheet({
   const [notes, setNotes] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [paymentExpanded, setPaymentExpanded] = useState(false);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [showCopyModal, setShowCopyModal] = useState<string | null>(null);
@@ -725,18 +638,50 @@ export function CartBottomSheet({
             {/* ── Checkout Footer (sticky) ─────────────────── */}
             {items.length > 0 && (
               <div className="border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex-shrink-0 space-y-2">
-                {/* Compact payment chips */}
-                <CompactPaymentSelector
-                  selected={paymentMethod}
-                  onSelect={setPaymentMethod}
-                  balance={parentBalance}
-                  orderTotal={selectedTotal}
-                />
+                {/* Collapsible payment method */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentExpanded((v) => !v)}
+                    className="w-full flex items-center justify-between py-2 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 transition-colors"
+                    aria-expanded={paymentExpanded}
+                    aria-controls="payment-selector-panel"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-primary-600 dark:text-primary-400">
+                        {PAYMENT_METHOD_META[paymentMethod].icon}
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {PAYMENT_METHOD_META[paymentMethod].label}
+                      </span>
+                    </div>
+                    <ChevronDown
+                      size={16}
+                      className={`text-gray-400 dark:text-gray-500 transition-transform ${
+                        paymentExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
 
-                {/* Collapsible notes */}
-                <CompactNotes value={notes} onChange={setNotes} />
+                  {paymentExpanded && (
+                    <div id="payment-selector-panel" className="mt-2">
+                      <PaymentMethodSelector
+                        selected={paymentMethod}
+                        onSelect={(method) => {
+                          setPaymentMethod(method);
+                          setPaymentExpanded(false);
+                        }}
+                        balance={parentBalance}
+                        orderTotal={selectedTotal}
+                      />
+                    </div>
+                  )}
+                </div>
 
-                {/* Warnings & errors — compact */}
+                {/* Order notes */}
+                <OrderNotes value={notes} onChange={setNotes} />
+
+                {/* Warnings & errors */}
                 {isOnlinePaymentMethod(paymentMethod) && orderGroupCount > 1 && (
                   <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
                     All {orderGroupCount} orders combined into one payment
@@ -753,7 +698,7 @@ export function CartBottomSheet({
                   </p>
                 )}
 
-                {/* Total + Checkout button — single row */}
+                {/* Total + Checkout button */}
                 <button
                   onClick={handleCheckout}
                   disabled={items.length === 0 || isCheckingOut}
