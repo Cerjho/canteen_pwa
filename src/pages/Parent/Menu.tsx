@@ -8,7 +8,7 @@ import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
 import { ProductCard } from '../../components/ProductCard';
 import { StudentSelector } from '../../components/StudentSelector';
-import { CartDrawer } from '../../components/CartDrawer';
+import { CartBottomSheet } from '../../components/CartBottomSheet';
 import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { ProductCardSkeleton } from '../../components/Skeleton';
@@ -51,7 +51,6 @@ export default function Menu() {
   const { 
     items, 
     itemsByStudent, 
-    itemsByDateAndStudent,
     addItem, 
     updateQuantity, 
     checkout, 
@@ -83,7 +82,7 @@ export default function Menu() {
 
   const parentBalance = walletData?.balance || 0;
 
-  // Query active orders for the CartDrawer (merge detection)
+  // Query active orders for the cart (merge detection)
   const { data: activeOrders } = useQuery({
     queryKey: ['active-orders-for-cart'],
     queryFn: async () => {
@@ -284,7 +283,7 @@ export default function Menu() {
         ? friendlyError(error.message, 'place your order')
         : 'Something went wrong. Please try again.';
       showToast(msg, 'error');
-      // Re-throw so CartDrawer can also display inline error
+      // Re-throw so cart can also display inline error
       throw error;
     }
   }, [items, checkout, queryClient, navigate, showToast]);
@@ -696,12 +695,11 @@ export default function Menu() {
         </>
       )}
 
-      <CartDrawer
+      <CartBottomSheet
         isOpen={cartOpen}
         onClose={() => setCartOpen(false)}
         items={items}
         itemsByStudent={itemsByStudent}
-        itemsByDateAndStudent={itemsByDateAndStudent}
         onUpdateQuantity={updateQuantity}
         onCheckout={handleCheckout}
         onClearDate={clearDate}
