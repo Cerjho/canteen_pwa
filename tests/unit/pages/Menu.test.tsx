@@ -120,7 +120,8 @@ const mockCartItems = [
     price: 65, 
     quantity: 2, 
     image_url: '',
-    scheduled_for: new Date().toISOString().split('T')[0]
+    scheduled_for: new Date().toISOString().split('T')[0],
+    meal_period: 'lunch' as const
   }
 ];
 
@@ -209,9 +210,13 @@ describe('Menu Page', () => {
     // Mock useAuth
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'test@example.com' } as ReturnType<typeof useAuth>['user'],
+      role: 'parent' as const,
       loading: false,
+      signingOut: false,
       error: null,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refreshAuth: vi.fn(),
+      onRoleChange: vi.fn().mockReturnValue(() => {})
     });
 
     // Create dates for testing
@@ -497,9 +502,13 @@ describe('Menu Page - Canteen Closed', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'test@example.com' } as ReturnType<typeof useAuth>['user'],
+      role: 'parent' as const,
       loading: false,
+      signingOut: false,
       error: null,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refreshAuth: vi.fn(),
+      onRoleChange: vi.fn().mockReturnValue(() => {})
     });
 
     vi.mocked(useStudents).mockReturnValue({
@@ -603,9 +612,13 @@ describe('Menu Page - Empty States', () => {
     
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-123', email: 'test@example.com' } as ReturnType<typeof useAuth>['user'],
+      role: 'parent' as const,
       loading: false,
+      signingOut: false,
       error: null,
-      signOut: vi.fn()
+      signOut: vi.fn(),
+      refreshAuth: vi.fn(),
+      onRoleChange: vi.fn().mockReturnValue(() => {})
     });
 
     vi.mocked(useStudents).mockReturnValue({

@@ -1,5 +1,5 @@
 // CartBottomSheet Component Tests
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 /**
  * CartBottomSheet uses vaul's Drawer (Radix Dialog portal) which requires
@@ -146,7 +146,7 @@ describe('CartBottomSheet — Business Logic', () => {
   describe('Checkout Label', () => {
     it('shows "Processing..." when checking out (cash)', () => {
       const isCheckingOut = true;
-      const paymentMethod = 'cash';
+      const paymentMethod: string = 'cash';
       const label = isCheckingOut ? (paymentMethod === 'gcash' ? 'Redirecting...' : 'Processing...') : 'Place Order';
       expect(label).toBe('Processing...');
     });

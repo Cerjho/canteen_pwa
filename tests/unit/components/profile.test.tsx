@@ -7,7 +7,7 @@ import { SettingsRow } from '../../../src/components/profile/SettingsRow';
 import { ProfileHeader } from '../../../src/components/profile/ProfileHeader';
 import { ProfileSkeleton } from '../../../src/components/profile/ProfileSkeleton';
 import { ToggleSwitch } from '../../../src/components/profile/ToggleSwitch';
-import { Mail, Shield, Key } from 'lucide-react';
+import { Mail } from 'lucide-react';
 
 // ─── SettingsGroup ─────────────────────────────────────────
 

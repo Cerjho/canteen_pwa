@@ -26,8 +26,112 @@ import { getCheckoutButtonText } from '../services/payments';
 import { formatDateLocal } from '../services/products';
 import { friendlyError } from '../utils/friendlyError';
 import { useConfirm } from './ConfirmDialog';
-import { PaymentMethodSelector } from './PaymentMethodSelector';
-import { OrderNotes } from './OrderNotes';
+
+/* ================================================================
+   COMPACT SUB-COMPONENTS (bottom sheet footer)
+   ================================================================ */
+
+const COMPACT_METHODS: {
+  value: PaymentMethod;
+  label: string;
+  icon: string;
+}[] = [
+  { value: 'cash', label: 'Cash', icon: '💵' },
+  { value: 'balance', label: 'Wallet', icon: '👛' },
+  { value: 'gcash', label: 'GCash', icon: '📱' },
+  { value: 'paymaya', label: 'Maya', icon: '📱' },
+  { value: 'card', label: 'Card', icon: '💳' },
+];
+
+function CompactPaymentSelector({
+  selected,
+  onSelect,
+  balance = 0,
+  orderTotal = 0,
+}: {
+  selected: PaymentMethod;
+  onSelect: (method: PaymentMethod) => void;
+  balance?: number;
+  orderTotal?: number;
+}) {
+  const isDisabled = (v: PaymentMethod) => {
+    if (v === 'balance' && (balance <= 0 || (orderTotal > 0 && balance < orderTotal))) return true;
+    return false;
+  };
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Payment</p>
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+        {COMPACT_METHODS.map((m) => {
+          const active = selected === m.value;
+          const disabled = isDisabled(m.value);
+          return (
+            <button
+              key={m.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onSelect(m.value)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
+                active
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                  : disabled
+                    ? 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <span className="text-sm leading-none">{m.icon}</span>
+              {m.label}
+              {m.value === 'balance' && !disabled && (
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">₱{balance.toFixed(0)}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CompactNotes({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded && !value) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="text-xs text-primary-600 dark:text-primary-400 font-medium hover:underline"
+      >
+        + Add order notes
+      </button>
+    );
+  }
+
+  return (
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={() => {
+        if (!value.trim()) {
+          setExpanded(false);
+          onChange('');
+        }
+      }}
+      placeholder="Special instructions..."
+      rows={2}
+      maxLength={500}
+      autoFocus={expanded && !value}
+      className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 resize-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+    />
+  );
+}
 
 /* ================================================================
    TYPES
@@ -620,89 +724,47 @@ export function CartBottomSheet({
 
             {/* ── Checkout Footer (sticky) ─────────────────── */}
             {items.length > 0 && (
-              <div className="border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] flex-shrink-0 space-y-3">
-                {/* Payment method — reuse existing component */}
-                <PaymentMethodSelector
+              <div className="border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex-shrink-0 space-y-2">
+                {/* Compact payment chips */}
+                <CompactPaymentSelector
                   selected={paymentMethod}
                   onSelect={setPaymentMethod}
                   balance={parentBalance}
                   orderTotal={selectedTotal}
                 />
 
-                {/* Order notes — reuse existing component */}
-                <OrderNotes value={notes} onChange={setNotes} />
+                {/* Collapsible notes */}
+                <CompactNotes value={notes} onChange={setNotes} />
 
-                {/* Online batched-orders info */}
+                {/* Warnings & errors — compact */}
                 {isOnlinePaymentMethod(paymentMethod) && orderGroupCount > 1 && (
-                  <div
-                    className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl"
-                    role="status"
-                  >
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                      <strong>Info:</strong> All {orderGroupCount} order groups
-                      will be combined into a single payment.
-                    </p>
-                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
+                    All {orderGroupCount} orders combined into one payment
+                  </p>
                 )}
-
-                {/* Balance warning */}
                 {paymentMethod === 'balance' && !canUseBalance && (
-                  <div
-                    className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl"
-                    role="alert"
-                  >
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      Insufficient balance. You need ₱
-                      {(selectedTotal - parentBalance).toFixed(2)} more.
-                    </p>
-                  </div>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+                    Need ₱{(selectedTotal - parentBalance).toFixed(2)} more balance
+                  </p>
                 )}
-
-                {/* Checkout error */}
                 {checkoutError && (
-                  <div
-                    className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
-                    role="alert"
-                  >
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      {checkoutError}
-                    </p>
-                  </div>
+                  <p className="text-xs text-red-600 dark:text-red-400 text-center">
+                    {checkoutError}
+                  </p>
                 )}
 
-                {/* Total + Checkout */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Total
-                    </span>
-                    {dateCount > 1 && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {selectedDates.size > 0
-                          ? `${selectedDates.size} of ${dateCount} days`
-                          : `${dateCount} days`}
-                      </p>
-                    )}
-                    {studentCount > 1 && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {studentCount} students
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    ₱{selectedTotal.toFixed(2)}
-                  </span>
-                </div>
-
+                {/* Total + Checkout button — single row */}
                 <button
                   onClick={handleCheckout}
                   disabled={items.length === 0 || isCheckingOut}
-                  className="w-full bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
+                  className="w-full bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   {isCheckingOut && (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   )}
-                  {checkoutLabel}
+                  <span>{checkoutLabel}</span>
+                  <span className="text-white/80 font-normal mx-1">·</span>
+                  <span>₱{selectedTotal.toFixed(2)}</span>
                 </button>
               </div>
             )}
