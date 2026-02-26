@@ -11,6 +11,8 @@ interface ProductCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   onAddToCart: (productId: string) => void;
+  /** When true, the Add button is greyed out with a "Select a student first" tooltip */
+  addDisabled?: boolean;
 }
 
 export function ProductCard({
@@ -22,7 +24,8 @@ export function ProductCard({
   available,
   isFavorite = false,
   onToggleFavorite,
-  onAddToCart
+  onAddToCart,
+  addDisabled = false,
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
   const hasImage = image_url && !imageError;
@@ -67,11 +70,18 @@ export function ProductCard({
             ₱{price.toFixed(2)}
           </span>
           <button
-            onClick={() => onAddToCart(id)}
-            disabled={!available}
-            className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg font-medium transition-colors"
+            onClick={() => !addDisabled && onAddToCart(id)}
+            disabled={!available || addDisabled}
+            title={addDisabled ? 'Select a student first' : undefined}
+            className={`px-4 py-2.5 rounded-lg font-medium transition-colors text-white ${
+              !available
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                : addDisabled
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                : 'bg-primary-600 hover:bg-primary-700'
+            }`}
           >
-            {available ? 'Add' : 'Out of Stock'}
+            {!available ? 'Out of Stock' : addDisabled ? 'Add' : 'Add'}
           </button>
         </div>
       </div>

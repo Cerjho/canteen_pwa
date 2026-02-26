@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus, formatDateLocal } from '../../services/products';
@@ -90,7 +90,7 @@ export default function Menu() {
       const { data } = await supabase
         .from('orders')
         .select('id, student_id, scheduled_for')
-        .eq('parent_id', user!.id)
+        .eq('parent_id', user?.id)
         .not('status', 'in', '("cancelled","completed")');
       return data || [];
     },
@@ -289,6 +289,10 @@ export default function Menu() {
     }
   }, [items, checkout, queryClient, navigate, showToast]);
 
+  // Determine whether there are no linked students (only after data has loaded)
+  const studentsLoaded = students !== undefined;
+  const hasNoStudents = studentsLoaded && students.length === 0;
+
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
     if (!weekdaysInfo) return;
@@ -309,6 +313,39 @@ export default function Menu() {
       setSelectedDate(weekdaysInfo[currentIdx + 1].date);
     }
   }, [weekdaysInfo, effectiveDate]);
+
+  // Gate: no students linked yet — show onboarding screen
+  if (hasNoStudents) {
+    return (
+      <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900 flex flex-col">
+        <div className="container mx-auto px-4 py-6 flex flex-col flex-1">
+          <PageHeader title="Menu" />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="max-w-sm w-full text-center px-4">
+              <div className="w-24 h-24 bg-primary-100 dark:bg-primary-900/40 rounded-full flex items-center justify-center mx-auto mb-6">
+                <UserPlus size={44} className="text-primary-600 dark:text-primary-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">
+                Link a Student Profile First
+              </h2>
+              <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                You need to link at least one student profile before you can browse the menu and place orders.
+              </p>
+              <button
+                onClick={() => navigate('/profile')}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-semibold rounded-xl transition-colors shadow-sm"
+              >
+                Go to Profile to Link a Student
+              </button>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
+                In your profile, tap <strong>"Link Student"</strong> and enter your child's school ID.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show canteen closed message for the selected date (holiday)
   if (selectedWeekdayInfo && !selectedWeekdayInfo.isOpen) {
@@ -510,6 +547,25 @@ export default function Menu() {
           onViewCart={() => setCartOpen(true)}
         />
 
+        {/* Banner: prompt student selection before ordering */}
+        {students && students.length > 0 && !selectedStudentId && (
+          <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-4 mb-4">
+            <span className="text-amber-500 dark:text-amber-400 mt-0.5" aria-hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 shrink-0">
+                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Select a student to start ordering
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Use the <strong>"Order for"</strong> dropdown above to choose which child you're ordering for. Add buttons are disabled until a student is selected.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Category Filter Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {CATEGORIES.map((cat) => (
@@ -585,6 +641,7 @@ export default function Menu() {
                 isFavorite={isFavorite(product.id)}
                 onToggleFavorite={() => toggleFavorite(product.id)}
                 onAddToCart={handleAddToCart}
+                addDisabled={!selectedStudentId}
               />
             ))}
           </div>

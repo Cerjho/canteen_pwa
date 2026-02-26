@@ -61,9 +61,9 @@ export function ChildSelector({
           </option>
         ))}
       </select>
-      {studentList.length === 0 && (
-        <p className="text-sm text-amber-600 dark:text-amber-400 mt-2" role="alert">
-          You haven't linked any students yet. Please link a student profile first.
+      {studentList.length > 0 && !selectedId && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5" role="alert">
+          Select a child to start ordering.
         </p>
       )}
     </div>
