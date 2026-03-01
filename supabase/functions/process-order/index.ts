@@ -398,7 +398,9 @@ serve(async (req) => {
       .select('id, student_id, scheduled_for, status, total_amount')
       .eq('student_id', student_id)
       .eq('scheduled_for', slotDate)
-      .not('status', 'eq', 'cancelled');
+      .eq('meal_period', items[0]?.meal_period || 'lunch')
+      .not('status', 'eq', 'cancelled')
+      .order('created_at', { ascending: true });
 
     if (slotConflicts && slotConflicts.length > 0) {
       const existingOrder = slotConflicts[0];

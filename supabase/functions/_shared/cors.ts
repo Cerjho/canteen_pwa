@@ -69,7 +69,14 @@ export function getCorsHeaders(origin: string | null): Record<string, string> {
 /**
  * Handle CORS preflight (OPTIONS) requests
  */
-export function handleCorsPrefllight(req: Request): Response | null {
+export function handleCorsPreflight(req: Request): Response | null {
+  return handleCorsPreflightImpl(req);
+}
+
+/** @deprecated Use handleCorsPreflight (single 'l') instead */
+export const handleCorsPrefllight = handleCorsPreflight;
+
+function handleCorsPreflightImpl(req: Request): Response | null {
   if (req.method !== 'OPTIONS') return null;
 
   const origin = req.headers.get('Origin');

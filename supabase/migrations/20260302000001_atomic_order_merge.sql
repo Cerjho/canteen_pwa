@@ -44,15 +44,49 @@ BEGIN
     );
   END IF;
 
-  -- Insert new items
-  INSERT INTO order_items (order_id, product_id, quantity, price_at_order, meal_period)
+  -- Validate stock and availability before inserting
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_items) AS item
+    LEFT JOIN products p ON p.id = (item->>'product_id')::UUID
+    WHERE p.id IS NULL OR NOT p.available
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'PRODUCT_UNAVAILABLE',
+      'message', 'One or more products are unavailable'
+    );
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_items) AS item
+    JOIN products p ON p.id = (item->>'product_id')::UUID
+    WHERE p.stock_quantity < (item->>'quantity')::INTEGER
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'INSUFFICIENT_STOCK',
+      'message', 'One or more products have insufficient stock'
+    );
+  END IF;
+
+  -- Insert new items with explicit confirmed status
+  INSERT INTO order_items (order_id, product_id, quantity, price_at_order, meal_period, status)
   SELECT
     p_order_id,
     (item->>'product_id')::UUID,
     (item->>'quantity')::INTEGER,
     (item->>'price_at_order')::NUMERIC(10,2),
-    COALESCE(item->>'meal_period', 'lunch')
+    COALESCE(item->>'meal_period', 'lunch'),
+    'confirmed'
   FROM jsonb_array_elements(p_items) AS item;
+
+  -- Decrement stock for merged items
+  UPDATE products SET stock_quantity = stock_quantity - sub.qty
+  FROM (
+    SELECT (item->>'product_id')::UUID AS pid, (item->>'quantity')::INTEGER AS qty
+    FROM jsonb_array_elements(p_items) AS item
+  ) sub
+  WHERE products.id = sub.pid;
 
   -- Recalculate total from all confirmed items
   SELECT COALESCE(SUM(price_at_order * quantity), 0)

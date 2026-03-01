@@ -244,6 +244,7 @@ interface QueuedOrderData {
     product_id: string;
     quantity: number;
     price_at_order: number;
+    meal_period?: string;
   }>;
   payment_method: string;
   notes?: string;
@@ -332,9 +333,8 @@ async function getSupabaseUrl(): Promise<string> {
     }
   }
   
-  // Final fallback - no URL available
-  console.error('[SW] No Supabase URL configured. App must cache the URL on init.');
-  return '';
+  // Final fallback - no URL available; abort sync rather than sending to wrong host
+  throw new Error('[SW] No Supabase URL configured. App must cache the URL on init.');
 }
 
 async function notifyClients(type: string, data: Record<string, unknown>): Promise<void> {

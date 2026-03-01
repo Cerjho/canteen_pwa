@@ -185,10 +185,9 @@ async function processQueueInner(): Promise<{ processed: number; failed: number 
       if (data?.error) {
         if (data.error === 'DUPLICATE_ORDER') {
           // Order already exists - this is fine, remove from queue
-        // Order already processed (dedupe check)
-        if (import.meta.env.DEV) {
-          // console.log('Order already processed (duplicate):', order.client_order_id);
-        }
+          if (import.meta.env.DEV) {
+            // console.log('Order already processed (duplicate):', order.client_order_id);
+          }
           await removeQueuedOrder(order.id);
           processed++;
           continue;
