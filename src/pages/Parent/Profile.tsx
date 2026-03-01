@@ -16,7 +16,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { getStudents, linkStudent, unlinkStudent, updateStudent, Student } from '../../services/students';
 import { PageHeader } from '../../components/PageHeader';
@@ -30,9 +30,6 @@ import { SettingsGroup, SettingsRow, ProfileHeader, ProfileSkeleton, ToggleSwitc
 import { useTheme } from '../../hooks/useTheme';
 import type { Parent } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export default function Profile() {
   const navigate = useNavigate();

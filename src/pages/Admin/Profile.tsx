@@ -15,7 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -24,9 +24,6 @@ import { EditProfileModal } from '../../components/EditProfileModal';
 import { SettingsGroup, SettingsRow, ProfileHeader, ProfileSkeleton, ToggleSwitch } from '../../components/profile';
 import { useTheme } from '../../hooks/useTheme';
 import { friendlyError } from '../../utils/friendlyError';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const NOTIFICATION_PREFS_KEY = 'canteen_admin_notifications';
 

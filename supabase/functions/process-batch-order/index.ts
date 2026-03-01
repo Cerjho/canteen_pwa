@@ -313,18 +313,31 @@ serve(async (req) => {
             .update({ total_amount: recalcTotal })
             .eq('id', existingOrder.id);
 
-          // Deduct delta from wallet if balance payment
+          // Deduct delta from wallet if balance payment (with proper payment/allocation records)
           if (payment_method === 'balance') {
             const delta = order.items.reduce(
               (s, i) => s + i.price_at_order * i.quantity, 0
             );
             if (delta > 0) {
-              const { error: balErr } = await supabaseAdmin.rpc('deduct_balance', {
-                p_user_id: parent_id,
+              // Fetch current balance for CAS
+              const { data: mergeWallet } = await supabaseAdmin
+                .from('wallets').select('balance').eq('user_id', parent_id).single();
+
+              if (!mergeWallet) {
+                console.error('No wallet found for merge balance deduction');
+                return errorResponse(corsHeaders, 400, 'NO_WALLET', 'No wallet found for balance deduction.');
+              }
+
+              const { error: balErr } = await supabaseAdmin.rpc('deduct_balance_with_payment', {
+                p_parent_id: parent_id,
+                p_expected_balance: mergeWallet.balance,
                 p_amount: delta,
+                p_order_ids: [existingOrder.id],
+                p_order_amounts: [delta],
               });
               if (balErr) {
                 console.error('Error deducting balance for merge:', balErr);
+                return errorResponse(corsHeaders, 400, 'INSUFFICIENT_BALANCE', 'Failed to deduct balance for merged items.');
               }
               mergeDeductedTotal += delta;
             }

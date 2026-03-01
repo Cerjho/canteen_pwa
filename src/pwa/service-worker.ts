@@ -344,51 +344,8 @@ async function notifyClients(type: string, data: Record<string, unknown>): Promi
   }
 }
 
-// Push notifications
-self.addEventListener('push', (event) => {
-  const data = event.data?.json() ?? {};
-  
-  const options: NotificationOptions = {
-    body: data.body || 'You have a new notification',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    data: data.data,
-    tag: data.tag || 'canteen-notification'
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'School Canteen', options)
-  );
-});
-
-// Handle notification clicks
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  
-  const action = event.action;
-  const data = event.notification.data;
-
-  if (action === 'dismiss') {
-    return;
-  }
-
-  // Open or focus the app
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clientList) => {
-      // Check if app is already open
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      // Open new window
-      if (self.clients.openWindow) {
-        const url = data?.url || '/';
-        return self.clients.openWindow(url);
-      }
-    })
-  );
-});
+// NOTE: Push notification handlers removed — no client code subscribes
+// via PushManager.subscribe(). Re-add when push notifications are implemented.
 
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating service worker...');

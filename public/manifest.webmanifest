@@ -1,10 +1,12 @@
 {
+  "id": "/",
   "name": "LOHECA Canteen",
   "short_name": "Canteen",
   "description": "Order food for your kids from school canteen",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "theme_color": "#F9FAFB",
   "background_color": "#F9FAFB",
@@ -32,6 +34,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "LOHECA Canteen — Order food for your kids"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "LOHECA Canteen — Browse school menu"
     }
   ],
   "categories": ["food", "education"],

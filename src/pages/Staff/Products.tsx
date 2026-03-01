@@ -1,16 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Package, AlertTriangle, Check, X, RefreshCw } from 'lucide-react';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import type { Product, ProductCategory } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
 

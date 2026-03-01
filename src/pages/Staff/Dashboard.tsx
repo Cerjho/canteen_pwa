@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, TouchEvent } from 'r
 import { useQuery } from '@tanstack/react-query';
 import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, XCircle, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame, Smartphone } from 'lucide-react';
 import { format, differenceInMinutes, isToday } from 'date-fns';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
@@ -15,8 +15,6 @@ import { getPaymentMethodLabel } from '../../services/payments';
 import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-
 /** Escape HTML special characters to prevent XSS in printOrder */
 function escapeHtml(str: string): string {
   return str
@@ -26,7 +24,6 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Helper to format date in Philippine timezone (UTC+8)
 function formatDateLocal(date: Date): string {

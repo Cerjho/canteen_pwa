@@ -28,10 +28,12 @@ if (SENTRY_DSN) {
 }
 
 // Create React Query client
+// Default staleTime reduced from 5 min to 30s for fresher real-time data.
+// Individual queries (products, settings) can override with longer staleTime.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 30, // 30 seconds default (was 5 min — too long for orders/menu)
       retry: 1,
       refetchOnWindowFocus: false
     }

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { useAuth } from '../../hooks/useAuth';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
@@ -31,9 +31,6 @@ import {
   Timer,
   XCircle
 } from 'lucide-react';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Helper to format date in Philippine timezone (UTC+8)
 function formatDateLocal(date: Date): string {

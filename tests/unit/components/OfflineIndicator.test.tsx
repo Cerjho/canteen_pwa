@@ -135,8 +135,9 @@ describe('OfflineIndicator Component', () => {
       
       const { container } = render(<OfflineIndicator />);
       
-      const indicator = container.firstChild;
-      expect(indicator).toHaveClass('bg-amber-500');
+      // The amber banner is the first child of the wrapper div
+      const banner = container.firstChild?.firstChild;
+      expect(banner).toHaveClass('bg-amber-500');
     });
 
     it('has high z-index', () => {
@@ -153,8 +154,8 @@ describe('OfflineIndicator Component', () => {
       
       const { container } = render(<OfflineIndicator />);
       
-      const indicator = container.firstChild;
-      expect(indicator).toHaveClass('text-white');
+      const banner = container.firstChild?.firstChild;
+      expect(banner).toHaveClass('text-white');
     });
 
     it('centers content', () => {
@@ -162,8 +163,8 @@ describe('OfflineIndicator Component', () => {
       
       const { container } = render(<OfflineIndicator />);
       
-      const indicator = container.firstChild;
-      expect(indicator).toHaveClass('flex', 'items-center', 'justify-center');
+      const banner = container.firstChild?.firstChild;
+      expect(banner).toHaveClass('flex', 'items-center', 'justify-center');
     });
   });
 

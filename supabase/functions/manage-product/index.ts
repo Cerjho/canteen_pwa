@@ -298,8 +298,32 @@ serve(async (req) => {
           .eq('product_id', product_id);
 
         if (!totalOrders || totalOrders === 0) {
-          // Safe to hard delete
+          // Safe to hard delete — also clean up associated image
+          const { data: productToDelete } = await supabaseAdmin
+            .from('products')
+            .select('image_url')
+            .eq('id', product_id)
+            .single();
+
           await supabaseAdmin.from('products').delete().eq('id', product_id);
+
+          // Delete orphan image from storage (best-effort, don't fail the delete)
+          if (productToDelete?.image_url) {
+            try {
+              const bucketName = 'product-images';
+              const urlParts = productToDelete.image_url.split(`${bucketName}/`);
+              if (urlParts.length >= 2) {
+                const filePath = urlParts[1];
+                if (filePath.startsWith('products/') && !filePath.includes('..')) {
+                  await supabaseAdmin.storage.from(bucketName).remove([filePath]);
+                  console.log(`[AUDIT] Deleted orphan image: ${filePath}`);
+                }
+              }
+            } catch (imgErr) {
+              console.warn(`[WARN] Failed to delete product image for ${product_id}:`, imgErr);
+            }
+          }
+
           console.log(`[AUDIT] Admin ${user.email} hard deleted product ${product_id}`);
         } else {
           // Soft delete - just mark unavailable

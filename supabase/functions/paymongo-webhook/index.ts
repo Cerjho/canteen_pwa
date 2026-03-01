@@ -427,103 +427,57 @@ async function handleTopupPaymentPaid(
     return;
   }
 
-  // Credit wallet balance
-  const { data: wallet } = await supabaseAdmin
-    .from('wallets')
-    .select('balance')
-    .eq('user_id', topupSession.parent_id)
-    .single();
-
-  // Supabase returns NUMERIC columns as strings — cast to Number for arithmetic
+  // Credit wallet balance using atomic RPC (SELECT FOR UPDATE — no CAS retries needed)
   const topupAmount = Number(topupSession.amount);
   let walletCredited = false;
 
-  if (wallet) {
-    const previousBalance = Number(wallet.balance);
-    const { error: walletError } = await supabaseAdmin
-      .from('wallets')
-      .update({
-        balance: previousBalance + topupAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', topupSession.parent_id)
-      .eq('balance', wallet.balance); // Optimistic lock: compare raw DB value
-
-    if (walletError) {
-      // Retry with fresh balance (up to 2 more attempts)
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        const { data: freshWallet } = await supabaseAdmin
-          .from('wallets')
-          .select('balance')
-          .eq('user_id', topupSession.parent_id)
-          .single();
-
-        if (freshWallet) {
-          const freshBalance = Number(freshWallet.balance);
-          const { error: retryError } = await supabaseAdmin
-            .from('wallets')
-            .update({
-              balance: freshBalance + topupAmount,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('user_id', topupSession.parent_id)
-            .eq('balance', freshWallet.balance); // Compare raw DB value
-
-          if (!retryError) {
-            walletCredited = true;
-            break;
-          }
-        }
-        // Small delay between retries
-        await new Promise(r => setTimeout(r, 200 * attempt));
+  try {
+    const { data: paymentId2, error: creditError } = await supabaseAdmin.rpc(
+      'credit_balance_with_payment',
+      {
+        p_parent_id: topupSession.parent_id,
+        p_amount: topupAmount,
+        p_type: 'topup',
+        p_method: paymentMethod,
+        p_reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
+        p_paymongo_payment_id: paymentId,
+        p_paymongo_checkout_id: checkout.id,
       }
+    );
 
-      if (!walletCredited) {
-        console.error('CRITICAL: Failed to credit wallet after retries for topup:', topupSessionId, 'amount:', topupAmount, 'parent:', topupSession.parent_id);
-        // Mark topup session for manual review — use 'failed' status (allowed by CHECK constraint)
-        // The payment was received but wallet credit failed — needs admin intervention
-        await supabaseAdmin
-          .from('topup_sessions')
-          .update({ status: 'failed' })
-          .eq('id', topupSessionId);
-        
-        // Also log to payments for audit trail
-        await supabaseAdmin.from('payments').insert({
-          parent_id: topupSession.parent_id,
-          type: 'topup',
-          amount_total: topupAmount,
-          method: paymentMethod,
-          status: 'failed',
-          reference_id: paymentId ? `PAYMONGO-${paymentId}-NEEDS-REVIEW` : `TOPUP-${topupSessionId}-NEEDS-REVIEW`,
-          paymongo_payment_id: paymentId,
-          paymongo_checkout_id: checkout.id,
-        });
-        return; // Don't create 'completed' transaction if wallet credit failed
-      }
-    } else {
-      walletCredited = true;
+    if (creditError) {
+      throw creditError;
     }
-  } else {
-    // Create wallet if it doesn't exist
-    await supabaseAdmin.from('wallets').insert({
-      user_id: topupSession.parent_id,
-      balance: topupAmount,
-    });
-    walletCredited = true;
-  }
 
-  // Only create 'completed' payment if wallet was actually credited
-  if (walletCredited) {
+    walletCredited = true;
+    console.log('[webhook] Wallet credited via RPC, payment_id:', paymentId2);
+  } catch (creditErr) {
+    console.error('CRITICAL: Failed to credit wallet via RPC for topup:', topupSessionId, 'amount:', topupAmount, 'parent:', topupSession.parent_id, creditErr);
+    // Mark topup session for manual review — use 'failed' status (allowed by CHECK constraint)
+    // The payment was received but wallet credit failed — needs admin intervention
+    await supabaseAdmin
+      .from('topup_sessions')
+      .update({ status: 'failed' })
+      .eq('id', topupSessionId);
+
+    // Also log to payments for audit trail
     await supabaseAdmin.from('payments').insert({
       parent_id: topupSession.parent_id,
       type: 'topup',
       amount_total: topupAmount,
       method: paymentMethod,
-      status: 'completed',
-      reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
+      status: 'failed',
+      reference_id: paymentId ? `PAYMONGO-${paymentId}-NEEDS-REVIEW` : `TOPUP-${topupSessionId}-NEEDS-REVIEW`,
       paymongo_payment_id: paymentId,
       paymongo_checkout_id: checkout.id,
     });
+    return; // Don't create 'completed' transaction if wallet credit failed
+  }
+
+  // Only continue if wallet was credited (payment record already created by RPC)
+  if (walletCredited) {
+    // Payment record was already created atomically by credit_balance_with_payment RPC
+    console.log('Topup completed (payment created by RPC):', { topupSessionId, amount: topupSession.amount, paymentMethod });
   }
 
   console.log('Topup completed:', { topupSessionId, amount: topupSession.amount, paymentMethod });
