@@ -88,13 +88,8 @@ test.describe('Critical User Flows', () => {
       await expect(page.getByText(/order.*placed|success/i)).toBeVisible();
     });
 
-    test.skip('order appears in order history', async ({ page }) => {
-      // Login
-      await page.goto('/login');
-      await page.getByLabel(/email/i).fill(testUser.email);
-      await page.getByLabel(/password/i).fill(testUser.password);
-      await page.getByRole('button', { name: /login|sign in/i }).click();
-      
+    test('order appears in order history', async ({ page }) => {
+      // Auth state loaded via auth.setup.ts
       // Navigate to order history
       await page.goto('/orders');
       
@@ -132,15 +127,9 @@ test.describe('Critical User Flows', () => {
   });
 
   test.describe('Search and Filter Flow', () => {
-    test.skip('user can search and filter products', async ({ page }) => {
-      // Login and go to menu
-      await page.goto('/login');
-      await page.getByLabel(/email/i).fill(testUser.email);
-      await page.getByLabel(/password/i).fill(testUser.password);
-      await page.getByRole('button', { name: /login|sign in/i }).click();
-      
-      await expect(page).toHaveURL(/\/menu/);
-      
+    test('user can search and filter products', async ({ page }) => {
+      // Auth state loaded via auth.setup.ts
+      await page.goto('/menu');
       // Search for a product
       const searchInput = page.getByPlaceholder(/search/i);
       await searchInput.fill('chicken');

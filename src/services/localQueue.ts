@@ -138,18 +138,11 @@ function getBackoffDelay(retryCount: number): number {
   return delay + Math.random() * 1000;
 }
 
-// Concurrency guard to prevent double-processing
+// Concurrency guard (fallback for environments without Web Locks)
 let isProcessing = false;
 
-// Process queue when online
-export async function processQueue(): Promise<{ processed: number; failed: number }> {
-  if (!isOnline() || isProcessing) {
-    return { processed: 0, failed: 0 };
-  }
-
-  isProcessing = true;
-  try {
-
+// Internal queue processor (extracted for lock wrapping)
+async function processQueueInner(): Promise<{ processed: number; failed: number }> {
   const orders = await getQueuedOrders();
   let processed = 0;
   let failed = 0;
@@ -245,6 +238,33 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
   }
 
   return { processed, failed };
+}
+
+// Process queue when online — uses Web Locks API for cross-context mutual exclusion
+// (prevents both main thread and service worker from processing simultaneously)
+export async function processQueue(): Promise<{ processed: number; failed: number }> {
+  if (!isOnline()) return { processed: 0, failed: 0 };
+
+  // Web Locks API is available in both main thread and service worker
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(
+      'order-queue-processing',
+      { ifAvailable: true },
+      async (lock) => {
+        if (!lock) {
+          // Another context (SW or another tab) is already processing
+          return { processed: 0, failed: 0 };
+        }
+        return processQueueInner();
+      }
+    );
+  }
+
+  // Fallback for environments without Web Locks API
+  if (isProcessing) return { processed: 0, failed: 0 };
+  isProcessing = true;
+  try {
+    return await processQueueInner();
   } finally {
     isProcessing = false;
   }

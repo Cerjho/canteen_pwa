@@ -418,118 +418,58 @@ serve(async (req) => {
         );
       }
 
-      // ── MERGE MODE: append items to existing order ──
+      // ── MERGE MODE: atomically append items using RPC (prevents race conditions) ──
       console.log('Merge mode: appending items to existing order', existingOrder.id);
 
-      // Insert new items into existing order
-      const mergeItems = items.map(item => ({
-        order_id: existingOrder.id,
+      const mergeItems = items.map((item: OrderItem) => ({
         product_id: item.product_id,
         quantity: item.quantity,
         price_at_order: item.price_at_order,
         meal_period: item.meal_period || 'lunch',
       }));
 
-      const { error: mergeItemsError } = await supabaseAdmin
-        .from('order_items')
-        .insert(mergeItems);
+      const { data: mergeResult, error: mergeError } = await supabaseAdmin.rpc(
+        'merge_order_items',
+        {
+          p_order_id: existingOrder.id,
+          p_items: mergeItems,
+          p_payment_method: payment_method,
+          p_parent_id: parent_id,
+        }
+      );
 
-      if (mergeItemsError) {
-        console.error('Merge items insert error:', mergeItemsError);
+      if (mergeError) {
+        console.error('Merge RPC error:', mergeError);
         return new Response(
-          JSON.stringify({ error: 'MERGE_ITEMS_FAILED', message: 'Failed to add items to existing order' }),
+          JSON.stringify({ error: 'MERGE_FAILED', message: 'Failed to merge items into existing order. Please retry.' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Recalculate total from all confirmed items
-      const { data: allItems, error: allItemsError } = await supabaseAdmin
-        .from('order_items')
-        .select('price_at_order, quantity')
-        .eq('order_id', existingOrder.id)
-        .eq('status', 'confirmed');
+      if (!mergeResult?.success) {
+        const errorCode = mergeResult?.error || 'MERGE_FAILED';
+        const errorMessage = mergeResult?.message || 'Merge failed';
+        const statusCode = errorCode === 'MERGE_CONFLICT' ? 409
+          : errorCode === 'INSUFFICIENT_BALANCE' ? 400
+          : errorCode === 'NO_WALLET' ? 400
+          : errorCode === 'ORDER_LOCKED' ? 409
+          : 500;
 
-      if (allItemsError || !allItems) {
-        console.error('Failed to recalculate total:', allItemsError);
         return new Response(
-          JSON.stringify({ error: 'MERGE_TOTAL_FAILED', message: 'Failed to recalculate order total' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: errorCode, message: errorMessage }),
+          { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
-      }
-
-      const newTotal = allItems.reduce((sum, i) => sum + i.price_at_order * i.quantity, 0);
-      const delta = newTotal - (existingOrder.total_amount || 0);
-
-      const { error: updateError } = await supabaseAdmin
-        .from('orders')
-        .update({ total_amount: newTotal })
-        .eq('id', existingOrder.id);
-
-      if (updateError) {
-        console.error('Failed to update order total:', updateError);
-        return new Response(
-          JSON.stringify({ error: 'MERGE_UPDATE_FAILED', message: 'Failed to update order total' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // If payment_method is 'balance', deduct delta from wallet
-      if (payment_method === 'balance' && delta > 0) {
-        const { data: wallet, error: walletError } = await supabaseAdmin
-          .from('wallets')
-          .select('balance')
-          .eq('user_id', parent_id)
-          .single();
-
-        if (walletError || !wallet) {
-          console.error('No wallet found for merge balance deduction');
-          return new Response(
-            JSON.stringify({ error: 'NO_WALLET', message: 'No wallet found. Please top up your balance first.' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (wallet.balance < delta) {
-          return new Response(
-            JSON.stringify({
-              error: 'INSUFFICIENT_BALANCE',
-              message: `Insufficient balance for merge. Required: ₱${delta.toFixed(2)}, Available: ₱${wallet.balance.toFixed(2)}`,
-              required: delta,
-              available: wallet.balance,
-            }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        const { error: rpcError } = await supabaseAdmin.rpc(
-          'deduct_balance_with_payment',
-          {
-            p_parent_id: parent_id,
-            p_expected_balance: wallet.balance,
-            p_amount: delta,
-            p_order_ids: [existingOrder.id],
-            p_order_amounts: [delta],
-          }
-        );
-
-        if (rpcError) {
-          console.error('Merge balance deduction error:', rpcError);
-          return new Response(
-            JSON.stringify({ error: 'BALANCE_DEDUCTION_FAILED', message: 'Failed to deduct balance for merged items. Please retry.' }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
       }
 
       // Return success with merge info — skip normal order creation
-      console.log('Merge successful:', { order_id: existingOrder.id, newTotal, delta });
+      console.log('Merge successful:', mergeResult);
       return new Response(
         JSON.stringify({
           success: true,
           merged: true,
-          order_id: existingOrder.id,
-          merged_order_ids: [existingOrder.id],
-          total_amount: newTotal,
+          order_id: mergeResult.order_id,
+          merged_order_ids: [mergeResult.order_id],
+          total_amount: mergeResult.new_total,
           message: 'Items merged into existing order successfully',
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

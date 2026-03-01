@@ -145,7 +145,7 @@ export default function AdminWeeklyMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select('id, name, description, price, category, image_url, available, stock_quantity, created_at, updated_at')
         .order('category')
         .order('name');
       if (error) throw error;
@@ -174,12 +174,12 @@ export default function AdminWeeklyMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('menu_schedules')
-        .select(`*, product:products(*)`)
+        .select('id, product_id, day_of_week, scheduled_date, is_active, product:products(*)')
         .gte('scheduled_date', weekStartStr)
         .lte('scheduled_date', weekEndStr)
         .order('scheduled_date');
       if (error) throw error;
-      return data;
+      return data as unknown as MenuSchedule[];
     }
   });
 
@@ -189,7 +189,7 @@ export default function AdminWeeklyMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('holidays')
-        .select('*')
+        .select('id, name, date, description, is_recurring')
         .order('date');
       if (error) throw error;
       return data;
@@ -202,7 +202,7 @@ export default function AdminWeeklyMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('makeup_days')
-        .select('*')
+        .select('id, date, name, reason')
         .order('date');
       if (error) throw error;
       return data;

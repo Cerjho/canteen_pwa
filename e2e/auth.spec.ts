@@ -132,8 +132,8 @@ test.describe('Registration Flow', () => {
 // Menu Page Tests (Authenticated)
 // ============================================
 test.describe('Menu Page', () => {
-  // These tests would normally require authentication setup
-  test.skip('should display menu with products', async ({ page }) => {
+  // These tests use auth state from auth.setup.ts
+  test('should display menu with products', async ({ page }) => {
     // Note: In real tests, set up auth state via page.context().addCookies() or storage state
     await page.goto('/menu');
     
@@ -146,7 +146,7 @@ test.describe('Menu Page', () => {
     await expect(page.getByText(/drinks/i)).toBeVisible();
   });
 
-  test.skip('should filter products by category', async ({ page }) => {
+  test('should filter products by category', async ({ page }) => {
     await page.goto('/menu');
     
     // Click on Snacks category
@@ -156,7 +156,7 @@ test.describe('Menu Page', () => {
     // This depends on actual product data
   });
 
-  test.skip('should search products', async ({ page }) => {
+  test('should search products', async ({ page }) => {
     await page.goto('/menu');
     
     const searchInput = page.getByPlaceholder(/search/i);
@@ -165,7 +165,7 @@ test.describe('Menu Page', () => {
     // Should filter to show only matching products
   });
 
-  test.skip('should show child selector', async ({ page }) => {
+  test('should show child selector', async ({ page }) => {
     await page.goto('/menu');
     
     await expect(page.getByText(/select.*child|order.*for/i)).toBeVisible();
@@ -236,7 +236,7 @@ test.describe('Cart Flow', () => {
 // Order History Tests
 // ============================================
 test.describe('Order History', () => {
-  test.skip('should display order history page', async ({ page }) => {
+  test('should display order history page', async ({ page }) => {
     await page.goto('/orders');
     
     await expect(page.getByText(/order history/i)).toBeVisible();
@@ -263,7 +263,7 @@ test.describe('Order History', () => {
 // Profile Page Tests
 // ============================================
 test.describe('Profile Page', () => {
-  test.skip('should display user profile', async ({ page }) => {
+  test('should display user profile', async ({ page }) => {
     await page.goto('/profile');
     
     await expect(page.getByText(/profile/i)).toBeVisible();
@@ -284,7 +284,7 @@ test.describe('Profile Page', () => {
     await expect(linkButton).toBeVisible();
   });
 
-  test.skip('should log out user', async ({ page }) => {
+  test('should log out user', async ({ page }) => {
     await page.goto('/profile');
     
     await page.getByRole('button', { name: /log.*out|sign.*out/i }).click();

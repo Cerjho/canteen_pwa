@@ -60,7 +60,7 @@ export default function AdminSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('system_settings')
-        .select('*');
+        .select('key, value, description, updated_at');
       
       if (error) {
         // Table might not exist yet

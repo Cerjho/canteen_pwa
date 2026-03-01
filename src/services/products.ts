@@ -314,7 +314,7 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
   const productIds = dateSchedules.map(s => s.product_id);
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, description, price, category, image_url, available, stock_quantity')
     .eq('available', true)
     .in('id', productIds)
     .order('category', { ascending: true });
@@ -332,7 +332,7 @@ export async function getProducts(): Promise<Product[]> {
 export async function getAllProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, description, price, category, image_url, available, stock_quantity')
     .order('category', { ascending: true });
 
   if (error) throw error;
@@ -342,7 +342,7 @@ export async function getAllProducts(): Promise<Product[]> {
 export async function getProductById(id: string): Promise<Product | null> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, description, price, category, image_url, available, stock_quantity')
     .eq('id', id)
     .single();
 
@@ -354,7 +354,7 @@ export async function getProductById(id: string): Promise<Product | null> {
 export async function getMenuSchedules(): Promise<MenuSchedule[]> {
   const { data, error } = await supabase
     .from('menu_schedules')
-    .select('*')
+    .select('id, product_id, day_of_week, is_active')
     .eq('is_active', true);
 
   if (error) throw error;

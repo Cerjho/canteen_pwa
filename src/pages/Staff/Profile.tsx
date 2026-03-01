@@ -57,7 +57,7 @@ export default function StaffProfilePage() {
       if (!user) throw new Error('User not authenticated');
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('*')
+        .select('id, email, phone_number, first_name, last_name, role, created_at')
         .eq('id', user.id)
         .maybeSingle();
 
