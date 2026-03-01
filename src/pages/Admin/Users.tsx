@@ -100,8 +100,9 @@ export default function AdminUsers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('invitations')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, email, role, code, used, used_by, created_at, expires_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
       
       if (error) throw error;
       return data || [];
@@ -112,12 +113,13 @@ export default function AdminUsers() {
   const { data: parents, isLoading: parentsLoading } = useQuery<Parent[]>({
     queryKey: ['admin-parents'],
     queryFn: async () => {
-      // Get user profiles with role = 'parent'
+      // Get user profiles with role = 'parent' (paginated)
       const { data: profiles, error } = await supabase
         .from('user_profiles')
-        .select('*')
+        .select('id, first_name, last_name, email, phone, role, created_at')
         .eq('role', 'parent')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
       
       if (error) throw error;
       

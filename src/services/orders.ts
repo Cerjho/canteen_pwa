@@ -318,7 +318,12 @@ export async function createBatchOrder(batchData: CreateBatchOrderRequest): Prom
   throw lastError || new Error('Failed to create batch orders after multiple retries');
 }
 
-export async function getOrderHistory(parentId: string) {
+const ORDER_PAGE_SIZE = 20;
+
+export async function getOrderHistory(parentId: string, page = 0) {
+  const from = page * ORDER_PAGE_SIZE;
+  const to = from + ORDER_PAGE_SIZE - 1;
+
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -331,8 +336,10 @@ export async function getOrderHistory(parentId: string) {
     `)
     .eq('parent_id', parentId)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .range(from, to);
 
   if (error) throw error;
   return data;
 }
+
+export { ORDER_PAGE_SIZE };

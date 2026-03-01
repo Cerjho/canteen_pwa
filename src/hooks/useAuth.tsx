@@ -2,7 +2,7 @@
 /* eslint-disable no-console */
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { User, AuthChangeEvent } from '@supabase/supabase-js';
-import { supabase } from '../services/supabaseClient';
+import { supabase, SUPABASE_URL } from '../services/supabaseClient';
 import {
   updateCachedSession,
   clearCachedSession,
@@ -50,6 +50,24 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // ─── Configuration ──────────────────────────────────────────────────
 const AUTH_TIMEOUT_MS = 5000; // Max time to wait for initial auth
 const VISIBILITY_REFRESH_DELAY_MS = 500; // Debounce visibility change refresh
+
+// ─── Service Worker Auth Sync ───────────────────────────────────────
+// Sends the current auth token & Supabase URL to the service worker
+// so background sync can authenticate when the app is closed.
+function syncAuthToServiceWorker(token: string | null): void {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  try {
+    if (token) {
+      navigator.serviceWorker.controller.postMessage({ type: 'STORE_AUTH_TOKEN', token });
+      navigator.serviceWorker.controller.postMessage({ type: 'STORE_SUPABASE_URL', url: SUPABASE_URL });
+    } else {
+      // Clear token on sign-out so SW doesn't use stale credentials
+      navigator.serviceWorker.controller.postMessage({ type: 'STORE_AUTH_TOKEN', token: '' });
+    }
+  } catch {
+    // SW may not be ready yet — non-critical
+  }
+}
 
 // ─── Provider (mount ONCE near the root) ────────────────────────────
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
@@ -176,6 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
           // Update centralized cache
           updateCachedSession(session);
           
+          // Sync auth token to service worker for background sync
+          syncAuthToServiceWorker(session.access_token);
+          
           // Use session user IMMEDIATELY so loading finishes fast
           updateUser(session.user);
           finishLoading();
@@ -229,6 +250,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       updateCachedSession(session);
       
       if (session?.user) {
+        // Sync auth token to service worker for background sync
+        syncAuthToServiceWorker(session.access_token);
+        
         // Set session user immediately
         updateUser(session.user);
         setError(null);
@@ -280,6 +304,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       
       // Clear caches before sign out
       clearCachedSession();
+      
+      // Clear SW auth token
+      syncAuthToServiceWorker(null);
       
       await supabase.auth.signOut();
       

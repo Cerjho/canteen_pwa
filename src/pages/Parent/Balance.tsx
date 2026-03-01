@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, RefreshCw, TrendingUp, Loader2 } from 'lucide-react';
@@ -114,22 +114,33 @@ export default function Balance() {
     enabled: !!user
   });
 
-  const { data: transactions, isLoading: loadingTx, isError: txError } = useQuery<PaymentRecord[]>({
+  const PAYMENT_PAGE_SIZE = 30;
+
+  const { data: txData, isLoading: loadingTx, isError: txError, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery<PaymentRecord[]>({
     queryKey: ['payments', user?.id],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
       if (!user) throw new Error('User not authenticated');
+      const page = pageParam as number;
+      const from = page * PAYMENT_PAGE_SIZE;
+      const to = from + PAYMENT_PAGE_SIZE - 1;
       const { data, error } = await supabase
         .from('payments')
-        .select('*')
+        .select('id, parent_id, type, method, amount_total, status, reference_id, created_at')
         .eq('parent_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .range(from, to);
       
       if (error) throw error;
       return data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.length === PAYMENT_PAGE_SIZE ? allPages.length : undefined;
+    },
     enabled: !!user
   });
+
+  const transactions = txData?.pages.flat() ?? [];
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
@@ -286,6 +297,19 @@ export default function Balance() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Load more */}
+          {hasNextPage && (
+            <div className="p-4 text-center border-t border-gray-100 dark:border-gray-700">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg disabled:opacity-50"
+              >
+                {isFetchingNextPage ? 'Loading…' : 'Load more'}
+              </button>
             </div>
           )}
         </div>

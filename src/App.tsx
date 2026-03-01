@@ -1,24 +1,27 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { User } from '@supabase/supabase-js';
 import { useAuth, useRoleChangeRedirect, UserRole } from './hooks/useAuth';
 import { useSystemSettings } from './hooks/useSystemSettings';
 import { clearAuthStorage } from './services/authSession';
+
+// Lazy-loaded page bundles — split by role for optimal chunking
 // Parent pages
-import ParentMenu from './pages/Parent/Menu';
-import ParentDashboard from './pages/Parent/Dashboard';
-import ParentProfile from './pages/Parent/Profile';
-import ParentBalance from './pages/Parent/Balance';
-import ParentOrderHistory from './pages/Parent/OrderHistory';
-import ParentOrderConfirmation from './pages/Parent/OrderConfirmation';
+const ParentMenu = lazy(() => import('./pages/Parent/Menu'));
+const ParentDashboard = lazy(() => import('./pages/Parent/Dashboard'));
+const ParentProfile = lazy(() => import('./pages/Parent/Profile'));
+const ParentBalance = lazy(() => import('./pages/Parent/Balance'));
+const ParentOrderHistory = lazy(() => import('./pages/Parent/OrderHistory'));
+const ParentOrderConfirmation = lazy(() => import('./pages/Parent/OrderConfirmation'));
 // Staff pages
-import StaffDashboard from './pages/Staff/Dashboard';
-import StaffProducts from './pages/Staff/Products';
-import StaffProfile from './pages/Staff/Profile';
+const StaffDashboard = lazy(() => import('./pages/Staff/Dashboard'));
+const StaffProducts = lazy(() => import('./pages/Staff/Products'));
+const StaffProfile = lazy(() => import('./pages/Staff/Profile'));
 // Auth pages
-import Login from './pages/Login';
-import Register from './pages/Register';
-// Shared components
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+
+// Shared components (small — kept eager)
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { BottomNav } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -26,17 +29,17 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { MaintenancePage } from './components/MaintenancePage';
 
 // Admin pages
-import AdminLayout from './pages/Admin/Layout';
-import AdminDashboard from './pages/Admin/Dashboard';
-import AdminProducts from './pages/Admin/Products';
-import AdminOrders from './pages/Admin/Orders';
-import AdminUsers from './pages/Admin/Users';
-import AdminReports from './pages/Admin/Reports';
-import AdminWeeklyMenu from './pages/Admin/WeeklyMenu';
-import AdminStudents from './pages/Admin/Students';
-import AdminProfile from './pages/Admin/Profile';
-import AdminSettings from './pages/Admin/Settings';
-import AdminAuditLogs from './pages/Admin/AuditLogs';
+const AdminLayout = lazy(() => import('./pages/Admin/Layout'));
+const AdminDashboard = lazy(() => import('./pages/Admin/Dashboard'));
+const AdminProducts = lazy(() => import('./pages/Admin/Products'));
+const AdminOrders = lazy(() => import('./pages/Admin/Orders'));
+const AdminUsers = lazy(() => import('./pages/Admin/Users'));
+const AdminReports = lazy(() => import('./pages/Admin/Reports'));
+const AdminWeeklyMenu = lazy(() => import('./pages/Admin/WeeklyMenu'));
+const AdminStudents = lazy(() => import('./pages/Admin/Students'));
+const AdminProfile = lazy(() => import('./pages/Admin/Profile'));
+const AdminSettings = lazy(() => import('./pages/Admin/Settings'));
+const AdminAuditLogs = lazy(() => import('./pages/Admin/AuditLogs'));
 
 // Role-based route protection component
 function RoleRoute({ 
@@ -142,6 +145,7 @@ function App() {
     <>
       <OfflineIndicator />
       <InstallPrompt />
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>}>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={!user ? <Login /> : <Navigate to={getDefaultRoute(userRole)} />} />
@@ -220,6 +224,7 @@ function App() {
         {/* 404 fallback */}
         <Route path="*" element={<Navigate to={user ? getDefaultRoute(userRole) : "/login"} />} />
       </Routes>
+      </Suspense>
       
       {/* Bottom Navigation - only show when logged in and not on admin routes */}
       {user && !isAdminRoute && <BottomNav />}

@@ -1529,9 +1529,12 @@ CREATE POLICY "Admins can manage invitations"
   USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 DROP POLICY IF EXISTS "Anyone can read invitation by code" ON invitations;
-CREATE POLICY "Anyone can read invitation by code"
+DROP POLICY IF EXISTS "Admin can read invitations" ON invitations;
+CREATE POLICY "Admin can read invitations"
   ON invitations FOR SELECT
-  USING (true);
+  USING (
+    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
 
 -- ─── menu_schedules ─────────────────────────
 
@@ -1659,9 +1662,12 @@ CREATE POLICY "Admins can view audit logs"
   USING (is_admin());
 
 DROP POLICY IF EXISTS "System can insert audit logs" ON audit_logs;
-CREATE POLICY "System can insert audit logs"
+DROP POLICY IF EXISTS "Staff and admin can insert audit logs" ON audit_logs;
+CREATE POLICY "Staff and admin can insert audit logs"
   ON audit_logs FOR INSERT
-  WITH CHECK (TRUE);
+  WITH CHECK (
+    (auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'staff')
+  );
 
 -- ─── cart_items ──────────────────────────────
 

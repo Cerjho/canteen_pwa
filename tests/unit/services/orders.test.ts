@@ -114,7 +114,7 @@ describe('Orders Service', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null })
+      range: vi.fn().mockResolvedValue({ data: [], error: null })
     };
 
     beforeEach(() => {
@@ -122,7 +122,7 @@ describe('Orders Service', () => {
     });
 
     it('queries orders table', async () => {
-      mockQueryBuilder.limit.mockResolvedValue({ data: [], error: null });
+      mockQueryBuilder.range.mockResolvedValue({ data: [], error: null });
 
       await getOrderHistory('parent-123');
 
@@ -130,7 +130,7 @@ describe('Orders Service', () => {
     });
 
     it('selects order with related data', async () => {
-      mockQueryBuilder.limit.mockResolvedValue({ data: [], error: null });
+      mockQueryBuilder.range.mockResolvedValue({ data: [], error: null });
 
       await getOrderHistory('parent-123');
 
@@ -139,7 +139,7 @@ describe('Orders Service', () => {
     });
 
     it('filters by parent_id', async () => {
-      mockQueryBuilder.limit.mockResolvedValue({ data: [], error: null });
+      mockQueryBuilder.range.mockResolvedValue({ data: [], error: null });
 
       await getOrderHistory('parent-123');
 
@@ -147,19 +147,27 @@ describe('Orders Service', () => {
     });
 
     it('orders by created_at descending', async () => {
-      mockQueryBuilder.limit.mockResolvedValue({ data: [], error: null });
+      mockQueryBuilder.range.mockResolvedValue({ data: [], error: null });
 
       await getOrderHistory('parent-123');
 
       expect(mockQueryBuilder.order).toHaveBeenCalledWith('created_at', { ascending: false });
     });
 
-    it('limits results to 50', async () => {
-      mockQueryBuilder.limit.mockResolvedValue({ data: [], error: null });
+    it('paginates results with range(0, 19) by default', async () => {
+      mockQueryBuilder.range.mockResolvedValue({ data: [], error: null });
 
       await getOrderHistory('parent-123');
 
-      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(50);
+      expect(mockQueryBuilder.range).toHaveBeenCalledWith(0, 19);
+    });
+
+    it('paginates with correct offset for page 1', async () => {
+      mockQueryBuilder.range.mockResolvedValue({ data: [], error: null });
+
+      await getOrderHistory('parent-123', 1);
+
+      expect(mockQueryBuilder.range).toHaveBeenCalledWith(20, 39);
     });
 
     it('returns order data', async () => {
@@ -171,7 +179,7 @@ describe('Orders Service', () => {
           items: []
         }
       ];
-      mockQueryBuilder.limit.mockResolvedValue({ data: mockOrders, error: null });
+      mockQueryBuilder.range.mockResolvedValue({ data: mockOrders, error: null });
 
       const result = await getOrderHistory('parent-123');
 
@@ -179,7 +187,7 @@ describe('Orders Service', () => {
     });
 
     it('throws error on failure', async () => {
-      mockQueryBuilder.limit.mockResolvedValue({ data: null, error: { message: 'Database error' } });
+      mockQueryBuilder.range.mockResolvedValue({ data: null, error: { message: 'Database error' } });
 
       await expect(getOrderHistory('parent-123')).rejects.toEqual({ message: 'Database error' });
     });

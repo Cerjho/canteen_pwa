@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { 
   History, 
@@ -49,15 +49,21 @@ export default function AdminAuditLogs() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  // Fetch audit logs
-  const { data: logs, isLoading, refetch } = useQuery<AuditLog[]>({
+  const PAGE_SIZE = 50;
+
+  // Fetch audit logs with pagination
+  const { data, isLoading, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery<AuditLog[]>({
     queryKey: ['audit-logs', entityFilter, actionFilter],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
+      const page = pageParam as number;
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       let query = supabase
         .from('audit_logs')
-        .select('*')
+        .select('id, user_id, action, entity_type, entity_id, old_data, new_data, created_at')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .range(from, to);
 
       if (entityFilter !== 'all') {
         query = query.eq('entity_type', entityFilter);
@@ -69,13 +75,17 @@ export default function AdminAuditLogs() {
       const { data, error } = await query;
       
       if (error) {
-        // Table might not exist yet
-        // Audit logs table might not exist yet - silently handle
         return [];
       }
       return data || [];
-    }
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
+    },
   });
+
+  const logs = data?.pages.flat() ?? [];
 
   // Filter by search
   const filteredLogs = logs?.filter(log => {
@@ -235,6 +245,19 @@ export default function AdminAuditLogs() {
                   ? 'Audit logging will track changes once the feature is enabled'
                   : 'Try adjusting your filters'}
               </p>
+            </div>
+          )}
+
+          {/* Load more */}
+          {hasNextPage && (
+            <div className="p-4 text-center border-t border-gray-100 dark:border-gray-700">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg disabled:opacity-50"
+              >
+                {isFetchingNextPage ? 'Loading…' : 'Load more'}
+              </button>
             </div>
           )}
         </div>

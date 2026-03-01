@@ -10,6 +10,7 @@
 ## Executive Summary
 
 | Dimension | Score | Notes |
+
 |---|---|---|
 | **Security** | **8/10** | RLS on all 21 tables, `app_metadata` roles, zero client-side service key exposure. Two overly permissive RLS policies (invitations, audit logs) reduce the score. |
 | **Offline Reliability** | **7/10** | Solid IndexedDB queue + background sync + foreground retry. However, the SW background sync is non-functional (auth token never sent to SW), and there's no offline page fallback. |
@@ -24,6 +25,7 @@
 ## Critical Findings (🔴 Fix Before Launch)
 
 | # | Severity | Area | Location | Issue | Fix |
+
 |---|---|---|---|---|---|
 | 1 | 🔴 | Offline | [src/pwa/service-worker.ts#L386-L396](src/pwa/service-worker.ts#L386-L396) | SW expects `STORE_AUTH_TOKEN` message to authenticate background sync, but **no app code ever sends it**. Background sync silently skips all queued orders when the app is closed. | In [src/hooks/useAuth.tsx](src/hooks/useAuth.tsx), post `STORE_AUTH_TOKEN` and `STORE_SUPABASE_URL` messages to the SW whenever the session changes. |
 | 2 | 🔴 | Performance | [src/App.tsx#L1-L42](src/App.tsx#L1-L42) | **Zero `React.lazy` usage** — all ~40 page/component imports are static. Admin, Staff, and Parent bundles all load on first paint regardless of user role. | Lazy-load all route-level pages with `React.lazy()` + `<Suspense>`. Group by role for maximum impact. |
@@ -35,6 +37,7 @@
 ## High Priority (🟠 Fix in Next Sprint)
 
 | # | Severity | Area | Location | Issue | Fix |
+
 |---|---|---|---|---|---|
 | 5 | 🟠 | Security | [supabase/consolidated_schema.sql#L1712](supabase/consolidated_schema.sql#L1712) | Audit logs INSERT policy is `WITH CHECK (TRUE)` — any authenticated user can insert arbitrary audit log entries, poisoning the audit trail. | Restrict to `WITH CHECK (is_staff_or_admin())` or remove client INSERT and log exclusively from edge functions. |
 | 6 | 🟠 | Offline | [src/pwa/service-worker.ts](src/pwa/service-worker.ts) | No offline page fallback. If a user navigates to an uncached route while offline, they see the browser's default "no internet" page instead of a branded offline screen. | Add a `setCatchHandler` in Workbox to serve a precached `offline.html` for navigation requests. |
@@ -146,6 +149,7 @@
 All 21 tables have RLS enabled ([consolidated_schema.sql#L1300-L1316](supabase/consolidated_schema.sql#L1300-L1316)):
 
 | Table | RLS Policies | Assessment |
+
 |---|---|---|
 | `user_profiles` | Own + staff/admin SELECT; Own INSERT; Own + admin UPDATE | ✅ Good |
 | `wallets` | Own + staff/admin SELECT; Own INSERT; Own + admin UPDATE | ✅ Good |
@@ -178,6 +182,7 @@ All 21 tables have RLS enabled ([consolidated_schema.sql#L1300-L1316](supabase/c
 #### Edge Function Authentication (✅ Excellent)
 
 All 29 edge functions follow the same pattern:
+
 1. Extract Bearer token from `Authorization` header
 2. Create admin client with `SUPABASE_SERVICE_ROLE_KEY` (server-side only)
 3. Validate token via `supabaseAdmin.auth.getUser(token)`
@@ -200,6 +205,7 @@ All 29 edge functions follow the same pattern:
 #### Manifest (✅ Complete)
 
 [public/manifest.webmanifest](public/manifest.webmanifest) includes all required fields:
+
 - `name`, `short_name`, `description`
 - `start_url: "/"`, `scope: "/"`
 - `display: "standalone"`
@@ -209,6 +215,7 @@ All 29 edge functions follow the same pattern:
 - `categories: ["food", "education"]`
 
 **Missing (non-critical):**
+
 - No `screenshots` array (Richer Install UI on Android)
 - No `id` field (recommended for stable identity)
 - No `display_override`
@@ -219,30 +226,35 @@ All 29 edge functions follow the same pattern:
 [src/pwa/service-worker.ts](src/pwa/service-worker.ts) (400 lines):
 
 **Caching strategies:**
+
 - **Precache**: All Vite build assets via `self.__WB_MANIFEST`
 - **NetworkFirst**: Supabase API (excluding `/functions/` and `/auth/`), 5s timeout, 50 entries, 5-min TTL
 - **StaleWhileRevalidate**: Products/menu data, 100 entries, 1-hour TTL
 - **CacheFirst**: Images (30 days), Google Fonts (1 year)
 
 **Background Sync** ([src/pwa/service-worker.ts#L83-L120](src/pwa/service-worker.ts#L83-L120)):
+
 - Listens for `sync-orders` event
 - Opens IndexedDB `canteen-offline` v2, store `order-queue`
 - Iterates queued orders, calls `process-order` Edge Function
 - **Critical issue:** Auth token never populated (see Critical Finding #1)
 
 **Lifecycle:**
+
 - `install`: `skipWaiting()` immediately
 - `activate`: Deletes old caches, `clients.claim()`, sends `SW_UPDATED` to all clients
 
 #### Install Prompt (✅ Good)
 
 [src/components/InstallPrompt.tsx](src/components/InstallPrompt.tsx):
+
 - Captures `beforeinstallprompt` from pre-React in [index.html#L12-L15](index.html#L12-L15)
 - iOS detection with "Add to Home Screen" instructions
 - Standalone detection via media query + `navigator.standalone`
 - 24-hour dismissal cooldown
 
 **Missing:**
+
 - No A2HS analytics tracking
 - No iOS PWA meta tags in `<head>`
 
@@ -257,6 +269,7 @@ All 29 edge functions follow the same pattern:
 **Storage:** IndexedDB (`idb`), database `canteen-offline` v2, store `order-queue`
 
 **Key features:**
+
 - Exponential backoff with jitter (1s base, 30s max)
 - Max 5 retries before moving to failed queue (localStorage)
 - Concurrency guard (`isProcessing` flag)
@@ -275,20 +288,24 @@ All 29 edge functions follow the same pattern:
 #### Realtime Subscriptions (✅ Well-Scoped)
 
 **Parent:** [src/hooks/useOrderSubscription.ts](src/hooks/useOrderSubscription.ts)
+
 - Channel: `order-updates-${userId}`
 - Filter: `parent_id=eq.${userId}`
 - Event: `UPDATE` only on `orders` table
 
 **Staff:** [src/pages/Staff/Dashboard.tsx#L641-L662](src/pages/Staff/Dashboard.tsx#L641-L662)
+
 - Channel: `staff-orders`
 - Events: `INSERT` + `UPDATE` on `orders`
 
 **Admin:** [src/pages/Admin/Dashboard.tsx#L716-L805](src/pages/Admin/Dashboard.tsx#L716-L805)
+
 - Channel: `admin-dashboard-realtime`
 - Events: `INSERT`/`UPDATE` on `orders`, `*` on `products`, `INSERT` on `user_profiles`
 - Tracks realtime health: `healthy` / `degraded` / `down`
 
 **Good practices:**
+
 - Clean `useRef` pattern avoids re-subscriptions
 - Cleanup on unmount
 - Tight filtering (not subscribing to entire tables)
@@ -302,6 +319,7 @@ All 29 edge functions follow the same pattern:
 **Status enum:** `'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment'`
 
 **Valid transitions** ([supabase/functions/manage-order/index.ts#L43-L50](supabase/functions/manage-order/index.ts#L43-L50)):
+
 - `awaiting_payment` → `cancelled`
 - `pending` → `preparing`, `cancelled`
 - `preparing` → `ready`, `cancelled`
@@ -325,6 +343,7 @@ All 29 edge functions follow the same pattern:
 9. **Order insert** (L700-L730): Sets status based on payment method
 
 **Batch order:** [supabase/functions/process-batch-order/index.ts](supabase/functions/process-batch-order/index.ts)
+
 - Single `Promise.all` for auth, settings, holidays, products, student links (L144-L155)
 - Aggregated stock reservation
 - Batch inserts
@@ -336,16 +355,19 @@ All 29 edge functions follow the same pattern:
 **Payment methods:** `'cash' | 'balance' | 'gcash' | 'paymaya' | 'card'`
 
 **Cash flow:**
+
 1. Order created with `status='awaiting_payment'`, `payment_due_at` = NOW + 4 hours
 2. Staff confirms via [confirm-cash-payment](supabase/functions/confirm-cash-payment/index.ts)
 3. Optimistic lock: `.eq('payment_status', 'awaiting_payment')` → prevents double-confirm
 
 **Balance flow:**
+
 1. `deduct_balance_with_payment` RPC with CAS on `balance = p_expected_balance`
 2. Atomically: deduct wallet + create payment + create allocations
 3. `CHECK (balance >= 0)` prevents negative balances
 
 **Online flow:**
+
 1. `createCheckout` → PayMongo checkout session
 2. User redirects to PayMongo
 3. PayMongo webhook → [paymongo-webhook](supabase/functions/paymongo-webhook/index.ts)
@@ -353,6 +375,7 @@ All 29 edge functions follow the same pattern:
 5. Frontend polls [check-payment-status](supabase/functions/check-payment-status/index.ts) with self-healing
 
 **Idempotency measures:**
+
 - Order creation: `client_order_id` UNIQUE
 - Cash confirmation: Optimistic lock on `payment_status`
 - Webhook: Checks `order.payment_status === 'paid'` before processing
@@ -368,6 +391,7 @@ All 29 edge functions follow the same pattern:
 - `CHECK (stock_quantity >= 0)` constraint
 
 **Protocol:**
+
 - Order creation: `decrement_stock` per item, with rollback tracking
 - Cancel/refund/timeout: `increment_stock` per item (failures logged but don't block)
 
@@ -389,6 +413,7 @@ All 29 edge functions follow the same pattern:
 **`select('*')` — 15+ occurrences:**
 
 | File | Line | Table |
+
 |---|---|---|
 | [src/services/products.ts](src/services/products.ts) | L317, L335, L345, L357 | products, menu_schedules, holidays |
 | [src/pages/Admin/WeeklyMenu.tsx](src/pages/Admin/WeeklyMenu.tsx) | L148, L192, L205 | menu_schedules |
@@ -429,6 +454,7 @@ All 29 edge functions follow the same pattern:
 #### RPC Functions (✅ Well-Designed)
 
 | RPC | Concurrency Safety |
+
 |---|---|
 | `decrement_stock` | `SELECT ... FOR UPDATE` row lock |
 | `increment_stock` | Simple atomic add |
@@ -443,14 +469,17 @@ All 29 edge functions follow the same pattern:
 **Bucket:** `product-images`, public
 
 **Upload validation** ([src/services/storage.ts#L14-L26](src/services/storage.ts#L14-L26)):
+
 - MIME type whitelist: JPEG, PNG, WebP, GIF
 - Max size: 5MB
 - Filename sanitization: UUIDs used
 
 **Delete protection** ([src/services/storage.ts#L64-L73](src/services/storage.ts#L64-L73)):
+
 - Path traversal prevention: Only allows `products/` prefix, blocks `..`
 
 **Missing:**
+
 - **No storage RLS policies** — Bucket setup commented out in migration ([supabase/migrations/20260105_admin_enhancements.sql#L230-L233](supabase/migrations/20260105_admin_enhancements.sql#L230-L233))
 - **No orphan cleanup** — Images not deleted when products are deleted
 
@@ -461,6 +490,7 @@ All 29 edge functions follow the same pattern:
 #### Environment Variables (✅ Secure)
 
 **Frontend:**
+
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_VAPID_PUBLIC_KEY`
@@ -478,6 +508,7 @@ All 29 edge functions follow the same pattern:
 1. `lint` → 2. `test-unit` → 3. `test-e2e` → 4. `build` → 5. `deploy-vercel` + 6. `deploy-functions` + `migrate`
 
 **Features:**
+
 - Node 18, npm ci with cache
 - Codecov coverage upload
 - Playwright (Chromium only for CI)
@@ -497,6 +528,7 @@ All 29 edge functions follow the same pattern:
 #### Unit Tests (✅ Excellent — 56 files)
 
 **Coverage areas:**
+
 - **Components:** 16 files (CartBottomSheet, ConfirmDialog, EditProfileModal, etc.)
 - **Hooks:** 8 files (useAuth, useCart, useOrders, useProducts, etc.)
 - **Services:** 12 files (orders, payments, localQueue, products, etc.)
@@ -504,6 +536,7 @@ All 29 edge functions follow the same pattern:
 - **Specialized:** `balanceConcurrency.test.ts`, `indexedDBRace.test.ts`, `cashPaymentFlow.test.ts`
 
 **Test infrastructure:**
+
 - [tests/setup.ts](tests/setup.ts): 106 lines of mocks (matchMedia, IntersectionObserver, crypto, etc.)
 - [tests/mocks/supabase.ts](tests/mocks/supabase.ts): Full Supabase client mock
 - [tests/mocks/data.ts](tests/mocks/data.ts): 365 lines of realistic Filipino canteen data
@@ -522,6 +555,7 @@ All 29 edge functions follow the same pattern:
 ## Files Reviewed
 
 ### Frontend (`src/`)
+
 - `App.tsx`, `main.tsx`, `index.css`
 - `hooks/`: useAuth.tsx, useCart.ts, useOrders.ts, useProducts.ts, useStudents.ts, useOrderSubscription.ts
 - `services/`: supabaseClient.ts, authSession.ts, orders.ts, payments.ts, products.ts, students.ts, storage.ts, localQueue.ts
@@ -532,23 +566,27 @@ All 29 edge functions follow the same pattern:
 - `pwa/`: service-worker.ts
 
 ### Backend (`supabase/`)
+
 - `consolidated_schema.sql`
 - `config.toml`
 - `migrations/`: 42 migration files
 - `functions/`: 29 edge functions
 
 ### Config & Build
+
 - `vite.config.ts`, `tsconfig.json`, `package.json`
 - `tailwind.config.cjs`, `postcss.config.cjs`
 - `vercel.json`
 - `.gitignore`
 
 ### Testing
+
 - `tests/`: 56 unit test files
 - `e2e/`: 3 E2E test files
 - `tests/setup.ts`, `tests/mocks/`, `tests/utils/`
 
 ### Documentation
+
 - `docs/`: 23 markdown files (ARCHITECTURE.md, SECURITY.md, TESTING.md, DEPLOYMENT.md, etc.)
 
 ---
@@ -556,12 +594,14 @@ All 29 edge functions follow the same pattern:
 ## Implementation Roadmap
 
 ### Sprint 1 (Critical — 1 week)
+
 - [ ] Add `React.lazy` code splitting for all route-level pages
 - [ ] Wire auth token to service worker (`postMessage` in `useAuth`)
 - [ ] Fix invitations RLS policy (restrict SELECT)
 - [ ] Add pagination to order history, audit logs, user lists
 
 ### Sprint 2 (High Priority — 2 weeks)
+
 - [ ] Fix audit logs RLS policy
 - [ ] Add offline page fallback
 - [ ] Fix order merge race condition (add locking)
@@ -572,6 +612,7 @@ All 29 edge functions follow the same pattern:
 - [ ] Un-skip E2E tests (create auth setup)
 
 ### Sprint 3 (Medium — 3 weeks)
+
 - [ ] Add iOS PWA meta tags and splash screens
 - [ ] Remove dead push notification code
 - [ ] Add storage bucket RLS policies via migration
@@ -582,6 +623,7 @@ All 29 edge functions follow the same pattern:
 - [ ] Improve wallet credit retry logic
 
 ### Backlog
+
 - [ ] Add manifest screenshots
 - [ ] Add display_override
 - [ ] Add stale-data warning for long offline periods

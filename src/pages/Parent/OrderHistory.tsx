@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { Package, Clock, ChefHat, CheckCircle, XCircle, AlertCircle, RefreshCw, CreditCard, Calendar, Timer } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { getOrderHistory } from '../../services/orders';
+import { getOrderHistory, ORDER_PAGE_SIZE } from '../../services/orders';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
@@ -13,15 +13,21 @@ import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 export default function OrderHistory() {
   const { user } = useAuth();
   
-  const { data: orders, isLoading, isError, error, refetch } = useQuery<OrderWithDetails[]>({
+  const { data, isLoading, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery<OrderWithDetails[]>({
     queryKey: ['order-history', user?.id],
-    queryFn: () => {
+    queryFn: ({ pageParam }) => {
       if (!user) throw new Error('User not authenticated');
-      return getOrderHistory(user.id);
+      return getOrderHistory(user.id, pageParam as number);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.length === ORDER_PAGE_SIZE ? allPages.length : undefined;
     },
     enabled: !!user,
     retry: 2
   });
+
+  const orders = data?.pages.flat() ?? [];
 
   const getStatusDetails = (status: string) => {
     switch (status) {
@@ -442,6 +448,19 @@ export default function OrderHistory() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Load more */}
+        {hasNextPage && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="px-6 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            >
+              {isFetchingNextPage ? 'Loading…' : 'Load older orders'}
+            </button>
           </div>
         )}
       </div>

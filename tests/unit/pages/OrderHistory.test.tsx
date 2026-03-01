@@ -11,7 +11,8 @@ vi.mock('../../../src/hooks/useAuth', () => ({
 }));
 
 vi.mock('../../../src/services/orders', () => ({
-  getOrderHistory: vi.fn()
+  getOrderHistory: vi.fn(),
+  ORDER_PAGE_SIZE: 20
 }));
 
 import { useAuth } from '../../../src/hooks/useAuth';
