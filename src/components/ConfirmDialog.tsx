@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -23,6 +23,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   // Handle Escape key to dismiss dialog
   useEffect(() => {
     if (!isOpen) return;
@@ -34,6 +36,31 @@ export function ConfirmDialog({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onCancel]);
+
+  // Auto-focus and trap focus within dialog
+  useEffect(() => {
+    if (!isOpen || !dialogRef.current) return;
+    const dialog = dialogRef.current;
+    const buttons = dialog.querySelectorAll<HTMLButtonElement>('button');
+    if (buttons.length > 0) buttons[0].focus();
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusable = dialog.querySelectorAll<HTMLElement>('button, [tabindex]');
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -63,7 +90,11 @@ export function ConfirmDialog({
         className="fixed inset-0 z-[60] flex items-center justify-center p-4"
         onClick={onCancel}
       >
-        <div 
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-dialog-title"
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full animate-slide-up"
           onClick={(e) => e.stopPropagation()}
         >
@@ -71,7 +102,7 @@ export function ConfirmDialog({
             <div className={`inline-flex p-4 rounded-full ${bg} mb-4`}>
               <Icon size={32} className={color} />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
+            <h3 id="confirm-dialog-title" className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
             <div className="text-gray-600 dark:text-gray-400 mb-6">{message}</div>
             
             <div className="flex gap-3">
@@ -96,7 +127,7 @@ export function ConfirmDialog({
 }
 
 // Hook for easier usage
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 interface UseConfirmOptions {
   title: string;
