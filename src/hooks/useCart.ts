@@ -119,6 +119,7 @@ export function useCart() {
   const notesRef = useRef(notes);
   const paymentMethodRef = useRef(paymentMethod);
   const checkoutInProgressRef = useRef(false);
+  const navigatingRef = useRef(false);
   
   // Keep refs in sync
   useEffect(() => {
@@ -862,6 +863,7 @@ export function useCart() {
 
         // Redirect to PayMongo checkout page
         if (batchResult.checkout_url) {
+          navigatingRef.current = true;
           window.location.href = batchResult.checkout_url;
         }
         return {
@@ -955,7 +957,9 @@ export function useCart() {
       throw err;
     } finally {
       checkoutInProgressRef.current = false;
-      setIsLoading(false);
+      if (!navigatingRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [user]);
 
