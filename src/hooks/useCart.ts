@@ -828,7 +828,7 @@ export function useCart() {
           parent_id: user.id,
           orders: batchOrders,
           payment_method: effectiveMethod as 'gcash' | 'paymaya' | 'card',
-          notes: orderNotes || currentNotes,
+          notes: orderNotes ?? currentNotes,
         });
 
         // Clear all cart items before redirect
@@ -906,7 +906,7 @@ export function useCart() {
         parent_id: user.id,
         orders: batchOrders,
         payment_method: effectiveMethod as 'cash' | 'balance',
-        notes: orderNotes || currentNotes,
+        notes: orderNotes ?? currentNotes,
       });
 
       // Notify parent if items were merged into existing orders

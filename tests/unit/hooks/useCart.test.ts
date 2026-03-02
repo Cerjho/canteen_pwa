@@ -535,4 +535,35 @@ describe('useCart Hook', () => {
       });
     });
   });
+
+  describe('BUG-020: Notes Handling', () => {
+    it('empty string notes should not fall back to stale notes', async () => {
+      const { result } = await renderCartHook();
+
+      // Set hook-level notes to simulate stale notes from a previous session
+      act(() => {
+        result.current.setNotes('Old stale notes');
+      });
+
+      await act(async () => {
+        await result.current.addItem(mockProduct);
+      });
+
+      await waitFor(() => {
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      // Checkout with explicit empty string — should NOT fall back to 'Old stale notes'
+      await act(async () => {
+        await result.current.checkout('cash', '');
+      });
+
+      // The batch order should have been called with empty string notes, NOT 'Old stale notes'
+      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notes: ''
+        })
+      );
+    });
+  });
 });
