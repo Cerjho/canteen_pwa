@@ -71,7 +71,7 @@ export function ProductCard({
       )}
 
       {/* Details: compact row on mobile, padded block on sm+ */}
-      <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col justify-between">
+      <div className="flex-1 min-w-0 min-h-24 sm:min-h-0 p-3 sm:p-4 flex flex-col justify-between">
         <div>
           <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-gray-100 line-clamp-1">{name}</h3>
           <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm line-clamp-2">{description}</p>
