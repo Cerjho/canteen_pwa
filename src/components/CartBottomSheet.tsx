@@ -178,14 +178,6 @@ export function CartBottomSheet({
     });
   };
 
-  const selectAllDates = () => {
-    if (selectedDates.size === uniqueDates.length) {
-      setSelectedDates(new Set());
-    } else {
-      setSelectedDates(new Set(uniqueDates));
-    }
-  };
-
   const getNextValidDates = (excludeDate: string): string[] => {
     const dates: string[] = [];
     const start = parseISO(excludeDate);
@@ -360,14 +352,14 @@ export function CartBottomSheet({
                           ? `${selectedDates.size} selected`
                           : 'All selected'}
                       </span>
-                      <button
-                        onClick={selectAllDates}
-                        className="text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline"
-                      >
-                        {selectedDates.size === uniqueDates.length
-                          ? 'Deselect all'
-                          : 'Select all'}
-                      </button>
+                      {selectedDates.size > 0 && selectedDates.size < uniqueDates.length && (
+                        <button
+                          onClick={() => setSelectedDates(new Set())}
+                          className="text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline"
+                        >
+                          Show all
+                        </button>
+                      )}
                     </div>
                   )}
 
