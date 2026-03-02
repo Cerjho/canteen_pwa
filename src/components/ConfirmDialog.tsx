@@ -127,6 +127,11 @@ export function useConfirm() {
   }, []);
 
   const confirm = useCallback((opts: UseConfirmOptions): Promise<boolean> => {
+    // Resolve any pending promise before replacing
+    if (resolveRef.current) {
+      resolveRef.current(false);
+      resolveRef.current = null;
+    }
     setOptions(opts);
     setIsOpen(true);
     
