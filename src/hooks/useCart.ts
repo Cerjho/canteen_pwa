@@ -215,6 +215,25 @@ export function useCart() {
     loadCart();
   }, [loadCart]);
 
+  // BUG-055: Cross-tab cart synchronization via BroadcastChannel
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel('cart-sync');
+    channel.onmessage = () => loadCart();
+    return () => channel.close();
+  }, [loadCart]);
+
+  const broadcastCartUpdate = useCallback(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    try {
+      const channel = new BroadcastChannel('cart-sync');
+      channel.postMessage('updated');
+      channel.close();
+    } catch {
+      // BroadcastChannel not supported or closed — ignore
+    }
+  }, []);
+
   // =====================================================
   // COMPUTED VALUES - GROUPINGS
   // =====================================================
@@ -415,6 +434,7 @@ export function useCart() {
           ignoreDuplicates: false
         });
       if (error) throw error;
+      broadcastCartUpdate();
     } catch (err) {
       console.error('Failed to save cart item:', err);
       // Revert optimistic update on error
@@ -422,7 +442,7 @@ export function useCart() {
       const message = err instanceof Error ? err.message : 'Failed to add item';
       setError(friendlyError(message, 'add this item'));
     }
-  }, [user, loadCart]);
+  }, [user, loadCart, broadcastCartUpdate]);
 
   // Update item quantity
   const updateQuantity = useCallback(async (
@@ -483,12 +503,13 @@ export function useCart() {
           .update({ quantity: clampedQty })
           .match(matchDb);
         if (error) throw error;
+        broadcastCartUpdate();
       } catch (err) {
         console.error('Failed to update cart item:', err);
         await loadCart();
       }
     }
-  }, [user, loadCart]);
+  }, [user, loadCart, broadcastCartUpdate]);
 
   // Clear entire cart
   const clearCart = useCallback(async () => {
@@ -503,11 +524,12 @@ export function useCart() {
           .from('cart_items')
           .delete()
           .eq('user_id', user.id);
+        broadcastCartUpdate();
       } catch (err) {
         console.error('Failed to clear cart:', err);
       }
     }
-  }, [user]);
+  }, [user, broadcastCartUpdate]);
 
   // Clear cart for a specific date
   const clearDate = useCallback(async (dateStr: string) => {
@@ -525,11 +547,12 @@ export function useCart() {
         .eq('user_id', user.id)
         .eq('scheduled_for', dateStr);
       if (error) throw error;
+      broadcastCartUpdate();
     } catch (err) {
       console.error('Failed to clear date:', err);
       await loadCart();
     }
-  }, [user, loadCart]);
+  }, [user, loadCart, broadcastCartUpdate]);
 
   // Clear cart for a specific student on a specific date
   const clearStudentOnDate = useCallback(async (studentId: string, dateStr: string) => {
@@ -552,11 +575,12 @@ export function useCart() {
           scheduled_for: dateStr
         });
       if (error) throw error;
+      broadcastCartUpdate();
     } catch (err) {
       console.error('Failed to clear student on date:', err);
       await loadCart();
     }
-  }, [user, loadCart]);
+  }, [user, loadCart, broadcastCartUpdate]);
 
   // Copy items from one date to another
   const copyDateItems = useCallback(async (fromDate: string, toDate: string) => {
@@ -635,13 +659,14 @@ export function useCart() {
           ignoreDuplicates: false,
         });
       if (error) throw error;
+      broadcastCartUpdate();
     } catch (err) {
       console.error('Failed to copy items:', err);
       await loadCart();
       const message = err instanceof Error ? err.message : 'Failed to copy items';
       setError(friendlyError(message, 'copy items'));
     }
-  }, [user, items, loadCart]);
+  }, [user, items, loadCart, broadcastCartUpdate]);
 
   // Copy student items from one date to another
   const copyStudentItems = useCallback(async (
@@ -723,11 +748,12 @@ export function useCart() {
           ignoreDuplicates: false,
         });
       if (error) throw error;
+      broadcastCartUpdate();
     } catch (err) {
       console.error('Failed to copy student items:', err);
       await loadCart();
     }
-  }, [user, items, loadCart]);
+  }, [user, items, loadCart, broadcastCartUpdate]);
 
   // =====================================================
   // CHECKOUT
@@ -935,6 +961,8 @@ export function useCart() {
         setPaymentMethod('cash');
       }
 
+      broadcastCartUpdate();
+
       return { 
         orders: results, 
         total: batchResult.total_amount,
@@ -953,7 +981,7 @@ export function useCart() {
         setIsLoading(false);
       }
     }
-  }, [user]);
+  }, [user, broadcastCartUpdate]);
 
   // Checkout only items for a specific date
   const checkoutDate = useCallback(async (
