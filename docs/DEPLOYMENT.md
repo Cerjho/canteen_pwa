@@ -76,7 +76,10 @@ In Vercel dashboard → Settings → Environment Variables:
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_VAPID_PUBLIC_KEY=your-vapid-key (optional)
+VITE_SENTRY_DSN=https://your-dsn@sentry.io/project-id
 ```
+
+**Note**: Apply each variable to Production, Preview, and Development environments.
 
 ### 2.3 Build Settings
 
@@ -114,6 +117,7 @@ In Netlify → Site settings → Environment variables:
 ```text
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SENTRY_DSN=https://your-dsn@sentry.io/project-id
 ```
 
 ### 3.4 Deploy
@@ -188,15 +192,36 @@ export default defineConfig({
 
 ## Step 8: Set Up Monitoring
 
+### Sentry Error Monitoring
+
+1. Go to [sentry.io](https://sentry.io) and create a project
+2. Choose **React** as the platform
+3. Copy your DSN from project settings
+4. Add `VITE_SENTRY_DSN` to Vercel/Netlify environment variables
+5. Redeploy your application
+
+**Access monitoring dashboard:**
+```
+https://sentry.io/organizations/your-org/issues/
+```
+
+**Key metrics to monitor:**
+- Error rate and types
+- Performance (page load times, API calls)
+- Session replays (captured on errors)
+- User impact and affected transactions
+
 ### Supabase Logging
 
 - Monitor Edge Function logs in Supabase Dashboard
 - Set up alerts for error rates
+- Check database performance metrics
 
 ### Vercel/Netlify Analytics
 
 - Enable Web Analytics in dashboard
 - Monitor build times and deployment status
+- Track visitor analytics and page views
 
 ### Error Tracking (Optional)
 
