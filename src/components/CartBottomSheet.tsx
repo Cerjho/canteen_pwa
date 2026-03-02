@@ -651,7 +651,8 @@ export function CartBottomSheet({
                                                 item.meal_period,
                                               )
                                             }
-                                            className="w-7 h-7 flex items-center justify-center bg-primary-100 dark:bg-primary-900/40 hover:bg-primary-200 dark:hover:bg-primary-900/60 rounded-lg transition-colors"
+                                            disabled={item.quantity >= 20}
+                                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${item.quantity >= 20 ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800' : 'bg-primary-100 dark:bg-primary-900/40 hover:bg-primary-200 dark:hover:bg-primary-900/60'}`}
                                             aria-label="Increase quantity"
                                           >
                                             <Plus size={14} className="text-primary-700 dark:text-primary-300" />
