@@ -56,11 +56,11 @@ export function ConfirmDialog({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-fade-in" />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] animate-fade-in" />
       
       {/* Dialog wrapper — click outside panel dismisses */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-[60] flex items-center justify-center p-4"
         onClick={onCancel}
       >
         <div 
