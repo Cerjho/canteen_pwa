@@ -20,7 +20,7 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
-  image_url: string;
+  image_url?: string;
   scheduled_for: string; // YYYY-MM-DD format
   meal_period: MealPeriod;
 }
@@ -192,7 +192,7 @@ export function useCart() {
             name: item.products.name,
             price: item.products.price,
             quantity: item.quantity,
-            image_url: item.products.image_url || '',
+            image_url: item.products.image_url || undefined,
             scheduled_for: item.scheduled_for,
             meal_period: item.meal_period || 'lunch'
           }));
