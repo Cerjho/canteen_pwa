@@ -395,8 +395,8 @@ describe('Menu Page', () => {
       renderMenu();
       
       await waitFor(() => {
-        // Should have date labels like "Today"
-        expect(screen.getByText(/today/i)).toBeInTheDocument();
+        // Should have "Today" label in date selector buttons
+        expect(screen.getByRole('button', { name: /today/i })).toBeInTheDocument();
       });
     });
 
@@ -405,8 +405,8 @@ describe('Menu Page', () => {
       renderMenu();
       
       await waitFor(() => {
-        // Should show today's date indicator
-        expect(screen.getByText(/today/i)).toBeInTheDocument();
+        // Should show today's date indicator in subtitle
+        expect(screen.getByText(/today's menu/i)).toBeInTheDocument();
       });
     });
   });

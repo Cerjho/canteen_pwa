@@ -11,7 +11,7 @@ import { StudentSelector } from '../../components/StudentSelector';
 import { CartBottomSheet } from '../../components/CartBottomSheet';
 import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
-import { ProductCardSkeleton } from '../../components/Skeleton';
+import { ProductCardSkeleton, Skeleton } from '../../components/Skeleton';
 import { WeeklyCartSummary } from '../../components/WeeklyCartSummary';
 import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
@@ -61,7 +61,7 @@ export default function Menu() {
     summary
   } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
-  const { data: students } = useStudents();
+  const { data: students, isLoading: studentsLoading } = useStudents();
 
   // Fetch parent wallet balance
   const { data: walletData } = useQuery({
@@ -289,8 +289,11 @@ export default function Menu() {
   }, [items, checkout, queryClient, navigate, showToast]);
 
   // Determine whether there are no linked students (only after data has loaded)
-  const studentsLoaded = students !== undefined;
+  const studentsLoaded = !studentsLoading && students !== undefined;
   const hasNoStudents = studentsLoaded && students.length === 0;
+
+  // Loading state for weekdays info
+  const weekdaysLoading = weekdaysInfo === undefined;
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
@@ -312,6 +315,37 @@ export default function Menu() {
       setSelectedDate(weekdaysInfo[currentIdx + 1].date);
     }
   }, [weekdaysInfo, effectiveDate]);
+
+  // Gate: initial data still loading — show skeleton to prevent flash of hidden content
+  if (!studentsLoaded || weekdaysLoading) {
+    return (
+      <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
+        <div className="container mx-auto px-4 py-6">
+          <PageHeader title="Menu" />
+          {/* Date selector skeleton */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-4">
+            <Skeleton className="h-4 w-24 mb-3" />
+            <div className="flex gap-1">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="flex-1 min-w-[60px] h-14 rounded-lg" />
+              ))}
+            </div>
+          </div>
+          {/* Student selector skeleton */}
+          <div className="mb-6">
+            <Skeleton className="h-4 w-20 mb-2" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+          </div>
+          {/* Product grid skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Gate: no students linked yet — show onboarding screen
   if (hasNoStudents) {
