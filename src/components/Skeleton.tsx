@@ -10,15 +10,14 @@ export function Skeleton({ className = '' }: SkeletonProps) {
 
 export function ProductCardSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-      <Skeleton className="w-full h-48" />
-      <div className="p-4">
-        <Skeleton className="h-5 w-3/4 mb-2" />
-        <Skeleton className="h-4 w-full mb-1" />
-        <Skeleton className="h-4 w-2/3 mb-4" />
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden flex sm:flex-col">
+      <Skeleton className="w-20 h-20 sm:w-full sm:h-36 flex-shrink-0" />
+      <div className="flex-1 min-w-0 p-3 sm:p-4">
+        <Skeleton className="h-4 sm:h-5 w-3/4 mb-1 sm:mb-2" />
+        <Skeleton className="h-3 sm:h-4 w-full mb-2 sm:mb-4" />
         <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-20" />
-          <Skeleton className="h-10 w-16 rounded-lg" />
+          <Skeleton className="h-6 sm:h-8 w-16 sm:w-20" />
+          <Skeleton className="h-8 sm:h-10 w-14 sm:w-16 rounded-lg" />
         </div>
       </div>
     </div>
