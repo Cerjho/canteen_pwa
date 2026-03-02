@@ -281,13 +281,10 @@ export default function Menu() {
       });
     } catch (error) {
       console.error('Checkout error:', error);
-      // Show the actual error from the backend instead of a generic message
       const msg = error instanceof Error
         ? friendlyError(error.message, 'place your order')
         : 'Something went wrong. Please try again.';
       showToastRef.current(msg, 'error');
-      // Re-throw so cart can also display inline error
-      throw error;
     }
   }, [items, checkout, queryClient, navigate]);
 
