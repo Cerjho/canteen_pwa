@@ -58,11 +58,15 @@ export function WeeklyCartSummary({
     });
   }, [items, weekdays]);
 
-  // Calculate totals
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
-  const totalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const uniqueDates = new Set(items.map(i => i.scheduled_for));
-  const uniqueStudents = new Set(items.map(i => i.student_id));
+  // Calculate totals only for items within visible weekdays
+  const visibleDateStrs = weekdays?.map(w => w.dateStr) || [];
+  const visibleItems = visibleDateStrs.length > 0
+    ? items.filter(i => visibleDateStrs.includes(i.scheduled_for))
+    : items;
+  const totalItems = visibleItems.reduce((sum, i) => sum + i.quantity, 0);
+  const totalAmount = visibleItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const uniqueDates = new Set(visibleItems.map(i => i.scheduled_for));
+  const uniqueStudents = new Set(visibleItems.map(i => i.student_id));
 
   if (totalItems === 0) {
     return null; // Don't show if cart is empty

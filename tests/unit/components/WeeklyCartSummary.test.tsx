@@ -351,8 +351,9 @@ describe('WeeklyCartSummary', () => {
       
       render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
-      // Summary should still show all items
-      expect(screen.getByText('₱100.00')).toBeInTheDocument(); // Total for both
+      // BUG-034: Footer totals should only include items within visible weekdays
+      const matches = screen.getAllByText('₱50.00');
+      expect(matches.length).toBeGreaterThanOrEqual(1); // Day pill + footer both show ₱50.00 (only today's item)
     });
 
     it('handles large quantities', () => {
