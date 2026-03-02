@@ -201,11 +201,13 @@ export default defineConfig({
 5. Redeploy your application
 
 **Access monitoring dashboard:**
-```
+
+```text
 https://sentry.io/organizations/your-org/issues/
 ```
 
 **Key metrics to monitor:**
+
 - Error rate and types
 - Performance (page load times, API calls)
 - Session replays (captured on errors)

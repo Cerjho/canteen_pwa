@@ -42,12 +42,14 @@ VITE_SENTRY_DSN=https://your-dsn@sentry.io/project-id
 ```
 
 **Sentry Setup (Optional):**
+
 1. Create a free account at [sentry.io](https://sentry.io)
 2. Create a new React project
 3. Copy your DSN and add to `.env`
 4. Restart dev server to enable error tracking
 
 ### Option B: Local Development with Supabase CLI
+
 ```bash
 # Initialize Supabase
 supabase init
