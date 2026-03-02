@@ -614,39 +614,33 @@ export function useCart() {
       return result;
     });
 
-    // Persist to database
+    // Persist to database — batch upsert to avoid partial failures
     try {
-      for (const item of itemsToCopy) {
-        const { data: existing } = await supabase
-          .from('cart_items')
-          .select('id, quantity')
-          .match({
-            user_id: user.id,
-            student_id: item.student_id,
-            product_id: item.product_id,
-            scheduled_for: toDate,
-            meal_period: item.meal_period
-          })
-          .maybeSingle();
+      const updatedItems = itemsRef.current;
+      const upsertRows = itemsToCopy.map(item => {
+        const matching = updatedItems.find(
+          i => i.product_id === item.product_id &&
+               i.student_id === item.student_id &&
+               i.scheduled_for === toDate &&
+               i.meal_period === item.meal_period
+        );
+        return {
+          user_id: user.id,
+          student_id: item.student_id,
+          product_id: item.product_id,
+          quantity: matching?.quantity ?? item.quantity,
+          scheduled_for: toDate,
+          meal_period: item.meal_period,
+        };
+      });
 
-        if (existing) {
-          await supabase
-            .from('cart_items')
-            .update({ quantity: existing.quantity + item.quantity })
-            .eq('id', existing.id);
-        } else {
-          await supabase
-            .from('cart_items')
-            .insert({
-              user_id: user.id,
-              student_id: item.student_id,
-              product_id: item.product_id,
-              quantity: item.quantity,
-              scheduled_for: toDate,
-              meal_period: item.meal_period
-            });
-        }
-      }
+      const { error } = await supabase
+        .from('cart_items')
+        .upsert(upsertRows, {
+          onConflict: 'user_id,student_id,product_id,scheduled_for,meal_period',
+          ignoreDuplicates: false,
+        });
+      if (error) throw error;
     } catch (err) {
       console.error('Failed to copy items:', err);
       await loadCart();
@@ -708,39 +702,33 @@ export function useCart() {
       return result;
     });
 
-    // Persist to database
+    // Persist to database — batch upsert to avoid partial failures
     try {
-      for (const item of itemsToCopy) {
-        const { data: existing } = await supabase
-          .from('cart_items')
-          .select('id, quantity')
-          .match({
-            user_id: user.id,
-            student_id: item.student_id,
-            product_id: item.product_id,
-            scheduled_for: toDate,
-            meal_period: item.meal_period
-          })
-          .maybeSingle();
+      const updatedItems = itemsRef.current;
+      const upsertRows = itemsToCopy.map(item => {
+        const matching = updatedItems.find(
+          i => i.product_id === item.product_id &&
+               i.student_id === item.student_id &&
+               i.scheduled_for === toDate &&
+               i.meal_period === item.meal_period
+        );
+        return {
+          user_id: user.id,
+          student_id: item.student_id,
+          product_id: item.product_id,
+          quantity: matching?.quantity ?? item.quantity,
+          scheduled_for: toDate,
+          meal_period: item.meal_period,
+        };
+      });
 
-        if (existing) {
-          await supabase
-            .from('cart_items')
-            .update({ quantity: existing.quantity + item.quantity })
-            .eq('id', existing.id);
-        } else {
-          await supabase
-            .from('cart_items')
-            .insert({
-              user_id: user.id,
-              student_id: item.student_id,
-              product_id: item.product_id,
-              quantity: item.quantity,
-              scheduled_for: toDate,
-              meal_period: item.meal_period
-            });
-        }
-      }
+      const { error } = await supabase
+        .from('cart_items')
+        .upsert(upsertRows, {
+          onConflict: 'user_id,student_id,product_id,scheduled_for,meal_period',
+          ignoreDuplicates: false,
+        });
+      if (error) throw error;
     } catch (err) {
       console.error('Failed to copy student items:', err);
       await loadCart();
