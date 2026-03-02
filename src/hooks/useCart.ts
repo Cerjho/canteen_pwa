@@ -395,41 +395,32 @@ export function useCart() {
       return [...prevItems, { ...item, id: crypto.randomUUID() }];
     });
 
-    // Persist to database
+    // Persist to database — single upsert to avoid race conditions
     try {
-      const { data: existing } = await supabase
+      // Calculate the new total quantity from the optimistic state
+      const updatedItems = itemsRef.current;
+      const matchingItem = updatedItems.find(
+        (i) => i.product_id === item.product_id &&
+               i.student_id === item.student_id &&
+               i.scheduled_for === item.scheduled_for &&
+               i.meal_period === item.meal_period
+      );
+      const targetQuantity = matchingItem?.quantity ?? item.quantity;
+
+      const { error } = await supabase
         .from('cart_items')
-        .select('id, quantity')
-        .match({
+        .upsert({
           user_id: user.id,
           student_id: item.student_id,
           product_id: item.product_id,
+          quantity: targetQuantity,
           scheduled_for: item.scheduled_for,
           meal_period: item.meal_period
-        })
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from('cart_items')
-          .update({ quantity: existing.quantity + item.quantity })
-          .eq('id', existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('cart_items')
-          .upsert({
-            user_id: user.id,
-            student_id: item.student_id,
-            product_id: item.product_id,
-            quantity: item.quantity,
-            scheduled_for: item.scheduled_for,
-            meal_period: item.meal_period
-          }, {
-            onConflict: 'user_id,student_id,product_id,scheduled_for,meal_period'
-          });
-        if (error) throw error;
-      }
+        }, {
+          onConflict: 'user_id,student_id,product_id,scheduled_for,meal_period',
+          ignoreDuplicates: false
+        });
+      if (error) throw error;
     } catch (err) {
       console.error('Failed to save cart item:', err);
       // Revert optimistic update on error
