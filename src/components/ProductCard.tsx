@@ -86,13 +86,13 @@ export function ProductCard({
             </span>
           ) : (
             <button
-              onClick={() => !addDisabled && onAddToCart(id)}
+              onClick={() => onAddToCart(id)}
               disabled={addDisabled}
               title={addDisabled ? 'Select a student first' : undefined}
-              className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg text-sm sm:text-base font-medium transition-all text-white active:scale-95 ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg text-sm sm:text-base font-medium transition-all text-white ${
                 addDisabled
                   ? 'bg-primary-600 opacity-50 cursor-not-allowed'
-                  : 'bg-primary-600 hover:bg-primary-700'
+                  : 'bg-primary-600 hover:bg-primary-700 active:scale-95'
               }`}
             >
               Add
