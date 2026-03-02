@@ -196,7 +196,7 @@ export function CartBottomSheet({
     setShowCopyModal(null);
   };
 
-  const handleClearDate = async (dateStr: string, e: React.MouseEvent) => {
+  const handleClearDate = async (dateStr: string, e: React.SyntheticEvent) => {
     e.stopPropagation();
     if (!onClearDate) return;
     const confirmed = await confirm({
@@ -478,7 +478,7 @@ export function CartBottomSheet({
                                 onClick={(e) => handleClearDate(dateStr, e)}
                                 onKeyDown={(e) => {
                                   if (e.key === ' ' || e.key === 'Enter') {
-                                    handleClearDate(dateStr, e as unknown as React.MouseEvent);
+                                    handleClearDate(dateStr, e);
                                   }
                                 }}
                                 className="p-1.5 hover:bg-white/50 dark:hover:bg-black/20 rounded transition-colors"
