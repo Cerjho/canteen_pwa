@@ -75,6 +75,7 @@ interface CartBottomSheetProps {
     scheduled_for: string;
     order_id: string;
   }>;
+  closedDates?: string[];
 }
 
 /* ================================================================
@@ -93,6 +94,7 @@ export function CartBottomSheet({
   onError,
   parentBalance = 0,
   existingOrders,
+  closedDates,
 }: CartBottomSheetProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [notes, setNotes] = useState('');
@@ -187,11 +189,16 @@ export function CartBottomSheet({
   const getNextValidDates = (excludeDate: string): string[] => {
     const dates: string[] = [];
     const start = parseISO(excludeDate);
-    for (let i = 1; i <= 14 && dates.length < 5; i++) {
+    const todayStr = formatDateLocal(new Date());
+    const maxDate = addDays(parseISO(todayStr), 14);
+    for (let i = 1; i <= 21 && dates.length < 5; i++) {
       const date = addDays(start, i);
-      if (date.getDay() === 0) continue;
-      if (isSaturday(date)) continue;
+      if (date.getDay() === 0) continue;         // Sunday
+      if (isSaturday(date)) continue;              // Saturday
       const dateStr = formatDateLocal(date);
+      if (dateStr < todayStr) continue;            // Past date
+      if (date > maxDate) break;                   // Beyond 14-day limit
+      if (closedDates?.includes(dateStr)) continue; // Holiday/closed
       if (!uniqueDates.includes(dateStr) || dateStr === excludeDate) {
         dates.push(dateStr);
       }

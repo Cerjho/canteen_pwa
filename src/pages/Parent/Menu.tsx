@@ -753,6 +753,7 @@ export default function Menu() {
         onCopyDateItems={copyDateItems}
         parentBalance={parentBalance}
         existingOrders={activeOrders?.map(o => ({ student_id: o.student_id, scheduled_for: o.scheduled_for, order_id: o.id }))}
+        closedDates={weekdaysInfo?.filter(w => !w.isOpen).map(w => w.dateStr)}
       />
     </div>
   );
