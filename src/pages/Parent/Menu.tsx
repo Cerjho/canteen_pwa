@@ -92,7 +92,7 @@ export default function Menu() {
         .from('orders')
         .select('id, student_id, scheduled_for')
         .eq('parent_id', user?.id)
-        .not('status', 'in', '("cancelled","completed")');
+        .not('status', 'in', '(cancelled,completed)');
       return data || [];
     },
     enabled: !!user?.id,
