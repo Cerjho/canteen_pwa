@@ -140,6 +140,14 @@ export function CartBottomSheet({
 
   // ── Side-effects ─────────────────────────────────────
 
+  // Prune selectedDates when items are removed and dates disappear
+  useEffect(() => {
+    setSelectedDates(prev => {
+      const pruned = new Set([...prev].filter(d => uniqueDates.includes(d)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [uniqueDates]);
+
   useEffect(() => {
     if (!isOpen) {
       setCheckoutError(null);
