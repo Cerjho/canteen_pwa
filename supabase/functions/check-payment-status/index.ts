@@ -5,14 +5,14 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
+import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 import { getCheckoutSession, resolvePaymentMethod } from '../_shared/paymongo.ts';
 
 serve(async (req) => {
   const origin = req.headers.get('Origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  const preflightResponse = handleCorsPrefllight(req);
+  const preflightResponse = handleCorsPreflight(req);
   if (preflightResponse) return preflightResponse;
 
   try {

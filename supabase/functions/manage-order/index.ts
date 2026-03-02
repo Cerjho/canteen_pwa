@@ -3,7 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
+import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
 type OrderStatus = 'awaiting_payment' | 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 type Action = 'update-status' | 'cancel' | 'add-notes' | 'bulk-update-status' | 'mark-item-unavailable';
@@ -34,7 +34,7 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(origin);
 
   // Handle CORS preflight
-  const preflightResponse = handleCorsPrefllight(req);
+  const preflightResponse = handleCorsPreflight(req);
   if (preflightResponse) return preflightResponse;
 
   try {

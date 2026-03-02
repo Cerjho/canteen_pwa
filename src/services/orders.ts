@@ -174,7 +174,7 @@ export async function createOrder(orderData: CreateOrderRequest): Promise<{ orde
         
         if (isRetryable && attempt < MAX_RETRIES - 1) {
           lastError = new Error(errorMessage);
-          await delay(RETRY_DELAY_MS * (attempt + 1)); // Exponential backoff
+          await delay(RETRY_DELAY_MS * (attempt + 1)); // Linear backoff
           continue;
         }
         throw new Error(errorMessage);

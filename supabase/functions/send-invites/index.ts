@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCorsPrefllight, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { handleCorsPreflight, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 // Generate a short, readable invite code
 function generateInviteCode(): string {
@@ -21,7 +21,7 @@ serve(async (req) => {
   const origin = req.headers.get('Origin');
 
   // Handle CORS preflight
-  const preflightResponse = handleCorsPrefllight(req);
+  const preflightResponse = handleCorsPreflight(req);
   if (preflightResponse) return preflightResponse;
 
   try {

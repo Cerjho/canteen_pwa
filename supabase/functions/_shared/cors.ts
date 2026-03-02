@@ -73,9 +73,6 @@ export function handleCorsPreflight(req: Request): Response | null {
   return handleCorsPreflightImpl(req);
 }
 
-/** @deprecated Use handleCorsPreflight (single 'l') instead */
-export const handleCorsPrefllight = handleCorsPreflight;
-
 function handleCorsPreflightImpl(req: Request): Response | null {
   if (req.method !== 'OPTIONS') return null;
 

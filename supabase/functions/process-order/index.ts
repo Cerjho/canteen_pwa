@@ -3,7 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { getCorsHeaders, handleCorsPrefllight } from '../_shared/cors.ts';
+import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
 // Helper to get today's date in Philippines timezone (UTC+8)
 function getTodayPhilippines(): string {
@@ -36,7 +36,7 @@ serve(async (req) => {
   const origin = req.headers.get('Origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  const preflightResponse = handleCorsPrefllight(req);
+  const preflightResponse = handleCorsPreflight(req);
   if (preflightResponse) return preflightResponse;
 
   try {
@@ -343,15 +343,6 @@ serve(async (req) => {
     // END SETTINGS ENFORCEMENT
     // ============================================
 
-    // Verify parent_id matches authenticated user
-    if (parent_id !== user.id) {
-      console.log('Rejected: Parent ID mismatch', { parent_id, user_id: user.id });
-      return new Response(
-        JSON.stringify({ error: 'UNAUTHORIZED', message: 'Parent ID does not match authenticated user' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Verify parent owns the student via parent_students link
     const { data: studentLink, error: linkError } = await supabaseAdmin
       .from('parent_students')
@@ -398,7 +389,6 @@ serve(async (req) => {
       .select('id, student_id, scheduled_for, status, total_amount')
       .eq('student_id', student_id)
       .eq('scheduled_for', slotDate)
-      .eq('meal_period', items[0]?.meal_period || 'lunch')
       .not('status', 'eq', 'cancelled')
       .order('created_at', { ascending: true });
 

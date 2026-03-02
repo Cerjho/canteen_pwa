@@ -17,6 +17,7 @@ DECLARE
   v_new_total NUMERIC(10,2);
   v_delta NUMERIC(10,2);
   v_wallet_balance NUMERIC(10,2);
+  v_payment_id UUID;
   v_item JSONB;
 BEGIN
   -- Lock the order row to prevent concurrent merges
@@ -123,7 +124,12 @@ BEGIN
 
     -- Record the payment
     INSERT INTO payments (parent_id, type, amount_total, method, status, reference_id)
-    VALUES (p_parent_id, 'payment', v_delta, 'balance', 'completed', p_order_id::TEXT);
+    VALUES (p_parent_id, 'payment', v_delta, 'balance', 'completed', p_order_id::TEXT)
+    RETURNING id INTO v_payment_id;
+
+    -- Record the payment allocation for audit trail
+    INSERT INTO payment_allocations (payment_id, order_id, allocated_amount)
+    VALUES (v_payment_id, p_order_id, v_delta);
   END IF;
 
   RETURN jsonb_build_object(

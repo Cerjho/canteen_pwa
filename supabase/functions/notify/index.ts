@@ -3,7 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { handleCorsPrefllight, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { handleCorsPreflight, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 // Valid notification types
 const VALID_NOTIFICATION_TYPES = ['order_placed', 'order_preparing', 'order_ready', 'order_completed', 'order_cancelled', 'custom'] as const;
@@ -49,7 +49,7 @@ serve(async (req) => {
   const origin = req.headers.get('Origin');
 
   // Handle CORS preflight
-  const preflightResponse = handleCorsPrefllight(req);
+  const preflightResponse = handleCorsPreflight(req);
   if (preflightResponse) return preflightResponse;
 
   try {

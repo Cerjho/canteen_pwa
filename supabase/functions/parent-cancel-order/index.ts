@@ -3,7 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { handleCorsPrefllight, jsonResponse } from '../_shared/cors.ts';
+import { handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 
 // Helper to get today's date in Philippines timezone (UTC+8)
 function getTodayPhilippines(): string {
@@ -21,7 +21,7 @@ serve(async (req) => {
   const origin = req.headers.get('Origin');
 
   // Handle CORS preflight
-  const preflightResponse = handleCorsPrefllight(req);
+  const preflightResponse = handleCorsPreflight(req);
   if (preflightResponse) return preflightResponse;
 
   try {

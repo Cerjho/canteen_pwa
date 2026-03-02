@@ -438,9 +438,9 @@ async function handleTopupPaymentPaid(
         p_parent_id: topupSession.parent_id,
         p_amount: topupAmount,
         p_type: 'topup',
-        p_method: paymentMethod,
+        p_method: finalPaymentMethod,
         p_reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
-        p_paymongo_payment_id: paymentId,
+        p_paymongo_payment_id: finalPaymentId,
         p_paymongo_checkout_id: checkout.id,
       }
     );
