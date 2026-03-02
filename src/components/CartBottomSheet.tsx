@@ -200,8 +200,12 @@ export function CartBottomSheet({
   };
 
   const handleCopyItems = async (fromDate: string, toDate: string) => {
-    if (onCopyDateItems) await onCopyDateItems(fromDate, toDate);
-    setShowCopyModal(null);
+    try {
+      if (onCopyDateItems) await onCopyDateItems(fromDate, toDate);
+      setShowCopyModal(null);
+    } catch (err) {
+      setCheckoutError(friendlyError(err, 'copy items'));
+    }
   };
 
   const handleClearDate = async (dateStr: string, e: React.SyntheticEvent) => {
@@ -213,7 +217,12 @@ export function CartBottomSheet({
       confirmLabel: 'Clear',
       type: 'warning',
     });
-    if (confirmed) await onClearDate(dateStr);
+    if (!confirmed) return;
+    try {
+      await onClearDate(dateStr);
+    } catch (err) {
+      setCheckoutError(friendlyError(err, 'clear items'));
+    }
   };
 
   // ── Checkout ─────────────────────────────────────────
