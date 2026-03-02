@@ -197,9 +197,9 @@ export function useCart() {
         setSelectedStudentIdState(stateResult.data.student_id);
       }
 
-      // Cleanup past cart items in background (don't wait)
+      // Cleanup past cart items in background (best-effort, don't block load)
       supabase.rpc('cleanup_past_cart_items').then(({ error }) => {
-        if (error) console.warn('Failed to cleanup past cart items:', error);
+        if (error) console.warn('[useCart] cleanup_past_cart_items failed:', error.message, error.code);
       });
 
     } catch (err) {
