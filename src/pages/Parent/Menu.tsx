@@ -126,7 +126,7 @@ export default function Menu() {
   
   // Check canteen status for selected date (use weekdayInfo if available)
   const { data: canteenStatus } = useQuery({
-    queryKey: ['canteen-status', effectiveDate.toISOString()],
+    queryKey: ['canteen-status', formatDateLocal(effectiveDate)],
     queryFn: () => getCanteenStatus(effectiveDate),
     enabled: !!selectedDate && !selectedWeekdayInfo // Skip if we already have weekday info
   });
@@ -136,7 +136,7 @@ export default function Menu() {
   
   // Fetch products for the selected date
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products', effectiveDate.toISOString()],
+    queryKey: ['products', formatDateLocal(effectiveDate)],
     queryFn: () => getProductsForDate(effectiveDate),
     enabled: !!selectedDate && isCanteenOpen
   });
