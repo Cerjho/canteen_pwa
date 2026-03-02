@@ -27,7 +27,7 @@ export default function OrderHistory() {
     retry: 2
   });
 
-  const orders = data?.pages.flat() ?? [];
+  const orders = useMemo(() => data?.pages.flat() ?? [], [data]);
 
   const getStatusDetails = (status: string) => {
     switch (status) {
