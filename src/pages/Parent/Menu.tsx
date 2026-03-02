@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -46,6 +46,8 @@ export default function Menu() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [snackPopup, setSnackPopup] = useState<{ productId: string } | null>(null);
   const { showToast } = useToast();
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
 
   // Cart hook now manages selectedStudentId
   const { 
@@ -168,7 +170,7 @@ export default function Menu() {
   // Memoize handlers to prevent unnecessary re-renders
   const handleAddToCart = useCallback((productId: string) => {
     if (!selectedStudentId) {
-      showToast('Please select a child first', 'error');
+      showToastRef.current('Please select a child first', 'error');
       return;
     }
     
@@ -198,9 +200,9 @@ export default function Menu() {
         scheduled_for: scheduledFor,
         meal_period: mealPeriod
       });
-      showToast(`${product.name} added for ${selectedStudent.first_name}`, 'success');
+      showToastRef.current(`${product.name} added for ${selectedStudent.first_name}`, 'success');
     }
-  }, [selectedStudentId, students, products, addItem, showToast, effectiveDate]);
+  }, [selectedStudentId, students, products, addItem, effectiveDate]);
 
   // Handle snack meal period selection from popup
   const handleSnackMealSelect = useCallback((mealPeriod: MealPeriod) => {
@@ -222,15 +224,15 @@ export default function Menu() {
         scheduled_for: scheduledFor,
         meal_period: mealPeriod
       });
-      showToast(`${product.name} added for ${selectedStudent.first_name} (${MEAL_PERIOD_LABELS[mealPeriod]})`, 'success');
+      showToastRef.current(`${product.name} added for ${selectedStudent.first_name} (${MEAL_PERIOD_LABELS[mealPeriod]})`, 'success');
     }
 
     setSnackPopup(null);
-  }, [snackPopup, selectedStudentId, products, students, addItem, showToast, effectiveDate]);
+  }, [snackPopup, selectedStudentId, products, students, addItem, effectiveDate]);
 
   const handleCheckout = useCallback(async (paymentMethod: PaymentMethod, notes: string, selectedDates?: string[]) => {
     if (items.length === 0) {
-      showToast('Cart is empty', 'error');
+      showToastRef.current('Cart is empty', 'error');
       return;
     }
 
@@ -283,11 +285,11 @@ export default function Menu() {
       const msg = error instanceof Error
         ? friendlyError(error.message, 'place your order')
         : 'Something went wrong. Please try again.';
-      showToast(msg, 'error');
+      showToastRef.current(msg, 'error');
       // Re-throw so cart can also display inline error
       throw error;
     }
-  }, [items, checkout, queryClient, navigate, showToast]);
+  }, [items, checkout, queryClient, navigate]);
 
   // Determine whether there are no linked students (only after data has loaded)
   const studentsLoaded = !studentsLoading && students !== undefined;
