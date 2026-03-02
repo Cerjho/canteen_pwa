@@ -700,6 +700,7 @@ export function CartBottomSheet({
 
                 {/* Total + Checkout button */}
                 <button
+                  type="button"
                   onClick={handleCheckout}
                   disabled={items.length === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance)}
                   className="w-full bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
