@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { formatDateLocal } from '../utils/dateUtils';
 
 export interface Product {
   id: string;
@@ -27,10 +28,8 @@ export interface CanteenStatus {
   makeupDayName?: string;
 }
 
-// Helper to format date as YYYY-MM-DD in Philippine timezone (UTC+8)
-export function formatDateLocal(date: Date): string {
-  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-}
+// Re-export formatDateLocal from shared utils for backward compatibility
+export { formatDateLocal };
 
 // Get "today" anchored to Philippine timezone (avoids browser-tz mismatch).
 // Uses formatDateLocal (the canonical PH-timezone formatter) to extract the

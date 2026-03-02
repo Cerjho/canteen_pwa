@@ -4,6 +4,7 @@ import { createBatchCheckout } from '../services/payments';
 import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
 import { friendlyError } from '../utils/friendlyError';
+import { getTodayLocal } from '../utils/dateUtils';
 import type { PaymentMethod, MealPeriod } from '../types';
 import { isOnlinePaymentMethod } from '../types';
 import { format, parseISO, isToday } from 'date-fns';
@@ -74,15 +75,6 @@ export interface CartSummary {
 // =====================================================
 // HELPER FUNCTIONS
 // =====================================================
-
-function formatDateLocal(date: Date): string {
-  // Use Asia/Manila timezone consistently with products service
-  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-}
-
-function getTodayLocal(): string {
-  return formatDateLocal(new Date());
-}
 
 function formatDisplayDate(dateStr: string): string {
   try {
