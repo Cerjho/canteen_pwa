@@ -96,8 +96,8 @@ describe('ConfirmDialog Component', () => {
 
       // Portal renders to document.body — query there
       const wrapper = document.body.querySelector('.fixed.inset-0.flex');
-      expect(wrapper).toBeTruthy();
-      fireEvent.click(wrapper!);
+      expect(wrapper).not.toBeNull();
+      if (wrapper) fireEvent.click(wrapper);
 
       expect(mockOnCancel).toHaveBeenCalledTimes(1);
     });

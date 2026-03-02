@@ -103,3 +103,24 @@ Object.defineProperty(navigator, 'onLine', {
 // Mock scroll functions
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 Element.prototype.scrollIntoView = vi.fn();
+
+// Mock BroadcastChannel — Node.js BroadcastChannel dispatches MessageEvent
+// which is incompatible with jsdom's EventTarget, causing
+// "The 'event' argument must be an instance of Event" unhandled errors.
+class MockBroadcastChannel {
+  name: string;
+  onmessage: ((ev: MessageEvent) => void) | null = null;
+  onmessageerror: ((ev: MessageEvent) => void) | null = null;
+  constructor(name: string) { this.name = name; }
+  postMessage = vi.fn();
+  close = vi.fn();
+  addEventListener = vi.fn();
+  removeEventListener = vi.fn();
+  dispatchEvent = vi.fn(() => true);
+}
+
+Object.defineProperty(globalThis, 'BroadcastChannel', {
+  writable: true,
+  configurable: true,
+  value: MockBroadcastChannel,
+});
