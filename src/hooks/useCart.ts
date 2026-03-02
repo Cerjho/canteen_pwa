@@ -759,6 +759,13 @@ export function useCart() {
 
       if (currentItems.length === 0) throw new Error('Your cart is empty.');
 
+      // Validate no items have past dates (e.g., user opened app before midnight)
+      const pastDateItems = currentItems.filter(item => isDateInPast(item.scheduled_for));
+      if (pastDateItems.length > 0) {
+        setItems(prev => prev.filter(i => !isDateInPast(i.scheduled_for)));
+        throw new Error('Some items were for past dates and have been removed. Please review your cart.');
+      }
+
       const currentPaymentMethod = paymentMethodRef.current;
       const currentNotes = notesRef.current;
 
