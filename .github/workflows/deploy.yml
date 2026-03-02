@@ -13,6 +13,7 @@ env:
   NODE_VERSION: '18'
   VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
   VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+  VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
 jobs:
   # Lint and type check
@@ -89,9 +90,15 @@ jobs:
 
       - name: Build application
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project=chromium
+        env:
+          CI: true
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
