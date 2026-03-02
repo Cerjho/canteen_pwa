@@ -17,7 +17,7 @@ import {
   Smartphone,
   CreditCard,
 } from 'lucide-react';
-import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
+import { format, parseISO, addDays, isSaturday } from 'date-fns';
 import type { CartItem } from '../hooks/useCart';
 import {
   MEAL_PERIOD_LABELS,
@@ -351,7 +351,8 @@ export function CartBottomSheet({
                     const itemCount = dateStudents
                       .flatMap((s) => s.items)
                       .reduce((sum, item) => sum + item.quantity, 0);
-                    const dateIsToday = isToday(parseISO(dateStr));
+                    // BUG-039: Use Asia/Manila timezone for "today" check
+                    const dateIsToday = dateStr === formatDateLocal(new Date());
 
                     return (
                       <div
