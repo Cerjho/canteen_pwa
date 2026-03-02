@@ -44,7 +44,8 @@ describe('ProductCard', () => {
 
     expect(screen.getByText('Chicken Adobo')).toBeInTheDocument();
     expect(screen.getByText('Classic Filipino dish with rice')).toBeInTheDocument();
-    expect(screen.getByText('₱65.00')).toBeInTheDocument();
+    const priceEl = screen.getByText('65.00');
+    expect(priceEl.textContent).toBe('₱65.00');
   });
 
   it('renders product image with correct attributes', () => {
@@ -65,24 +66,22 @@ describe('ProductCard', () => {
     expect(mockOnAddToCart).toHaveBeenCalledWith('test-product-1');
   });
 
-  it('shows "Out of Stock" when product is not available', () => {
+  it('shows "Sold Out" badge when product is not available', () => {
     render(
       <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
     );
 
-    const button = screen.getByRole('button');
-    expect(button).toHaveTextContent('Out of Stock');
-    expect(button).toBeDisabled();
+    expect(screen.getByText('Sold Out')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
   });
 
-  it('disables button when product is unavailable', () => {
+  it('does not call onAddToCart when product is unavailable', () => {
     render(
       <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
     );
 
-    const button = screen.getByRole('button');
-    fireEvent.click(button);
-
+    // No Add button rendered for unavailable products
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
     expect(mockOnAddToCart).not.toHaveBeenCalled();
   });
 
@@ -91,7 +90,8 @@ describe('ProductCard', () => {
       <ProductCard {...mockProduct} price={45.5} onAddToCart={mockOnAddToCart} />
     );
 
-    expect(screen.getByText('₱45.50')).toBeInTheDocument();
+    const priceEl = screen.getByText('45.50');
+    expect(priceEl.textContent).toBe('₱45.50');
   });
 });
 

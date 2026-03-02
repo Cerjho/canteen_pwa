@@ -607,8 +607,8 @@ export default function Menu() {
               onClick={() => setSelectedCategory(cat.value)}
               className={`px-4 py-2 rounded-full font-medium whitespace-nowrap transition-colors ${
                 selectedCategory === cat.value
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 ring-1 ring-primary-300 dark:ring-primary-700'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               {cat.label}
@@ -617,11 +617,13 @@ export default function Menu() {
         </div>
 
         {/* Search Bar */}
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search menu items..."
-        />
+        <div className="mb-4">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search menu items..."
+          />
+        </div>
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4">
@@ -667,10 +669,11 @@ export default function Menu() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product, index) => (
               <ProductCard
                 key={product.id}
                 {...product}
+                index={index}
                 isFavorite={isFavorite(product.id)}
                 onToggleFavorite={() => toggleFavorite(product.id)}
                 onAddToCart={handleAddToCart}

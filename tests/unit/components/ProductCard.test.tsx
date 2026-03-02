@@ -34,7 +34,9 @@ describe('ProductCard Component', () => {
 
     it('renders product price with peso sign and 2 decimal places', () => {
       render(<ProductCard {...mockProduct} onAddToCart={mockOnAddToCart} />);
-      expect(screen.getByText('₱65.00')).toBeInTheDocument();
+      const priceEl = screen.getByText('65.00');
+      expect(priceEl).toBeInTheDocument();
+      expect(priceEl.textContent).toBe('₱65.00');
     });
 
     it('renders product image with correct src', () => {
@@ -58,17 +60,20 @@ describe('ProductCard Component', () => {
   describe('Price Formatting', () => {
     it('formats whole number prices correctly', () => {
       render(<ProductCard {...mockProduct} price={100} onAddToCart={mockOnAddToCart} />);
-      expect(screen.getByText('₱100.00')).toBeInTheDocument();
+      const priceEl = screen.getByText('100.00');
+      expect(priceEl.textContent).toBe('₱100.00');
     });
 
     it('formats decimal prices correctly', () => {
       render(<ProductCard {...mockProduct} price={45.5} onAddToCart={mockOnAddToCart} />);
-      expect(screen.getByText('₱45.50')).toBeInTheDocument();
+      const priceEl = screen.getByText('45.50');
+      expect(priceEl.textContent).toBe('₱45.50');
     });
 
     it('formats small prices correctly', () => {
       render(<ProductCard {...mockProduct} price={5.99} onAddToCart={mockOnAddToCart} />);
-      expect(screen.getByText('₱5.99')).toBeInTheDocument();
+      const priceEl = screen.getByText('5.99');
+      expect(priceEl.textContent).toBe('₱5.99');
     });
   });
 
@@ -83,43 +88,39 @@ describe('ProductCard Component', () => {
       expect(mockOnAddToCart).toHaveBeenCalledWith('test-product-1');
     });
 
-    it('does not call onAddToCart when product is unavailable', () => {
+    it('does not render Add button when product is unavailable', () => {
       render(
         <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
       );
 
-      const button = screen.getByRole('button');
-      fireEvent.click(button);
-
-      expect(mockOnAddToCart).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
     });
   });
 
   describe('Unavailable Products', () => {
-    it('shows "Out of Stock" text when unavailable', () => {
+    it('shows "Sold Out" badge when unavailable', () => {
       render(
         <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
       );
 
-      expect(screen.getByText('Out of Stock')).toBeInTheDocument();
+      expect(screen.getByText('Sold Out')).toBeInTheDocument();
     });
 
-    it('disables button when unavailable', () => {
+    it('does not render add button when unavailable', () => {
       render(
         <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
       );
 
-      const button = screen.getByRole('button');
-      expect(button).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
     });
 
-    it('applies disabled styles when unavailable', () => {
+    it('applies sold out badge styles when unavailable', () => {
       render(
         <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
       );
 
-      const button = screen.getByRole('button');
-      expect(button).toHaveClass('bg-gray-300');
+      const badge = screen.getByText('Sold Out');
+      expect(badge).toHaveClass('text-red-500');
     });
   });
 

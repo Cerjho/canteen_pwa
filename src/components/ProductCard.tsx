@@ -13,6 +13,8 @@ interface ProductCardProps {
   onAddToCart: (productId: string) => void;
   /** When true, the Add button is greyed out with a "Select a student first" tooltip */
   addDisabled?: boolean;
+  /** Index in the grid, used for staggered entry animation */
+  index?: number;
 }
 
 export function ProductCard({
@@ -26,12 +28,16 @@ export function ProductCard({
   onToggleFavorite,
   onAddToCart,
   addDisabled = false,
+  index = 0,
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
   const hasImage = image_url && !imageError;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all duration-200 relative flex sm:flex-col">
+    <div
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow duration-200 relative flex sm:flex-col animate-fade-in opacity-0 [animation-fill-mode:forwards]"
+      style={{ animationDelay: `${Math.min(index, 11) * 50}ms` }}
+    >
       {/* Favorite button */}
       {onToggleFavorite && (
         <button
@@ -54,12 +60,12 @@ export function ProductCard({
         <img
           src={image_url}
           alt={name}
-          className="w-24 h-24 sm:w-full sm:h-36 object-cover flex-shrink-0"
+          className="w-24 h-24 sm:w-full sm:h-36 object-cover flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl"
           loading="lazy"
           onError={() => setImageError(true)}
         />
       ) : (
-        <div className="w-24 h-24 sm:w-full sm:h-36 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-750 flex items-center justify-center flex-shrink-0">
+        <div className="w-24 h-24 sm:w-full sm:h-36 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-750 flex items-center justify-center flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl">
           <UtensilsCrossed size={24} className="sm:w-10 sm:h-10 text-primary-300 dark:text-gray-500" />
         </div>
       )}
@@ -72,22 +78,26 @@ export function ProductCard({
         </div>
         <div className="flex items-center justify-between mt-1 sm:mt-3">
           <span className="text-sm sm:text-2xl font-bold text-primary-600 dark:text-primary-400">
-            ₱{price.toFixed(2)}
+            <span className="text-xs sm:text-lg font-normal text-primary-400 dark:text-primary-500">₱</span>{price.toFixed(2)}
           </span>
-          <button
-            onClick={() => !addDisabled && onAddToCart(id)}
-            disabled={!available || addDisabled}
-            title={addDisabled ? 'Select a student first' : undefined}
-            className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg text-sm sm:text-base font-medium transition-colors text-white ${
-              !available
-                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
-                : addDisabled
-                ? 'bg-primary-600 opacity-50 cursor-not-allowed'
-                : 'bg-primary-600 hover:bg-primary-700'
-            }`}
-          >
-            {!available ? 'Out of Stock' : 'Add'}
-          </button>
+          {!available ? (
+            <span className="text-xs font-medium text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full">
+              Sold Out
+            </span>
+          ) : (
+            <button
+              onClick={() => !addDisabled && onAddToCart(id)}
+              disabled={addDisabled}
+              title={addDisabled ? 'Select a student first' : undefined}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg text-sm sm:text-base font-medium transition-all text-white active:scale-95 ${
+                addDisabled
+                  ? 'bg-primary-600 opacity-50 cursor-not-allowed'
+                  : 'bg-primary-600 hover:bg-primary-700'
+              }`}
+            >
+              Add
+            </button>
+          )}
         </div>
       </div>
     </div>

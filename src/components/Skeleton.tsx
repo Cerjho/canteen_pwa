@@ -10,8 +10,8 @@ export function Skeleton({ className = '' }: SkeletonProps) {
 
 export function ProductCardSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden flex sm:flex-col">
-      <Skeleton className="w-24 h-24 sm:w-full sm:h-36 flex-shrink-0" />
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden flex sm:flex-col">
+      <Skeleton className="w-24 h-24 sm:w-full sm:h-36 flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl" />
       <div className="flex-1 min-w-0 p-3 sm:p-4">
         <Skeleton className="h-4 sm:h-5 w-3/4 mb-1 sm:mb-2" />
         <Skeleton className="h-3 sm:h-4 w-full mb-2 sm:mb-4" />
