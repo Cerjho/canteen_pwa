@@ -92,13 +92,12 @@ describe('ConfirmDialog Component', () => {
     });
 
     it('calls onCancel when backdrop clicked', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      // The dialog wrapper (with onClick={onCancel}) is a fixed inset-0 flex container
-      const wrapper = container.querySelector('.fixed.inset-0.flex');
-      if (wrapper) {
-        fireEvent.click(wrapper);
-      }
+      // Portal renders to document.body — query there
+      const wrapper = document.body.querySelector('.fixed.inset-0.flex');
+      expect(wrapper).toBeTruthy();
+      fireEvent.click(wrapper!);
 
       expect(mockOnCancel).toHaveBeenCalledTimes(1);
     });
@@ -115,31 +114,31 @@ describe('ConfirmDialog Component', () => {
 
   describe('Type Variants', () => {
     it('renders warning type by default', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      // Warning uses yellow background for icon
-      const iconBg = container.querySelector('.bg-yellow-100');
+      // Warning uses yellow background for icon (portal renders to document.body)
+      const iconBg = document.body.querySelector('.bg-yellow-100');
       expect(iconBg).toBeInTheDocument();
     });
 
     it('renders danger type', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} type="danger" />);
+      render(<ConfirmDialog {...defaultProps} type="danger" />);
 
-      const iconBg = container.querySelector('.bg-red-100');
+      const iconBg = document.body.querySelector('.bg-red-100');
       expect(iconBg).toBeInTheDocument();
     });
 
     it('renders success type', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} type="success" />);
+      render(<ConfirmDialog {...defaultProps} type="success" />);
 
-      const iconBg = container.querySelector('.bg-green-100');
+      const iconBg = document.body.querySelector('.bg-green-100');
       expect(iconBg).toBeInTheDocument();
     });
 
     it('renders info type', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} type="info" />);
+      render(<ConfirmDialog {...defaultProps} type="info" />);
 
-      const iconBg = container.querySelector('.bg-blue-100');
+      const iconBg = document.body.querySelector('.bg-blue-100');
       expect(iconBg).toBeInTheDocument();
     });
 
@@ -160,23 +159,24 @@ describe('ConfirmDialog Component', () => {
 
   describe('Layout', () => {
     it('renders icon', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      const svg = container.querySelector('svg');
+      // Portal renders to document.body
+      const svg = document.body.querySelector('svg');
       expect(svg).toBeInTheDocument();
     });
 
     it('centers content', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      const dialogInner = container.querySelector('.text-center');
+      const dialogInner = document.body.querySelector('.text-center');
       expect(dialogInner).toBeInTheDocument();
     });
 
     it('renders buttons side by side', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      const buttonContainer = container.querySelector('.flex.gap-3');
+      const buttonContainer = document.body.querySelector('.flex.gap-3');
       expect(buttonContainer).toBeInTheDocument();
     });
   });
@@ -202,16 +202,17 @@ describe('ConfirmDialog Component', () => {
 
   describe('Backdrop', () => {
     it('renders backdrop overlay', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      const backdrop = container.querySelector('.bg-black\\/50');
+      // Portal renders to document.body
+      const backdrop = document.body.querySelector('.bg-black\\/50');
       expect(backdrop).toBeInTheDocument();
     });
 
     it('backdrop has z-index for stacking', () => {
-      const { container } = render(<ConfirmDialog {...defaultProps} />);
+      render(<ConfirmDialog {...defaultProps} />);
 
-      const backdrop = container.querySelector('.z-\\[70\\]');
+      const backdrop = document.body.querySelector('.z-\\[9999\\]');
       expect(backdrop).toBeInTheDocument();
     });
   });
