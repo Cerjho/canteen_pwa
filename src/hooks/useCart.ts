@@ -836,14 +836,18 @@ export function useCart() {
           return !checkoutKeys.has(key);
         }));
 
-        // Batch delete from DB — single query using cart item IDs
-        const cartItemIdsToDelete = currentItems.map(item => item.id);
-        if (cartItemIdsToDelete.length > 0) {
+        // Batch delete from DB — delete by composite key to avoid stale client-generated IDs
+        for (const item of currentItems) {
           await supabase
             .from('cart_items')
             .delete()
-            .eq('user_id', user.id)
-            .in('id', cartItemIdsToDelete);
+            .match({
+              user_id: user.id,
+              student_id: item.student_id,
+              product_id: item.product_id,
+              scheduled_for: item.scheduled_for,
+              meal_period: item.meal_period,
+            });
         }
 
         // If all orders were merged into existing ones, no checkout redirect needed
@@ -926,14 +930,18 @@ export function useCart() {
         return !successfulKeys.has(key);
       }));
 
-      // Batch delete from DB — single query using cart item IDs
-      const cartItemIdsToDelete = currentItems.map(item => item.id);
-      if (cartItemIdsToDelete.length > 0) {
+      // Batch delete from DB — delete by composite key to avoid stale client-generated IDs
+      for (const item of currentItems) {
         await supabase
           .from('cart_items')
           .delete()
-          .eq('user_id', user.id)
-          .in('id', cartItemIdsToDelete);
+          .match({
+            user_id: user.id,
+            student_id: item.student_id,
+            product_id: item.product_id,
+            scheduled_for: item.scheduled_for,
+            meal_period: item.meal_period,
+          });
       }
 
       // If all items were checked out, reset notes and payment method
