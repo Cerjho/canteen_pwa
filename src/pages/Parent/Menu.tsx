@@ -206,6 +206,13 @@ export default function Menu() {
     }
   }, [selectedStudentId, students, products, addItem, effectiveDate]);
 
+  // Clear snack popup if product is no longer available after refetch
+  useEffect(() => {
+    if (snackPopup && products && !products.find(p => p.id === snackPopup.productId)) {
+      setSnackPopup(null);
+    }
+  }, [products, snackPopup]);
+
   // Handle snack meal period selection from popup
   const handleSnackMealSelect = useCallback((mealPeriod: MealPeriod) => {
     if (!snackPopup || !selectedStudentId) return;
