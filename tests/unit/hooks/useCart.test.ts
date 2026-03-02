@@ -3,77 +3,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCart } from '../../../src/hooks/useCart';
 
-// Mock supabase client
-const mockInsert = vi.fn().mockReturnValue({ data: null, error: null });
-const _mockUpdate = vi.fn().mockReturnValue({ data: null, error: null });
-const _mockDelete = vi.fn().mockReturnValue({ data: null, error: null });
-const mockUpsert = vi.fn().mockReturnValue({ data: null, error: null });
-const mockSelect = vi.fn().mockReturnValue({
-  eq: vi.fn().mockReturnValue({
-    gte: vi.fn().mockReturnValue({
-      order: vi.fn().mockReturnValue({ data: [], error: null })
-    }),
-    maybeSingle: vi.fn().mockReturnValue({ data: null, error: null }),
-    single: vi.fn().mockReturnValue({ data: null, error: null })
-  }),
-  match: vi.fn().mockReturnValue({
-    maybeSingle: vi.fn().mockReturnValue({ data: null, error: null })
-  })
+// Mock supabase client — each from() call returns a fresh self-referencing chain
+// so vi.clearAllMocks() never breaks the mock structure.
+vi.mock('../../../src/services/supabaseClient', () => {
+  const createChain = () => {
+    const terminalResult = { data: null, error: null };
+    const listResult = { data: [], error: null };
+
+    const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+    // Chain methods return the chain itself (for .eq().gte().order() etc.)
+    ['eq', 'gte', 'match', 'select', 'update', 'delete'].forEach(m => {
+      chain[m] = vi.fn(() => chain);
+    });
+    // Terminal methods return result objects
+    chain.maybeSingle = vi.fn(() => terminalResult);
+    chain.single = vi.fn(() => terminalResult);
+    chain.order = vi.fn(() => listResult);
+    chain.insert = vi.fn(() => terminalResult);
+    chain.upsert = vi.fn(() => terminalResult);
+    chain.in = vi.fn(() => terminalResult);
+    return chain;
+  };
+
+  return {
+    supabase: {
+      from: vi.fn(() => createChain()),
+      rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+  };
 });
 
-vi.mock('../../../src/services/supabaseClient', () => ({
-  supabase: {
-    from: vi.fn((_table: string) => {
-      // Reset mocks for chain
-      mockSelect.mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          gte: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({ data: [], error: null })
-          }),
-          maybeSingle: vi.fn().mockReturnValue({ data: null, error: null }),
-          single: vi.fn().mockReturnValue({ data: null, error: null })
-        }),
-        match: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockReturnValue({ data: null, error: null })
-        })
-      });
-      return {
-        select: mockSelect,
-        insert: mockInsert,
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({ data: null, error: null })
-          }),
-          match: vi.fn().mockReturnValue({ data: null, error: null })
-        }),
-        delete: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({ data: null, error: null })
-          }),
-          match: vi.fn().mockReturnValue({ data: null, error: null })
-        }),
-        upsert: mockUpsert
-      };
-    }),
-    rpc: vi.fn().mockResolvedValue({ data: null, error: null })
-  }
-}));
-
-// Mock useAuth
+// Mock useAuth — stable object reference to prevent infinite re-render loop
+const mockUser = { id: 'test-user-123' };
 vi.mock('../../../src/hooks/useAuth', () => ({
   useAuth: () => ({
-    user: { id: 'test-user-123' }
+    user: mockUser
   })
 }));
 
-// Mock createOrder
-const mockCreateOrder = vi.fn();
+// Mock createBatchOrder (the hook now uses batch order API)
+const mockCreateBatchOrder = vi.fn();
 vi.mock('../../../src/services/orders', () => ({
-  createOrder: (data: Record<string, unknown>) => mockCreateOrder(data)
+  createBatchOrder: (data: Record<string, unknown>) => mockCreateBatchOrder(data)
+}));
+
+// Mock payments service (imported by the hook)
+vi.mock('../../../src/services/payments', () => ({
+  createBatchCheckout: vi.fn()
 }));
 
 describe('useCart Hook', () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   
   const mockProduct = {
     product_id: 'product-1',
@@ -83,31 +63,29 @@ describe('useCart Hook', () => {
     price: 65.00,
     quantity: 1,
     image_url: 'https://example.com/adobo.jpg',
-    scheduled_for: today
+    scheduled_for: today,
+    meal_period: 'lunch' as const
   };
+
+  // Helper: renders the hook and waits for the initial loadCart effect to settle.
+  // This avoids race conditions between loadCart's setItems([]) and test actions.
+  async function renderCartHook() {
+    const hookResult = renderHook(() => useCart());
+    await waitFor(() => {
+      expect(hookResult.result.current.isLoadingCart).toBe(false);
+    });
+    return hookResult;
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateOrder.mockResolvedValue({ id: 'order-1' });
-    // Reset supabase mock to return empty cart
-    mockSelect.mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        gte: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({ data: [], error: null })
-        }),
-        maybeSingle: vi.fn().mockReturnValue({ data: null, error: null }),
-        single: vi.fn().mockReturnValue({ data: null, error: null }),
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockReturnValue({ data: null, error: null })
-          })
-        })
-      }),
-      match: vi.fn().mockReturnValue({
-        maybeSingle: vi.fn().mockReturnValue({ data: null, error: null })
-      })
+    mockCreateBatchOrder.mockResolvedValue({
+      success: true,
+      order_ids: ['order-1'],
+      orders: [{ order_id: 'order-1', client_order_id: 'client-1', total_amount: 65, status: 'pending', payment_status: 'awaiting_payment', payment_due_at: null }],
+      total_amount: 65,
+      message: 'Orders created successfully'
     });
-    mockInsert.mockReturnValue({ data: null, error: null });
   });
 
   describe('Initial State', () => {
@@ -123,7 +101,7 @@ describe('useCart Hook', () => {
 
   describe('addItem', () => {
     it('should add new item to cart', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -142,7 +120,7 @@ describe('useCart Hook', () => {
     });
 
     it('should increment quantity for existing item', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -159,7 +137,7 @@ describe('useCart Hook', () => {
     });
 
     it('should add multiple different items', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -180,7 +158,7 @@ describe('useCart Hook', () => {
     });
 
     it('should add quantity correctly', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem({ ...mockProduct, quantity: 3 });
@@ -194,7 +172,7 @@ describe('useCart Hook', () => {
 
   describe('updateQuantity', () => {
     it('should update item quantity', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -214,7 +192,7 @@ describe('useCart Hook', () => {
     });
 
     it('should remove item when quantity is zero', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -234,7 +212,7 @@ describe('useCart Hook', () => {
     });
 
     it('should remove item when quantity is negative', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -256,7 +234,7 @@ describe('useCart Hook', () => {
 
   describe('clearCart', () => {
     it('should clear all items', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -312,7 +290,7 @@ describe('useCart Hook', () => {
 
   describe('total', () => {
     it('should calculate total correctly', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem({ ...mockProduct, quantity: 2 }); // 65 * 2 = 130
@@ -337,7 +315,7 @@ describe('useCart Hook', () => {
     });
 
     it('should update total when quantity changes', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -393,7 +371,7 @@ describe('useCart Hook', () => {
 
   describe('checkout', () => {
     it('should create order with cart items', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -407,15 +385,19 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', '');
       });
 
-      expect(mockCreateOrder).toHaveBeenCalledWith(
+      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           parent_id: 'test-user-123',
-          student_id: 'student-1',
-          items: expect.arrayContaining([
+          orders: expect.arrayContaining([
             expect.objectContaining({
-              product_id: 'product-1',
-              quantity: 1,
-              price_at_order: 65.00
+              student_id: 'student-1',
+              items: expect.arrayContaining([
+                expect.objectContaining({
+                  product_id: 'product-1',
+                  quantity: 1,
+                  price_at_order: 65.00
+                })
+              ])
             })
           ])
         })
@@ -423,7 +405,7 @@ describe('useCart Hook', () => {
     });
 
     it('should clear cart after successful checkout', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -453,7 +435,7 @@ describe('useCart Hook', () => {
     });
 
     it('should use provided payment method', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -467,7 +449,7 @@ describe('useCart Hook', () => {
         await result.current.checkout('balance', '');
       });
 
-      expect(mockCreateOrder).toHaveBeenCalledWith(
+      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           payment_method: 'balance'
         })
@@ -475,7 +457,7 @@ describe('useCart Hook', () => {
     });
 
     it('should include notes in order', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -489,7 +471,7 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', 'Extra rice please');
       });
 
-      expect(mockCreateOrder).toHaveBeenCalledWith(
+      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           notes: 'Extra rice please'
         })
@@ -497,7 +479,7 @@ describe('useCart Hook', () => {
     });
 
     it('should include scheduled date in order', async () => {
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);
@@ -511,17 +493,27 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', '');
       });
 
-      expect(mockCreateOrder).toHaveBeenCalledWith(
+      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          scheduled_for: today
+          orders: expect.arrayContaining([
+            expect.objectContaining({
+              scheduled_for: today
+            })
+          ])
         })
       );
     });
 
     it('should return order result', async () => {
-      mockCreateOrder.mockResolvedValue({ order_id: 'new-order-id', status: 'pending' });
+      mockCreateBatchOrder.mockResolvedValue({
+        success: true,
+        order_ids: ['new-order-id'],
+        orders: [{ order_id: 'new-order-id', client_order_id: 'c-1', total_amount: 65, status: 'pending', payment_status: 'awaiting_payment', payment_due_at: null }],
+        total_amount: 65,
+        message: 'OK'
+      });
 
-      const { result } = renderHook(() => useCart());
+      const { result } = await renderCartHook();
 
       await act(async () => {
         await result.current.addItem(mockProduct);

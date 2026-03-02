@@ -267,22 +267,41 @@ describe('Products Service', () => {
     });
 
     it('excludes holidays', async () => {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      
-      mockQueryBuilder.lte.mockResolvedValue({ 
-        data: [{ date: tomorrowStr }], 
-        error: null 
+      // Use fake timers for consistent date behavior
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2025-01-27T10:00:00')); // Monday
+
+      const tomorrowStr = '2025-01-28'; // Tuesday
+
+      // getAvailableOrderDates → getWeekdaysWithStatus which queries holidays and makeup_days
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'holidays') {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [{ date: tomorrowStr, name: 'Test Holiday', is_recurring: false }],
+              error: null
+            })
+          };
+        }
+        if (table === 'makeup_days') {
+          return {
+            select: vi.fn(() => ({
+              gte: vi.fn().mockResolvedValue({ data: [], error: null })
+            }))
+          };
+        }
+        return mockQueryBuilder;
       });
 
       const result = await getAvailableOrderDates();
 
       // Result should not contain the holiday date
       const holidayFound = result.some(
-        d => d.toISOString().split('T')[0] === tomorrowStr
+        d => d.toLocaleDateString('en-CA') === tomorrowStr
       );
       expect(holidayFound).toBe(false);
+
+      vi.useRealTimers();
     });
   });
 

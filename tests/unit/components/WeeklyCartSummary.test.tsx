@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WeeklyCartSummary } from '../../../src/components/WeeklyCartSummary';
 import type { CartItem } from '../../../src/hooks/useCart';
+import type { WeekdayInfo } from '../../../src/services/products';
 import { format, addDays } from 'date-fns';
 
 // Helper to create cart items
@@ -16,9 +17,31 @@ function createCartItem(overrides: Partial<CartItem> = {}): CartItem {
     price: 50,
     image_url: 'https://example.com/burger.jpg',
     quantity: 1,
-    scheduled_for: format(new Date(), 'yyyy-MM-dd')
+    scheduled_for: format(new Date(), 'yyyy-MM-dd'),
+    meal_period: 'lunch'
   };
   return { ...baseItem, ...overrides };
+}
+
+// Helper to create weekday info for the weekdays prop
+function createWeekdayInfo(date: Date, overrides: Partial<WeekdayInfo> = {}): WeekdayInfo {
+  return {
+    date,
+    dateStr: format(date, 'yyyy-MM-dd'),
+    isOpen: true,
+    isHoliday: false,
+    ...overrides
+  };
+}
+
+// Create a default Mon-Fri (or custom count) week starting from current fake date
+function createDefaultWeekdays(count = 5): WeekdayInfo[] {
+  const days: WeekdayInfo[] = [];
+  for (let i = 0; i < count; i++) {
+    const date = addDays(new Date(), i);
+    days.push(createWeekdayInfo(date));
+  }
+  return days;
 }
 
 describe('WeeklyCartSummary', () => {
@@ -56,9 +79,10 @@ describe('WeeklyCartSummary', () => {
       expect(screen.getByText('View Cart')).toBeInTheDocument();
     });
 
-    it('renders day pills for specified number of days', () => {
+    it('renders day pills for weekdays provided', () => {
       const items = [createCartItem()];
-      render(<WeeklyCartSummary items={items} daysToShow={5} />);
+      const weekdays = createDefaultWeekdays(5);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Should show 5 day pills (Today, Tue, Wed, Thu, Fri for Monday start)
       expect(screen.getByText('Today')).toBeInTheDocument();
@@ -70,7 +94,8 @@ describe('WeeklyCartSummary', () => {
 
     it('shows date numbers on day pills', () => {
       const items = [createCartItem()];
-      render(<WeeklyCartSummary items={items} daysToShow={3} />);
+      const weekdays = createDefaultWeekdays(3);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Mon Jan 27 should show "27"
       expect(screen.getByText('27')).toBeInTheDocument();
@@ -87,7 +112,8 @@ describe('WeeklyCartSummary', () => {
         createCartItem({ id: '1', quantity: 2 }),
         createCartItem({ id: '2', quantity: 3 })
       ];
-      render(<WeeklyCartSummary items={items} />);
+      const weekdays = createDefaultWeekdays(5);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // 2 + 3 = 5 items for today
       expect(screen.getByText('5 items')).toBeInTheDocument();
@@ -95,7 +121,8 @@ describe('WeeklyCartSummary', () => {
 
     it('shows singular "item" for single item', () => {
       const items = [createCartItem({ quantity: 1 })];
-      render(<WeeklyCartSummary items={items} />);
+      const weekdays = createDefaultWeekdays(5);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       expect(screen.getByText('1 item')).toBeInTheDocument();
     });
@@ -106,7 +133,8 @@ describe('WeeklyCartSummary', () => {
         createCartItem({ id: '1', quantity: 2 }), // Today
         createCartItem({ id: '2', scheduled_for: tomorrow, quantity: 1 }) // Tomorrow
       ];
-      render(<WeeklyCartSummary items={items} />);
+      const weekdays = createDefaultWeekdays(5);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       expect(screen.getByText('2 items')).toBeInTheDocument();
       expect(screen.getByText('1 item')).toBeInTheDocument();
@@ -119,7 +147,8 @@ describe('WeeklyCartSummary', () => {
         createCartItem({ id: '1', price: 50, quantity: 2 }), // 100
         createCartItem({ id: '2', price: 30, quantity: 1 })  // 30
       ];
-      render(<WeeklyCartSummary items={items} />);
+      const weekdays = createDefaultWeekdays(5);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Day total shown on day pill - today button contains ₱130
       const todayButton = screen.getByText('Today').closest('button');
@@ -182,10 +211,12 @@ describe('WeeklyCartSummary', () => {
     it('calls onDateClick when day pill clicked', () => {
       const onDateClick = vi.fn();
       const items = [createCartItem()];
+      const weekdays = createDefaultWeekdays(5);
       
       render(
         <WeeklyCartSummary 
           items={items} 
+          weekdays={weekdays}
           onDateClick={onDateClick} 
         />
       );
@@ -216,10 +247,12 @@ describe('WeeklyCartSummary', () => {
       const onDateClick = vi.fn();
       const today = format(new Date(), 'yyyy-MM-dd');
       const items = [createCartItem({ scheduled_for: today })];
+      const weekdays = createDefaultWeekdays(5);
       
       render(
         <WeeklyCartSummary 
           items={items} 
+          weekdays={weekdays}
           onDateClick={onDateClick} 
         />
       );
@@ -239,8 +272,9 @@ describe('WeeklyCartSummary', () => {
     it('applies different styles for today with items', () => {
       const today = format(new Date(), 'yyyy-MM-dd');
       const items = [createCartItem({ scheduled_for: today })];
+      const weekdays = createDefaultWeekdays(5);
       
-      render(<WeeklyCartSummary items={items} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       const todayButton = screen.getByText('Today').closest('button');
       expect(todayButton).toHaveClass('bg-green-100');
@@ -249,8 +283,9 @@ describe('WeeklyCartSummary', () => {
     it('applies different styles for other days with items', () => {
       const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
       const items = [createCartItem({ scheduled_for: tomorrow })];
+      const weekdays = createDefaultWeekdays(5);
       
-      render(<WeeklyCartSummary items={items} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       const tomorrowButton = screen.getByText('Tue').closest('button');
       expect(tomorrowButton).toHaveClass('bg-primary-100');
@@ -258,8 +293,9 @@ describe('WeeklyCartSummary', () => {
 
     it('applies muted styles for days without items', () => {
       const items = [createCartItem()]; // Only today has items
+      const weekdays = createDefaultWeekdays(5);
       
-      render(<WeeklyCartSummary items={items} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Wednesday should have muted styling (no items)
       const wedButton = screen.getByText('Wed').closest('button');
@@ -274,8 +310,13 @@ describe('WeeklyCartSummary', () => {
       
       const saturday = '2025-02-01';
       const items = [createCartItem({ scheduled_for: saturday })];
+      // Provide weekdays including the Saturday as a makeup day
+      const weekdays: WeekdayInfo[] = [
+        createWeekdayInfo(new Date('2025-01-31'), {}),
+        createWeekdayInfo(new Date('2025-02-01'), { isSaturday: true, isMakeupDay: true, makeupDayName: 'Makeup Day' })
+      ];
       
-      render(<WeeklyCartSummary items={items} daysToShow={2} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Should show Sat as it's a potential makeup day
       expect(screen.getByText('Sat')).toBeInTheDocument();
@@ -285,9 +326,15 @@ describe('WeeklyCartSummary', () => {
       // Set to Saturday
       vi.setSystemTime(new Date('2025-02-01T10:00:00')); // Saturday
       
-      const items = [createCartItem()];
+      const items = [createCartItem({ scheduled_for: '2025-02-03' })];
+      // Provide Mon-Wed (skipping Sunday) as weekdays
+      const weekdays: WeekdayInfo[] = [
+        createWeekdayInfo(new Date('2025-02-03')), // Mon
+        createWeekdayInfo(new Date('2025-02-04')), // Tue
+        createWeekdayInfo(new Date('2025-02-05')), // Wed
+      ];
       
-      render(<WeeklyCartSummary items={items} daysToShow={3} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Should skip Sunday and show Mon
       expect(screen.queryByText('Sun')).not.toBeInTheDocument();
@@ -300,8 +347,9 @@ describe('WeeklyCartSummary', () => {
         createCartItem({ id: '1' }), // Today
         createCartItem({ id: '2', scheduled_for: farFuture }) // Beyond 5 days
       ];
+      const weekdays = createDefaultWeekdays(5);
       
-      render(<WeeklyCartSummary items={items} daysToShow={5} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       // Summary should still show all items
       expect(screen.getByText('₱100.00')).toBeInTheDocument(); // Total for both
@@ -309,8 +357,9 @@ describe('WeeklyCartSummary', () => {
 
     it('handles large quantities', () => {
       const items = [createCartItem({ quantity: 99 })];
+      const weekdays = createDefaultWeekdays(5);
       
-      render(<WeeklyCartSummary items={items} />);
+      render(<WeeklyCartSummary items={items} weekdays={weekdays} />);
       
       expect(screen.getByText('99 items')).toBeInTheDocument();
     });
