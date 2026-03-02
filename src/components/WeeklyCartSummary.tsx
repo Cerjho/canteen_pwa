@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { format, isToday } from 'date-fns';
+import { format } from 'date-fns';
 import { Calendar, ShoppingCart, ChevronRight } from 'lucide-react';
+import { formatDateLocal } from '../services/products';
 import type { CartItem } from '../hooks/useCart';
 import type { WeekdayInfo } from '../services/products';
 
@@ -31,20 +32,24 @@ export function WeeklyCartSummary({
   onViewCart
 }: WeeklyCartSummaryProps) {
   
-  // Derive day summaries from the authoritative weekdays list (same data as the date selector)
+  // Derive day summaries from the authoritative weekdays list (same data as the date selector).
+  // Use dateStr comparison (PH timezone) instead of date-fns isToday (browser timezone)
+  // so "Today" label is always correct regardless of browser timezone setting.
   const weekDays = useMemo(() => {
     if (!weekdays) return [];
+    const todayStr = formatDateLocal(new Date()); // PH-timezone today string
     
     return weekdays.map((day): DaySummary => {
       const dayItems = items.filter(i => i.scheduled_for === day.dateStr);
       const uniqueStudents = new Set(dayItems.map(i => i.student_id));
+      const isTodayDay = day.dateStr === todayStr;
       
       return {
         date: day.date,
         dateStr: day.dateStr,
         displayDate: format(day.date, 'd'),
-        dayName: isToday(day.date) ? 'Today' : format(day.date, 'EEE'),
-        isToday: isToday(day.date),
+        dayName: isTodayDay ? 'Today' : format(day.date, 'EEE'),
+        isToday: isTodayDay,
         isWeekend: !!day.isSaturday,
         itemCount: dayItems.reduce((sum, i) => sum + i.quantity, 0),
         total: dayItems.reduce((sum, i) => sum + i.price * i.quantity, 0),

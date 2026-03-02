@@ -32,13 +32,14 @@ export function formatDateLocal(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
-// Get "today" anchored to Philippine timezone (avoids browser-tz mismatch)
+// Get "today" anchored to Philippine timezone (avoids browser-tz mismatch).
+// Uses formatDateLocal (the canonical PH-timezone formatter) to extract the
+// date components, then creates a midnight Date in local time — avoids the
+// unreliable new Date(toLocaleString(...)) pattern.
 function getPhilippineToday(): Date {
-  const nowPH = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
-  );
-  nowPH.setHours(0, 0, 0, 0);
-  return nowPH;
+  const phDateStr = formatDateLocal(new Date()); // "YYYY-MM-DD" in Asia/Manila
+  const [year, month, day] = phDateStr.split('-').map(Number);
+  return new Date(year, month - 1, day); // midnight in local time
 }
 
 // Check if a date matches a holiday (including recurring holidays)

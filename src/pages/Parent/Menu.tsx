@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, isToday, isTomorrow } from 'date-fns';
+import { format, isTomorrow } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus, formatDateLocal } from '../../services/products';
 import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
@@ -29,9 +29,9 @@ const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string 
   { value: 'drinks', label: 'Drinks' },
 ];
 
-// Get friendly date label
+// Get friendly date label (uses PH-timezone string comparison for "Today")
 function getDateLabel(date: Date): string {
-  if (isToday(date)) return 'Today';
+  if (formatDateLocal(date) === formatDateLocal(new Date())) return 'Today';
   if (isTomorrow(date)) return 'Tomorrow';
   return format(date, 'EEE, MMM d');
 }
@@ -381,7 +381,7 @@ export default function Menu() {
               <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
                 {weekdaysInfo.map((dayInfo) => {
                   const isSelected = dayInfo.dateStr === formatDateLocal(effectiveDate);
-                  const isTodayDate = isToday(dayInfo.date);
+                  const isTodayDate = dayInfo.dateStr === formatDateLocal(new Date());
                   
                   return (
                     <button
@@ -423,7 +423,7 @@ export default function Menu() {
               <CalendarOff size={48} className="text-red-500 dark:text-red-400" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              {isToday(effectiveDate) ? 'Canteen Closed Today' : 'Canteen Closed'}
+              {formatDateLocal(effectiveDate) === formatDateLocal(new Date()) ? 'Canteen Closed Today' : 'Canteen Closed'}
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               The canteen is closed for<br />
@@ -449,7 +449,7 @@ export default function Menu() {
           subtitle={
             <span className="flex items-center gap-1.5">
               <Calendar size={14} className="text-primary-500 dark:text-primary-400" />
-              {isToday(effectiveDate) ? "Today's Menu" : `Menu for ${format(effectiveDate, 'EEE, MMM d')}`}
+              {formatDateLocal(effectiveDate) === formatDateLocal(new Date()) ? "Today's Menu" : `Menu for ${format(effectiveDate, 'EEE, MMM d')}`}
             </span>
           }
           action={
@@ -479,7 +479,7 @@ export default function Menu() {
               <Calendar size={16} className="text-primary-500 dark:text-primary-400" />
               Order for:
             </span>
-            {!isToday(effectiveDate) && (
+              {formatDateLocal(effectiveDate) !== formatDateLocal(new Date()) && (
               <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">
                 Advance Order
               </span>
@@ -489,7 +489,7 @@ export default function Menu() {
             <div className="flex gap-1 overflow-x-auto pb-1">
               {weekdaysInfo.map((dayInfo) => {
                 const isSelected = dayInfo.dateStr === formatDateLocal(effectiveDate);
-                const isTodayDate = isToday(dayInfo.date);
+                const isTodayDate = dayInfo.dateStr === formatDateLocal(new Date());
                 
                 return (
                   <button
@@ -618,7 +618,7 @@ export default function Menu() {
                         onClick={() => setSelectedDate(dayInfo.date)}
                         className="px-3 py-1.5 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded-lg text-sm font-medium hover:bg-primary-100 dark:hover:bg-primary-900/50"
                       >
-                        {isToday(dayInfo.date) ? 'Today' : format(dayInfo.date, 'EEE, MMM d')}
+                        {dayInfo.dateStr === formatDateLocal(new Date()) ? 'Today' : format(dayInfo.date, 'EEE, MMM d')}
                       </button>
                     ))}
                 </div>
