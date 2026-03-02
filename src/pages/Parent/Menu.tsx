@@ -93,7 +93,7 @@ export default function Menu() {
         .not('status', 'in', '("cancelled","completed")');
       return data || [];
     },
-    enabled: !!user?.id && cartOpen,
+    enabled: !!user?.id,
     staleTime: 30_000,
   });
   
