@@ -280,7 +280,11 @@ export function CartBottomSheet({
       <Drawer.Root
         open={isOpen}
         onOpenChange={(open) => {
-          if (!open) onClose();
+          if (!open) {
+            setPaymentExpanded(false);
+            setCollapsedDates(new Set());
+            onClose();
+          }
         }}
         dismissible={!isCheckingOut}
       >
