@@ -94,6 +94,7 @@ export default function Menu() {
       return data || [];
     },
     enabled: !!user?.id && cartOpen,
+    staleTime: 30_000,
   });
   
   // Get weekdays with status (including holidays)
