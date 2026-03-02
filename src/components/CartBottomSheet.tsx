@@ -104,6 +104,7 @@ export function CartBottomSheet({
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [showCopyModal, setShowCopyModal] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const { confirm, ConfirmDialogElement } = useConfirm();
 
   // ── Computed values ──────────────────────────────────
@@ -580,12 +581,13 @@ export function CartBottomSheet({
                                         className="flex items-center gap-3 p-2.5 bg-gray-50 dark:bg-gray-900/60 rounded-xl"
                                       >
                                         <img
-                                          src={item.image_url || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="%23999">?</text></svg>'}
+                                          src={failedImages.has(`${item.scheduled_for}-${item.student_id}-${item.product_id}`) || !item.image_url
+                                            ? 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="%23999">?</text></svg>'
+                                            : item.image_url}
                                           alt={item.name}
                                           className="w-12 h-12 object-cover rounded-lg flex-shrink-0"
-                                          onError={(e) => {
-                                            (e.target as HTMLImageElement).src =
-                                              'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="%23999">?</text></svg>';
+                                          onError={() => {
+                                            setFailedImages(prev => new Set(prev).add(`${item.scheduled_for}-${item.student_id}-${item.product_id}`));
                                           }}
                                         />
                                         <div className="flex-1 min-w-0">
