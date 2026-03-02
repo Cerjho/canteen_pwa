@@ -83,12 +83,13 @@ export function ConfirmDialog({
 
   return createPortal(
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] animate-fade-in" />
+      {/* Backdrop — pointer-events:auto overrides Radix Dialog modal's body pointer-events:none */}
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] animate-fade-in" style={{ pointerEvents: 'auto' }} />
       
       {/* Dialog wrapper — click outside panel dismisses */}
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        style={{ pointerEvents: 'auto' }}
         onClick={onCancel}
       >
         <div

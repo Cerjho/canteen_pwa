@@ -215,5 +215,17 @@ describe('ConfirmDialog Component', () => {
       const backdrop = document.body.querySelector('.z-\\[9999\\]');
       expect(backdrop).toBeInTheDocument();
     });
+
+    it('backdrop and wrapper have pointer-events auto to override modal body styles', () => {
+      render(<ConfirmDialog {...defaultProps} />);
+
+      // Backdrop (first z-[9999] element without flex)
+      const backdrop = document.body.querySelector('.bg-black\\/50');
+      expect(backdrop).toHaveStyle({ pointerEvents: 'auto' });
+
+      // Dialog wrapper (z-[9999] element with flex)
+      const wrapper = document.body.querySelector('.fixed.inset-0.flex');
+      expect(wrapper).toHaveStyle({ pointerEvents: 'auto' });
+    });
   });
 });
