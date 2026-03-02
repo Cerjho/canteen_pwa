@@ -223,6 +223,17 @@ export function useCart() {
     return () => channel.close();
   }, [loadCart]);
 
+  // BUG-042: Refetch cart when tab becomes visible (catches server-side deletions)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadCart();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadCart]);
+
   const broadcastCartUpdate = useCallback(() => {
     if (typeof BroadcastChannel === 'undefined') return;
     try {
