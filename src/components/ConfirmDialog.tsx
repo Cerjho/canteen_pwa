@@ -200,7 +200,7 @@ export function useConfirm() {
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />
-  ), [isOpen, options, handleConfirm, handleCancel]);
+  ), [isOpen, options.title, options.message, options.confirmLabel, options.cancelLabel, options.type, handleConfirm, handleCancel]);
 
   return { confirm, ConfirmDialogElement };
 }
