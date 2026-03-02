@@ -90,7 +90,7 @@ export const MEAL_PERIOD_ICONS: Record<MealPeriod, string> = {
 export function autoMealPeriod(category: ProductCategory): MealPeriod | null {
   switch (category) {
     case 'mains': return 'lunch';
-    case 'drinks': return 'afternoon_snack';
+    case 'drinks': return null; // User must choose
     case 'snacks': return null; // User must choose
   }
 }
