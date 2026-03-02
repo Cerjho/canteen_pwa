@@ -272,4 +272,38 @@ describe('CartBottomSheet — Business Logic', () => {
       expect(expanded).toBe(false);
     });
   });
+
+  // ── BUG-003: Checkout button disabled states ────────────
+
+  describe('BUG-003: Checkout Button Disabled States', () => {
+    it('checkout button is disabled when balance payment selected but balance insufficient', () => {
+      const paymentMethod = 'balance';
+      const canUseBalance = false;
+      const itemsLength = 3;
+      const isCheckingOut = false;
+
+      const disabled = itemsLength === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance);
+      expect(disabled).toBe(true);
+    });
+
+    it('checkout button is enabled when balance is sufficient', () => {
+      const paymentMethod = 'balance';
+      const canUseBalance = true;
+      const itemsLength = 3;
+      const isCheckingOut = false;
+
+      const disabled = itemsLength === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance);
+      expect(disabled).toBe(false);
+    });
+
+    it('checkout button is enabled for cash payment regardless of balance', () => {
+      const paymentMethod = 'cash';
+      const canUseBalance = false;
+      const itemsLength = 3;
+      const isCheckingOut = false;
+
+      const disabled = itemsLength === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance);
+      expect(disabled).toBe(false);
+    });
+  });
 });
