@@ -60,18 +60,18 @@ export function ProductCard({
         <img
           src={image_url}
           alt={name}
-          className="w-24 h-24 sm:w-full sm:h-36 object-cover flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl"
+          className="w-24 min-h-24 sm:min-h-0 sm:w-full sm:h-36 object-cover flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl"
           loading="lazy"
           onError={() => setImageError(true)}
         />
       ) : (
-        <div className="w-24 h-24 sm:w-full sm:h-36 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-750 flex items-center justify-center flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl">
+        <div className="w-24 min-h-24 sm:min-h-0 sm:w-full sm:h-36 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-750 flex items-center justify-center flex-shrink-0 rounded-l-xl sm:rounded-l-none sm:rounded-t-xl">
           <UtensilsCrossed size={24} className="sm:w-10 sm:h-10 text-primary-300 dark:text-gray-500" />
         </div>
       )}
 
       {/* Details: compact row on mobile, padded block on sm+ */}
-      <div className="flex-1 min-w-0 min-h-24 sm:min-h-0 p-3 sm:p-4 flex flex-col justify-between">
+      <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col justify-between">
         <div>
           <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-gray-100 line-clamp-1">{name}</h3>
           <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm line-clamp-2">{description}</p>
