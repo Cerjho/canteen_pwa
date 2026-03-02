@@ -121,11 +121,13 @@ export default function Menu() {
     }
   }, [weekdaysInfo, selectedDate]);
   
-  // Use first available date or today as fallback - memoize to prevent useCallback dependency issues
-  const effectiveDate = useMemo(
-    () => selectedDate || weekdaysInfo?.[0]?.date || new Date(),
+  // Use first available date or today as fallback — stabilize by date string to prevent
+  // identity changes when weekdaysInfo refetches with new Date objects
+  const effectiveDateStr = useMemo(
+    () => formatDateLocal(selectedDate || weekdaysInfo?.[0]?.date || new Date()),
     [selectedDate, weekdaysInfo]
   );
+  const effectiveDate = useMemo(() => new Date(effectiveDateStr + 'T00:00:00'), [effectiveDateStr]);
   
   // Check canteen status for selected date (use weekdayInfo if available)
   const { data: canteenStatus } = useQuery({
