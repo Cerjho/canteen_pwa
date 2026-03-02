@@ -137,7 +137,7 @@ export function WeeklyCartSummary({
                   ? 'text-green-500 dark:text-green-500'
                   : 'text-primary-500 dark:text-primary-500'
               }`}>
-                ₱{day.total.toFixed(0)}
+                ₱{day.total.toFixed(2)}
               </div>
             )}
           </button>
