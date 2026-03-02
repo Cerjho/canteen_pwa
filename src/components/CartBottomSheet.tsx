@@ -313,6 +313,12 @@ export function CartBottomSheet({
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/50 z-40" />
           <Drawer.Content
+            onKeyDown={(e) => {
+              if (isCheckingOut && e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
             className="fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white dark:bg-gray-800 outline-none"
             style={{ maxHeight: '92vh' }}
           >
