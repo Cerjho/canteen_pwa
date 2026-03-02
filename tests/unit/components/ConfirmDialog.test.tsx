@@ -211,7 +211,7 @@ describe('ConfirmDialog Component', () => {
     it('backdrop has z-index for stacking', () => {
       const { container } = render(<ConfirmDialog {...defaultProps} />);
 
-      const backdrop = container.querySelector('.z-\\[60\\]');
+      const backdrop = container.querySelector('.z-\\[70\\]');
       expect(backdrop).toBeInTheDocument();
     });
   });
