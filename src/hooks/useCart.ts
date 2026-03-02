@@ -118,6 +118,7 @@ export function useCart() {
   const itemsRef = useRef(items);
   const notesRef = useRef(notes);
   const paymentMethodRef = useRef(paymentMethod);
+  const checkoutInProgressRef = useRef(false);
   
   // Keep refs in sync
   useEffect(() => {
@@ -745,6 +746,10 @@ export function useCart() {
     selectedDates?: string[] // Optional: only checkout specific dates
   ) => {
     if (!user) throw new Error('Please sign in to continue.');
+    if (checkoutInProgressRef.current) {
+      throw new Error('Checkout already in progress');
+    }
+    checkoutInProgressRef.current = true;
     
     setIsLoading(true);
     setError(null);
@@ -949,6 +954,7 @@ export function useCart() {
       setError(errorMessage);
       throw err;
     } finally {
+      checkoutInProgressRef.current = false;
       setIsLoading(false);
     }
   }, [user]);
