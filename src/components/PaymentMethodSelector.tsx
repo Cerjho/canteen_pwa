@@ -120,7 +120,7 @@ export function PaymentMethodSelector({ selected, onSelect, balance = 0, orderTo
   const onlineMethods = PAYMENT_METHODS.filter(m => m.group === 'online');
 
   const getDisabledState = (method: PaymentMethodOption): { disabled: boolean; reason?: string } => {
-    if (method.value === 'balance' && balance < orderTotal && orderTotal > 0) {
+    if (method.value === 'balance' && balance + 0.01 < orderTotal && orderTotal > 0) {
       return { disabled: true, reason: `Need ₱${(orderTotal - balance).toFixed(2)} more` };
     }
     if (method.value === 'balance' && balance <= 0) {
