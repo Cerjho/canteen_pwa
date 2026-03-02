@@ -105,7 +105,7 @@ export function CartBottomSheet({
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [showCopyModal, setShowCopyModal] = useState<string | null>(null);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
-  const { confirm, ConfirmDialogElement } = useConfirm();
+  const { confirm, ConfirmDialogElement, isOpen: isConfirmOpen } = useConfirm();
 
   // ── Computed values ──────────────────────────────────
 
@@ -301,13 +301,19 @@ export function CartBottomSheet({
             onClose();
           }
         }}
-        dismissible={!isCheckingOut}
+        dismissible={!isCheckingOut && !isConfirmOpen}
       >
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/50 z-40" />
           <Drawer.Content
+            onPointerDownOutside={(e) => {
+              if (isConfirmOpen) e.preventDefault();
+            }}
+            onInteractOutside={(e) => {
+              if (isConfirmOpen) e.preventDefault();
+            }}
             onKeyDown={(e) => {
-              if (isCheckingOut && e.key === 'Escape') {
+              if ((isCheckingOut || isConfirmOpen) && e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
               }
