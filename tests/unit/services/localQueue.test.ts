@@ -1,6 +1,21 @@
 // LocalQueue Service Tests
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock supabaseClient to prevent GoTrueClient instantiation warnings
+vi.mock('../../../src/services/supabaseClient', () => ({
+  supabase: {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })),
+    auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }) },
+    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
+  },
+}));
+
 // Mock idb
 const mockDB = {
   add: vi.fn(),

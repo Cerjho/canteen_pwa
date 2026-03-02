@@ -227,6 +227,7 @@ describe('Background Sync Registration', () => {
     });
 
     it('should handle sync registration failure gracefully', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mockRegistration = {
         sync: {
           register: vi.fn().mockRejectedValue(new Error('Sync not supported'))
@@ -246,6 +247,7 @@ describe('Background Sync Registration', () => {
       
       const result = await registerSync();
       expect(result.success).toBe(false);
+      warnSpy.mockRestore();
     });
   });
 });

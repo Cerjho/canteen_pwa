@@ -4,6 +4,14 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
+// Mock supabaseClient to prevent GoTrueClient instantiation warnings
+vi.mock('../../../src/services/supabaseClient', () => ({
+  supabase: {
+    from: vi.fn(),
+    auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }) },
+  },
+}));
+
 // Mock toast
 const mockShowToast = vi.fn();
 vi.mock('../../../src/components/Toast', () => ({
