@@ -674,6 +674,7 @@ export function CartBottomSheet({
                         }}
                         balance={parentBalance}
                         orderTotal={selectedTotal}
+                        isOffline={!navigator.onLine}
                       />
                     </div>
                   )}
