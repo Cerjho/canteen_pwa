@@ -1,10 +1,17 @@
 // Visual Regression and Critical User Flow E2E Tests
 import { test, expect } from '@playwright/test';
 
+// Whether we have a real Supabase backend configured
+const hasBackend = !!(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY);
+
 // ============================================
 // Visual Regression Tests
+// Skip on CI — baseline screenshots are environment-dependent
+// Run locally with: npx playwright test --update-snapshots
 // ============================================
 test.describe('Visual Regression', () => {
+  test.skip(!!process.env.CI, 'Visual regression tests skipped on CI');
+
   test('login page visual snapshot', async ({ page }) => {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
@@ -89,6 +96,7 @@ test.describe('Critical User Flows', () => {
     });
 
     test('order appears in order history', async ({ page }) => {
+      test.skip(!hasBackend, 'Requires Supabase backend');
       // Auth state loaded via auth.setup.ts
       // Navigate to order history
       await page.goto('/orders');
@@ -128,6 +136,7 @@ test.describe('Critical User Flows', () => {
 
   test.describe('Search and Filter Flow', () => {
     test('user can search and filter products', async ({ page }) => {
+      test.skip(!hasBackend, 'Requires Supabase backend');
       // Auth state loaded via auth.setup.ts
       await page.goto('/menu');
       // Search for a product
@@ -385,6 +394,7 @@ test.describe('Checkout Payment Methods', () => {
 // ============================================
 test.describe('Toast Notifications', () => {
   test('shows error toast on failed login', async ({ page }) => {
+    test.skip(!hasBackend, 'Requires Supabase backend');
     await page.goto('/login');
     
     await page.getByLabel(/email/i).fill('wrong@email.com');
@@ -407,6 +417,7 @@ test.describe('Toast Notifications', () => {
 // ============================================
 test.describe('Keyboard Navigation', () => {
   test('can complete login form using keyboard only', async ({ page }) => {
+    test.skip(!hasBackend, 'Requires Supabase backend for error response');
     await page.goto('/login');
     
     // Tab to email
