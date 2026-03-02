@@ -199,9 +199,7 @@ export function CartBottomSheet({
       if (dateStr < todayStr) continue;            // Past date
       if (date > maxDate) break;                   // Beyond 14-day limit
       if (closedDates?.includes(dateStr)) continue; // Holiday/closed
-      if (!uniqueDates.includes(dateStr) || dateStr === excludeDate) {
-        dates.push(dateStr);
-      }
+      dates.push(dateStr);
     }
     return dates;
   };
@@ -532,6 +530,9 @@ export function CartBottomSheet({
                                   className="px-3 py-1.5 text-sm bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
                                 >
                                   {format(parseISO(targetDate), 'EEE, MMM d')}
+                                  {uniqueDates.includes(targetDate) && (
+                                    <span className="text-xs ml-1 opacity-60">(merge)</span>
+                                  )}
                                 </button>
                               ))}
                             </div>
