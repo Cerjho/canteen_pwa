@@ -6,7 +6,7 @@ import { supabase } from '../services/supabaseClient';
 import { friendlyError } from '../utils/friendlyError';
 import type { PaymentMethod, MealPeriod } from '../types';
 import { isOnlinePaymentMethod } from '../types';
-import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
+import { format, parseISO, isToday } from 'date-fns';
 
 // =====================================================
 // TYPES
@@ -95,13 +95,9 @@ function formatDisplayDate(dateStr: string): string {
 }
 
 function isDateInPast(dateStr: string): boolean {
-  try {
-    const date = parseISO(dateStr);
-    const today = startOfDay(new Date());
-    return isBefore(date, today);
-  } catch {
-    return false;
-  }
+  // BUG-035: Use Manila timezone consistently with DB trigger validate_cart_item_date()
+  const todayStr = getTodayLocal(); // Uses Asia/Manila
+  return dateStr < todayStr; // String comparison works for YYYY-MM-DD format
 }
 
 // =====================================================

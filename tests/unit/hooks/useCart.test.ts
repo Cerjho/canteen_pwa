@@ -566,4 +566,34 @@ describe('useCart Hook', () => {
       );
     });
   });
+
+  describe('BUG-035: isDateInPast timezone handling', () => {
+    it('rejects adding items for past dates using Asia/Manila timezone', async () => {
+      const { result } = await renderCartHook();
+
+      // Use a clearly past date
+      await act(async () => {
+        await result.current.addItem({
+          ...mockProduct,
+          scheduled_for: '2020-01-01'
+        });
+      });
+
+      // Item should NOT be added — past date validation should prevent it
+      // The hook sets an error for past dates
+      expect(result.current.error).toBeTruthy();
+    });
+
+    it('allows adding items for today using Asia/Manila timezone', async () => {
+      const { result } = await renderCartHook();
+
+      await act(async () => {
+        await result.current.addItem(mockProduct); // Uses 'today' as scheduled_for
+      });
+
+      await waitFor(() => {
+        expect(result.current.items).toHaveLength(1);
+      });
+    });
+  });
 });
