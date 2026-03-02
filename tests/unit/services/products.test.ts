@@ -249,16 +249,15 @@ describe('Products Service', () => {
     it('returns array of dates', async () => {
       mockQueryBuilder.lte.mockResolvedValue({ data: [], error: null });
 
-      const result = await getAvailableOrderDates(5);
+      const result = await getAvailableOrderDates();
 
       expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeLessThanOrEqual(5);
     });
 
     it('excludes weekends', async () => {
       mockQueryBuilder.lte.mockResolvedValue({ data: [], error: null });
 
-      const result = await getAvailableOrderDates(5);
+      const result = await getAvailableOrderDates();
 
       for (const date of result) {
         const dayOfWeek = date.getDay();
@@ -277,7 +276,7 @@ describe('Products Service', () => {
         error: null 
       });
 
-      const result = await getAvailableOrderDates(5);
+      const result = await getAvailableOrderDates();
 
       // Result should not contain the holiday date
       const holidayFound = result.some(

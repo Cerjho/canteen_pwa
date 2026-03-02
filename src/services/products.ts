@@ -32,6 +32,15 @@ export function formatDateLocal(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
+// Get "today" anchored to Philippine timezone (avoids browser-tz mismatch)
+function getPhilippineToday(): Date {
+  const nowPH = new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
+  );
+  nowPH.setHours(0, 0, 0, 0);
+  return nowPH;
+}
+
 // Check if a date matches a holiday (including recurring holidays)
 // Uses a single query instead of two sequential queries
 async function checkHoliday(targetDate: Date): Promise<{ name: string } | null> {
@@ -129,140 +138,84 @@ export interface WeekdayInfo {
   isSaturday?: boolean;
 }
 
-// Get next N school days with their status (including holidays and make-up Saturdays)
-export async function getWeekdaysWithStatus(daysAhead: number = 5): Promise<WeekdayInfo[]> {
+// Get remaining school days of the current week with their status.
+// Shows Mon–Fri (+ any makeup Saturday) of the current week, starting from today.
+// If today is a regular Saturday or Sunday, shows the following Mon–Fri(+Sat) instead.
+export async function getWeekdaysWithStatus(): Promise<WeekdayInfo[]> {
   const weekdays: WeekdayInfo[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getPhilippineToday();
+  const todayStr = formatDateLocal(today);
   
-  // Get ALL holidays
-  const { data: holidays } = await supabase
-    .from('holidays')
-    .select('date, name, is_recurring');
+  // Fetch holidays and makeup days in parallel
+  const [{ data: holidays }, { data: makeupDays }] = await Promise.all([
+    supabase.from('holidays').select('date, name, is_recurring'),
+    supabase.from('makeup_days').select('date, name, reason').gte('date', todayStr),
+  ]);
   
-  // Get ALL make-up days (Saturdays)
-  const { data: makeupDays } = await supabase
-    .from('makeup_days')
-    .select('date, name, reason')
-    .gte('date', formatDateLocal(today));
-  
-  // Build maps for holidays
-  const exactHolidayDates = new Map<string, string>(); // date -> name
-  const recurringMonthDays = new Map<string, string>(); // MM-DD -> name
-  
+  // Build lookup maps
+  const exactHolidayDates = new Map<string, string>();
+  const recurringMonthDays = new Map<string, string>();
   holidays?.forEach(h => {
-    const holidayDateStr = h.date.split('T')[0];
-    if (h.is_recurring) {
-      recurringMonthDays.set(holidayDateStr.slice(5), h.name); // MM-DD
-    } else {
-      exactHolidayDates.set(holidayDateStr, h.name);
-    }
+    const d = h.date.split('T')[0];
+    if (h.is_recurring) recurringMonthDays.set(d.slice(5), h.name);
+    else exactHolidayDates.set(d, h.name);
   });
   
-  // Build set of make-up day dates
-  const makeupDayDates = new Map<string, string>(); // date -> name
-  makeupDays?.forEach(m => {
-    const makeupDateStr = m.date.split('T')[0];
-    makeupDayDates.set(makeupDateStr, m.name);
-  });
-  
-  const checkDate = new Date(today);
-  // Continue until we have enough WEEKDAYS (Mon-Fri), makeup Saturdays are extra
-  const maxDaysToCheck = daysAhead * 3; // Check up to 3 weeks ahead
-  let daysChecked = 0;
-  let weekdayCount = 0; // Count only Mon-Fri days
-  
-  while (weekdayCount < daysAhead && daysChecked < maxDaysToCheck) {
-    const dayOfWeek = checkDate.getDay();
-    const dateStr = formatDateLocal(checkDate);
-    const monthDay = dateStr.slice(5); // MM-DD
-    
-    // Check if holiday (applies to all days)
+  const makeupDayMap = new Map<string, string>();
+  makeupDays?.forEach(m => makeupDayMap.set(m.date.split('T')[0], m.name));
+
+  // Determine the start of the school week window
+  const startDate = new Date(today);
+  const dow = startDate.getDay();
+  if (dow === 0) {
+    // Sunday → next Monday
+    startDate.setDate(startDate.getDate() + 1);
+  } else if (dow === 6 && !makeupDayMap.has(formatDateLocal(startDate))) {
+    // Regular Saturday → next Monday
+    startDate.setDate(startDate.getDate() + 2);
+  }
+
+  // End of the school week = the Saturday of the week that startDate falls in
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + (6 - startDate.getDay()));
+
+  // Walk startDate → endDate (inclusive), collecting valid school days
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    const dayOfWeek = cursor.getDay();
+    const dateStr = formatDateLocal(cursor);
+    const monthDay = dateStr.slice(5);
+
     const holidayName = exactHolidayDates.get(dateStr) || recurringMonthDays.get(monthDay);
     const isHoliday = !!holidayName;
-    
-    // Check if this Saturday is a make-up day
     const isSaturday = dayOfWeek === 6;
-    const makeupDayName = makeupDayDates.get(dateStr);
+    const makeupDayName = makeupDayMap.get(dateStr);
     const isMakeupDay = isSaturday && !!makeupDayName;
-    
-    // Include: weekdays (Mon-Fri) OR make-up Saturdays
-    // Exclude: Sundays and regular Saturdays
-    if (dayOfWeek !== 0 && (dayOfWeek !== 6 || isMakeupDay)) {
+
+    // Include Mon–Fri and makeup Saturdays; skip Sundays and regular Saturdays
+    if (dayOfWeek !== 0 && (!isSaturday || isMakeupDay)) {
       weekdays.push({
-        date: new Date(checkDate),
+        date: new Date(cursor),
         dateStr,
-        isOpen: !isHoliday, // Holiday overrides make-up day
+        isOpen: !isHoliday,
         isHoliday,
         holidayName,
         isMakeupDay,
         makeupDayName,
-        isSaturday
+        isSaturday,
       });
-      
-      // Only count Mon-Fri towards the daysAhead limit
-      // Makeup Saturdays are bonus days that don't count against the limit
-      if (!isSaturday) {
-        weekdayCount++;
-      }
     }
-    
-    checkDate.setDate(checkDate.getDate() + 1);
-    daysChecked++;
+
+    cursor.setDate(cursor.getDate() + 1);
   }
-  
+
   return weekdays;
 }
 
-// Get available order dates (next 5 weekdays excluding holidays)
-export async function getAvailableOrderDates(daysAhead: number = 5): Promise<Date[]> {
-  const dates: Date[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // Get ALL holidays (we'll filter in code for correct matching)
-  const { data: holidays } = await supabase
-    .from('holidays')
-    .select('date, is_recurring');
-  
-  // Build sets for exact dates and recurring month-days
-  const exactHolidayDates = new Set<string>();
-  const recurringMonthDays = new Set<string>();
-  
-  holidays?.forEach(h => {
-    if (h.is_recurring) {
-      recurringMonthDays.add(h.date.slice(5)); // MM-DD
-    } else {
-      exactHolidayDates.add(h.date);
-    }
-  });
-
-  // Fetch makeup days so Saturdays that are makeup days are included
-  const { data: makeupDays } = await supabase
-    .from('makeup_days')
-    .select('date');
-  const makeupDaySet = new Set((makeupDays || []).map(m => m.date));
-  
-  const checkDate = new Date(today);
-  while (dates.length < daysAhead) {
-    const dayOfWeek = checkDate.getDay();
-    const dateStr = formatDateLocal(checkDate);
-    const monthDay = dateStr.slice(5); // MM-DD
-    
-    // Skip holidays (both exact and recurring)
-    const isHoliday = exactHolidayDates.has(dateStr) || recurringMonthDays.has(monthDay);
-    // Skip weekends unless it's a makeup Saturday
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const isMakeupSaturday = dayOfWeek === 6 && makeupDaySet.has(dateStr);
-    
-    if (!isHoliday && (!isWeekend || isMakeupSaturday)) {
-      dates.push(new Date(checkDate));
-    }
-    
-    checkDate.setDate(checkDate.getDate() + 1);
-  }
-  
-  return dates;
+// Get available order dates for the current week (reuses getWeekdaysWithStatus)
+export async function getAvailableOrderDates(): Promise<Date[]> {
+  const weekdays = await getWeekdaysWithStatus();
+  return weekdays.filter(w => w.isOpen).map(w => w.date);
 }
 
 // Get products available for a specific date based on menu schedule

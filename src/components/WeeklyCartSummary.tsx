@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
-import { format, addDays, isToday, isSaturday, isSunday } from 'date-fns';
+import { format, isToday } from 'date-fns';
 import { Calendar, ShoppingCart, ChevronRight } from 'lucide-react';
-import { formatDateLocal } from '../services/products';
 import type { CartItem } from '../hooks/useCart';
+import type { WeekdayInfo } from '../services/products';
 
 interface WeeklyCartSummaryProps {
   items: CartItem[];
-  daysToShow?: number;
+  /** Weekday info from getWeekdaysWithStatus — single source of truth for which days to show */
+  weekdays?: WeekdayInfo[];
   onDateClick?: (dateStr: string) => void;
   onViewCart?: () => void;
 }
@@ -25,48 +26,32 @@ interface DaySummary {
 
 export function WeeklyCartSummary({ 
   items, 
-  daysToShow = 5,
+  weekdays,
   onDateClick,
   onViewCart
 }: WeeklyCartSummaryProps) {
   
-  // Generate weekdays starting from today
+  // Derive day summaries from the authoritative weekdays list (same data as the date selector)
   const weekDays = useMemo(() => {
-    const days: DaySummary[] = [];
-    const today = new Date();
-    let currentDate = today;
-    let daysAdded = 0;
+    if (!weekdays) return [];
     
-    // Skip to next valid day if today is weekend
-    while (isSunday(currentDate)) {
-      currentDate = addDays(currentDate, 1);
-    }
-    
-    while (daysAdded < daysToShow) {
-      // Skip Sundays (Saturdays might be makeup days)
-      if (!isSunday(currentDate)) {
-        const dateStr = formatDateLocal(currentDate);
-        const dayItems = items.filter(i => i.scheduled_for === dateStr);
-        const uniqueStudents = new Set(dayItems.map(i => i.student_id));
-        
-        days.push({
-          date: currentDate,
-          dateStr,
-          displayDate: format(currentDate, 'd'),
-          dayName: isToday(currentDate) ? 'Today' : format(currentDate, 'EEE'),
-          isToday: isToday(currentDate),
-          isWeekend: isSaturday(currentDate),
-          itemCount: dayItems.reduce((sum, i) => sum + i.quantity, 0),
-          total: dayItems.reduce((sum, i) => sum + i.price * i.quantity, 0),
-          studentCount: uniqueStudents.size
-        });
-        daysAdded++;
-      }
-      currentDate = addDays(currentDate, 1);
-    }
-    
-    return days;
-  }, [items, daysToShow]);
+    return weekdays.map((day): DaySummary => {
+      const dayItems = items.filter(i => i.scheduled_for === day.dateStr);
+      const uniqueStudents = new Set(dayItems.map(i => i.student_id));
+      
+      return {
+        date: day.date,
+        dateStr: day.dateStr,
+        displayDate: format(day.date, 'd'),
+        dayName: isToday(day.date) ? 'Today' : format(day.date, 'EEE'),
+        isToday: isToday(day.date),
+        isWeekend: !!day.isSaturday,
+        itemCount: dayItems.reduce((sum, i) => sum + i.quantity, 0),
+        total: dayItems.reduce((sum, i) => sum + i.price * i.quantity, 0),
+        studentCount: uniqueStudents.size,
+      };
+    });
+  }, [items, weekdays]);
 
   // Calculate totals
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);

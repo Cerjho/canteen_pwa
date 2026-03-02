@@ -99,7 +99,7 @@ export default function Menu() {
   // Get weekdays with status (including holidays)
   const { data: weekdaysInfo } = useQuery({
     queryKey: ['weekdays-with-status'],
-    queryFn: () => getWeekdaysWithStatus(5)
+    queryFn: () => getWeekdaysWithStatus()
   });
   
   // Get selected weekday info for checking holiday status
@@ -535,7 +535,7 @@ export default function Menu() {
         {/* Weekly Cart Summary - shows multi-day cart at a glance */}
         <WeeklyCartSummary
           items={items}
-          daysToShow={5}
+          weekdays={weekdaysInfo}
           onDateClick={(dateStr) => {
             // Navigate to that date
             const targetDay = weekdaysInfo?.find(d => d.dateStr === dateStr);
