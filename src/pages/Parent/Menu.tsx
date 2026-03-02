@@ -245,6 +245,11 @@ export default function Menu() {
     const scheduledDates = [...new Set(itemsToCheckout.map(i => i.scheduled_for))];
     const hasFutureOrders = scheduledDates.some(d => d !== formatDateLocal(new Date()));
 
+    // Capture values before await — checkout() mutates items state
+    const studentNames = [...new Set(itemsToCheckout.map(i => i.student_name))].join(', ');
+    const checkoutTotal = itemsToCheckout.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    const itemCount = itemsToCheckout.length;
+
     try {
       // Each item has its own scheduled_for date, checkout groups by student+date
       const result = await checkout(paymentMethod, notes, selectedDates);
@@ -259,10 +264,6 @@ export default function Menu() {
         queryClient.invalidateQueries({ queryKey: ['parent-balance'] });
       }
       
-      // Get student names for confirmation
-      const studentNames = [...new Set(itemsToCheckout.map(i => i.student_name))].join(', ');
-      const checkoutTotal = itemsToCheckout.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      
       // Navigate to confirmation page
       navigate('/order-confirmation', {
         state: {
@@ -270,7 +271,7 @@ export default function Menu() {
           orderCount: result?.orders?.length || 1,
           totalAmount: checkoutTotal,
           childName: studentNames || 'Your children',
-          itemCount: itemsToCheckout.length,
+          itemCount,
           isOffline: false,
           paymentMethod,
           scheduledDates: scheduledDates,
