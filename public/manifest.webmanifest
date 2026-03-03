@@ -1,8 +1,8 @@
 {
   "id": "/",
   "name": "LOHECA Canteen",
-  "short_name": "Canteen",
-  "description": "Order food for your kids from school canteen",
+  "short_name": "LOHECA",
+  "description": "Order food for your kids from LOHECA Canteen",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

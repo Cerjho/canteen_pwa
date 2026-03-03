@@ -151,7 +151,7 @@ serve(async (req) => {
           },
         ],
         paymentMethodTypes: methodTypes,
-        description: 'School Canteen Wallet Top-Up',
+        description: 'LOHECA Canteen Wallet Top-Up',
         metadata: {
           type: 'topup',
           parent_id: user.id,

@@ -208,7 +208,7 @@ export default function Register() {
             <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <Shield size={32} className="text-primary-600 dark:text-primary-400" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Join School Canteen</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Join LOHECA Canteen</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
               Enter your invitation code to register
             </p>
@@ -436,7 +436,7 @@ export default function Register() {
         </div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Account Created!</h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Welcome to School Canteen! Your account has been set up successfully.
+          Welcome to LOHECA Canteen! Your account has been set up successfully.
         </p>
         <button
           onClick={() => navigate('/login')}

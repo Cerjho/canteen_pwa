@@ -118,7 +118,7 @@ You have the right to:
 
 ### Exercising Your Rights
 
-Email: <privacy@yourschool.edu.ph>  
+Email: <privacy@loheca-canteen.ph>  
 Response Time: Within 15 days
 
 ---
@@ -219,9 +219,9 @@ We may update this policy. Changes will be:
 ## Contact Us
 
 **Data Protection Officer**  
-Email: <dpo@yourschool.edu.ph>  
+Email: <dpo@loheca-canteen.ph>  
 Phone: +63 XXX XXX XXXX  
-Address: [School Address]
+Address: [LOHECA School Address]
 
 **National Privacy Commission**  
 Website: <https://www.privacy.gov.ph>  

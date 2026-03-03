@@ -1,4 +1,4 @@
-// Comprehensive E2E Tests for School Canteen PWA
+// Comprehensive E2E Tests for LOHECA Canteen PWA
 import { test, expect, Page } from '@playwright/test';
 
 // ============================================

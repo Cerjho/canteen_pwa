@@ -79,7 +79,7 @@ describe('Login Page', () => {
     it('renders login form', () => {
       renderLogin();
 
-      expect(screen.getByRole('heading', { name: /School Canteen/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /LOHECA Canteen/i })).toBeInTheDocument();
       expect(screen.getByText(/Order food for your kids/i)).toBeInTheDocument();
     });
 

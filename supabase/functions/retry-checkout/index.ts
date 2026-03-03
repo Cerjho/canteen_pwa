@@ -252,7 +252,7 @@ serve(async (req) => {
       checkoutSession = await createCheckoutSession({
         lineItems: namedLineItems,
         paymentMethodTypes: mapPaymentMethodTypes(effectiveMethod),
-        description: 'School Canteen Order (Retry)',
+        description: 'LOHECA Canteen Order (Retry)',
         metadata: {
           type: 'order',
           order_id: order_id,

@@ -37,7 +37,7 @@ interface SettingsState {
 }
 
 const defaultSettings: SettingsState = {
-  canteen_name: 'School Canteen',
+  canteen_name: 'LOHECA Canteen',
   operating_hours: { open: '07:00', close: '15:00' },
   order_cutoff_time: '10:00',
   allow_future_orders: true,

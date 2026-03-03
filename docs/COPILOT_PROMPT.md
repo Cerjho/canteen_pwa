@@ -6,7 +6,7 @@ This file provides context and instructions for GitHub Copilot when working in t
 
 ## Project Context
 
-You are working on a **serverless Progressive Web App (PWA)** for a Philippine elementary school canteen. The app allows **parents** to manage food orders for their children.
+You are working on a **serverless Progressive Web App (PWA)** for LOHECA Canteen. The app allows **parents** to manage food orders for their children.
 
 **Key Points**:
 

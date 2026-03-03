@@ -40,7 +40,7 @@ const NOTIFICATION_TEMPLATES = {
     body: 'Your order has been cancelled. Please contact staff for details.'
   },
   custom: {
-    title: 'School Canteen',
+    title: 'LOHECA Canteen',
     body: 'You have a new notification.'
   }
 };

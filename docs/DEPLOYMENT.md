@@ -131,7 +131,7 @@ Netlify builds on every Git push to `main`.
 ### Vercel
 
 1. Go to project Settings → Domains
-2. Add your domain (e.g., `canteen.school.edu.ph`)
+2. Add your domain (e.g., `canteen.loheca.com`)
 3. Update DNS records as instructed
 
 ### Netlify
@@ -155,7 +155,7 @@ Edit `src/pwa/manifest.webmanifest`:
 
 ```json
 {
-  "start_url": "https://canteen.school.edu.ph/",
+  "start_url": "https://canteen.loheca.com/",
   "scope": "/"
 }
 ```

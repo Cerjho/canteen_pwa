@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 -- Default settings
 INSERT INTO system_settings (key, value, description) VALUES
-  ('canteen_name', '"School Canteen"', 'Name of the canteen displayed in the app'),
+  ('canteen_name', '"LOHECA Canteen"', 'Name of the canteen displayed in the app'),
   ('operating_hours', '{"open": "07:00", "close": "15:00"}', 'Operating hours for the canteen'),
   ('order_cutoff_time', '"10:00"', 'Daily cutoff time for placing orders'),
   ('allow_future_orders', 'true', 'Allow parents to order for future dates'),

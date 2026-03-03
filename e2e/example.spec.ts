@@ -1,4 +1,4 @@
-// E2E Tests for School Canteen PWA
+// E2E Tests for LOHECA Canteen PWA
 import { test, expect } from '@playwright/test';
 
 // Whether we have a real Supabase backend configured
@@ -13,8 +13,8 @@ test.describe('Authentication', () => {
     
     // Should redirect to login
     await expect(page).toHaveURL(/\/login/, { timeout: 15000 });
-    // h1 says "School Canteen" — wait for it to render after auth loading
-    await expect(page.getByRole('heading', { name: /school canteen/i })).toBeVisible({ timeout: 15000 });
+    // h1 says "LOHECA Canteen" — wait for it to render after auth loading
+    await expect(page.getByRole('heading', { name: /loheca canteen/i })).toBeVisible({ timeout: 15000 });
   });
 
   test('should show signup link on login page', async ({ page }) => {
@@ -203,14 +203,14 @@ test.describe('Responsive Design', () => {
     await page.setViewportSize({ width: 768, height: 1024 }); // iPad
     await page.goto('/login');
     
-    await expect(page.getByRole('heading', { name: /school canteen/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: /loheca canteen/i })).toBeVisible({ timeout: 15000 });
   });
 
   test('should work on desktop viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/login');
     
-    await expect(page.getByRole('heading', { name: /school canteen/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: /loheca canteen/i })).toBeVisible({ timeout: 15000 });
   });
 });
 

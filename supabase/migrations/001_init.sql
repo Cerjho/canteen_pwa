@@ -1,4 +1,4 @@
--- Initial migration for School Canteen PWA
+-- Initial migration for LOHECA Canteen PWA
 -- Supabase Postgres with Row Level Security
 -- Uses gen_random_uuid() which is built into Postgres 13+
 

@@ -2,7 +2,7 @@
 
 ## Vision
 
-To become the leading canteen management solution for Philippine schools, enabling parents to easily order nutritious meals for their children with transparency and convenience.
+To be LOHECA's leading canteen management solution, enabling parents to easily order nutritious meals for their children with transparency and convenience.
 
 ---
 

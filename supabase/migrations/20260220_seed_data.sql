@@ -1,5 +1,5 @@
 -- ============================================
--- SEED DATA: School Canteen PWA
+-- SEED DATA: LOHECA Canteen PWA
 -- Provides realistic demo data for all tables
 -- Uses the 3 existing auth users:
 --   admin:  afd318a4-f9c4-4fef-ac9e-79751269c4d0

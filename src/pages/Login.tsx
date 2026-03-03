@@ -74,7 +74,7 @@ export default function Login() {
           <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
             <span className="text-4xl">🍱</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">School Canteen</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">LOHECA Canteen</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Order food for your kids</p>
         </div>
 

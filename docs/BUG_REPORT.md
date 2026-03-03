@@ -1,4 +1,4 @@
-# 🐛 Comprehensive Bug Report - Canteen PWA
+# 🐛 Comprehensive Bug Report - LOHECA Canteen PWA
 
 **Generated:** January 2, 2026  
 **Analysis Scope:** Full codebase analysis including components, hooks, services, pages, Supabase functions, and configuration files.
@@ -8,7 +8,7 @@
 ## 📊 Executive Summary
 
 | Category | Critical | High | Medium | Low | Total |
-|----------|----------|------|--------|-----|-------|
+| ---------- | ---------- | ------ | -------- | ----- | ------- |
 | Components | 0 | 5 | 5 | 13 | 23 |
 | Hooks | 4 | 3 | 5 | 5 | 17 |
 | Services | 2 | 8 | 9 | 4 | 23 |
@@ -225,28 +225,28 @@ queryFn: async () => {
 
 ## 🟠 HIGH SEVERITY ISSUES (37)
 
-### Components (5)
+### High — Components (5)
 
 | # | File | Issue | Lines |
-|---|------|-------|-------|
+| --- | ------ | ------- | ------- |
 | 1 | `ChangePasswordModal.tsx` | Memory leak - setTimeout not cleaned up on unmount | - |
 | 2 | `ConfirmDialog.tsx` | Component created inside useCallback causes remounts | - |
 | 3 | `CartDrawer.tsx` | Missing error handling in checkout - users don't see errors | - |
 | 4 | `PullToRefresh.tsx` | Race condition - setState on unmounted component | - |
 | 5 | `Toast.tsx` | Memory leak - setTimeout IDs not cleaned up | - |
 
-### Hooks (3)
+### High — Hooks (3)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `useAuth.ts` | State update after unmount - missing cleanup flag |
 | 2 | `useAuth.ts` | Missing error handling for getSession promise |
 | 3 | `useOrderSubscription.ts` | QueryClient in deps causes unnecessary re-subscriptions |
 
-### Services (8)
+### High — Services (8)
 
 | # | File | Issue | Lines |
-|---|------|-------|-------|
+| --- | ------ | ------- | ------- |
 | 1 | `localQueue.ts` | Unhandled promise rejection in 'online' event listener | 271-276 |
 | 2 | `localQueue.ts` | Data loss on IndexedDB upgrade - old data deleted | 33-37 |
 | 3 | `orders.ts` | Missing error handling for edge function response | 26-30 |
@@ -256,10 +256,10 @@ queryFn: async () => {
 | 7 | `storage.ts` | Memory leak - Object URL never revoked | 115 |
 | 8 | `students.ts` | Inconsistent error handling pattern | 64-75 |
 
-### Pages (6)
+### High — Pages (6)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `Login.tsx` | Missing loading state reset on success |
 | 2 | `Register.tsx` | Missing dependency in useEffect for code verification |
 | 3 | `Admin/Dashboard.tsx` | Race condition in real-time subscription |
@@ -267,10 +267,10 @@ queryFn: async () => {
 | 5 | `Parent/Menu.tsx` | Potential infinite loop in date selection |
 | 6 | `Staff/Orders.tsx` | Memory leak in real-time subscription |
 
-### Supabase Functions (12)
+### High — Supabase Functions (12)
 
 | # | Function | Issue |
-|---|----------|-------|
+| --- | ---------- | ------- |
 | 1 | `list-staff` | Unbounded user listing - no pagination (DoS risk) |
 | 2 | `send-invites` | Unbounded user listing |
 | 3 | `register` | Unbounded user listing |
@@ -284,10 +284,10 @@ queryFn: async () => {
 | 11 | `manage-student` | No rate limiting on bulk import (500 students) |
 | 12 | `admin-topup` | Missing transaction atomicity |
 
-### Configuration (3)
+### High — Configuration (3)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `App.tsx` / `types/index.ts` | Duplicate UserRole type definition |
 | 2 | `vite.config.ts` / `manifest` | PWA icon `purpose: "any maskable"` causes rendering issues |
 | 3 | `service-worker.ts` | Hardcoded placeholder URL |
@@ -296,30 +296,30 @@ queryFn: async () => {
 
 ## 🟡 MEDIUM SEVERITY ISSUES (38+)
 
-### Components (5)
+### Medium — Components (5)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `ActiveOrderBadge.tsx` | Unsafe non-null assertion with `user!.id` |
 | 2 | `CartDrawer.tsx` | Missing focus trap in drawer modal |
 | 3 | `ConfirmDialog.tsx` | Stale closure in callback - promise may never resolve |
 | 4 | `PaymentMethodSelector.tsx` | Missing fieldset/legend for accessibility |
 | 5 | `Toast.tsx` | Missing ARIA live region for screen readers |
 
-### Hooks (5)
+### Medium — Hooks (5)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `useFavorites.ts` | Missing error handling for JSON.parse |
 | 2 | `useFavorites.ts` | No type validation for parsed data |
 | 3 | `useFavorites.ts` | Stale closure issue in toggle function |
 | 4 | `useOrderSubscription.ts` | No error handling for subscription |
 | 5 | `useCart.ts` | Stale closure in checkout function |
 
-### Services (9)
+### Medium — Services (9)
 
 | # | File | Issue | Lines |
-|---|------|-------|-------|
+| --- | ------ | ------- | ------- |
 | 1 | `localQueue.ts` | Failed orders can grow indefinitely in localStorage | - |
 | 2 | `localQueue.ts` | Missing input validation in queueOrder | 51-65 |
 | 3 | `localQueue.ts` | Missing error handling for localStorage | 223-229 |
@@ -330,10 +330,10 @@ queryFn: async () => {
 | 8 | `storage.ts` | Null canvas context not handled | 91-103 |
 | 9 | `students.ts` | Type safety issue with Supabase select | 10-31 |
 
-### Pages (9)
+### Medium — Pages (9)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `Admin/Settings.tsx` | Missing dependency in dark mode useEffect |
 | 2 | `Admin/Settings.tsx` | Type safety issue with settings parsing |
 | 3 | `Admin/Orders.tsx` | Date filter mutates Date object |
@@ -344,10 +344,10 @@ queryFn: async () => {
 | 8 | `Parent/Menu.tsx` | Date formatting edge cases |
 | 9 | `Parent/Profile.tsx` | Complex profile creation may fail silently |
 
-### Configuration (5)
+### Medium — Configuration (5)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `types/index.ts` | Deprecated `Child` interface still used |
 | 2 | `package.json` | Missing ESLint configuration |
 | 3 | `types/index.ts` | Redundant PaymentMethod union |
@@ -358,10 +358,10 @@ queryFn: async () => {
 
 ## 🟢 LOW SEVERITY ISSUES (43+)
 
-### Components (13)
+### Low — Components (13)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `ActiveOrderBadge.tsx` | Hook called for all users, not just parents |
 | 2 | `CartDrawer.tsx` | Missing Escape key handler |
 | 3 | `ChangePasswordModal.tsx` | Missing aria-label on close button |
@@ -376,29 +376,29 @@ queryFn: async () => {
 | 12 | `Toast.tsx` | Dismiss button missing aria-label |
 | 13 | `ChangePasswordModal.tsx` | Race condition in password change |
 
-### Hooks (5)
+### Low — Hooks (5)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `useCart.ts` | Missing error state management |
 | 2 | `useCart.ts` | No loading state for checkout |
 | 3 | `useFavorites.ts` | Old favorites briefly visible on user switch |
 | 4 | `useProducts.ts` | Unused queryClient |
 | 5 | `useStudents.ts` | Missing return type annotation |
 
-### Services (4)
+### Low — Services (4)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `localQueue.ts` | Type assertion with `any` |
 | 2 | `orders.ts` | Missing type safety for response |
 | 3 | `products.ts` | No caching of holiday data |
 | 4 | `storage.ts` | Missing URL validation |
 
-### Pages (17)
+### Low — Pages (17)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `Login.tsx` | Missing error sanitization |
 | 2 | `Admin/index.tsx` | Missing loading state during role check |
 | 3 | `Admin/Reports.tsx` | Date range function not memoized |
@@ -417,10 +417,10 @@ queryFn: async () => {
 | 16 | `Admin/AuditLogs.tsx` | Using `as any` type assertion |
 | 17 | `Admin/Reports.tsx` | Console.log statements |
 
-### Configuration (4)
+### Low — Configuration (4)
 
 | # | File | Issue |
-|---|------|-------|
+| --- | ------ | ------- |
 | 1 | `package.json` | Missing @types/eslint |
 | 2 | `tailwind.config.cjs` / `index.css` | Duplicate animation definition |
 | 3 | `postcss.config.cjs` | Formatting issue |

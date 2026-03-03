@@ -41,8 +41,8 @@ Users can install the app to their home screen:
 
 ```json
 {
-  "name": "School Canteen",
-  "short_name": "Canteen",
+  "name": "LOHECA Canteen",
+  "short_name": "LOHECA",
   "description": "Order food for your kids",
   "start_url": "/",
   "display": "standalone",

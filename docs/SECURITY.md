@@ -386,7 +386,7 @@ logger.info('Order created', {
 
 ## Reporting Vulnerabilities
 
-**Security Email**: <security@yourschool.edu.ph>
+**Security Email**: <security@loheca-canteen.ph>
 
 **Response Time**: 24 hours
 

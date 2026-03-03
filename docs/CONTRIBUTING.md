@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for considering contributing to the School Canteen PWA!
+Thank you for considering contributing to the LOHECA Canteen PWA!
 
 ---
 

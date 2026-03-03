@@ -1,7 +1,7 @@
 {
-  "name": "canteen-pwa",
+  "name": "loheca-canteen-pwa",
   "version": "1.0.0",
-  "description": "Progressive Web App for elementary school canteen orders",
+  "description": "LOHECA Canteen — Progressive Web App for school canteen orders",
   "type": "module",
   "scripts": {
     "dev": "vite",

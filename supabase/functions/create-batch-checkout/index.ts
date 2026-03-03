@@ -588,8 +588,8 @@ serve(async (req) => {
       // Build description
       const studentNames = uniqueStudentIds.map(id => studentNameMap.get(id) || 'Student').join(', ');
       const description = orders.length === 1
-        ? 'School Canteen Order'
-        : `School Canteen — ${orders.length} orders for ${studentNames}`;
+        ? 'LOHECA Canteen Order'
+        : `LOHECA Canteen — ${orders.length} orders for ${studentNames}`;
 
       checkoutSession = await createCheckoutSession({
         lineItems,

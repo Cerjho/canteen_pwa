@@ -192,7 +192,7 @@ npm install package-name
 ## Dependency Graph
 
 ```text
-canteen-pwa
+loheca-canteen-pwa
 ├── react (UI)
 │   ├── react-router-dom (routing)
 │   └── react-query (data)

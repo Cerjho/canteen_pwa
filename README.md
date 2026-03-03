@@ -1,6 +1,6 @@
-# 🍱 Elementary School Canteen PWA
+# 🍱 LOHECA Canteen PWA
 
-A serverless Progressive Web App for managing canteen orders in Philippine elementary schools. Parents browse menus, place orders for their children, and track order status—all with offline support.
+A serverless Progressive Web App for managing canteen orders at LOHECA. Parents browse menus, place orders for their children, and track order status—all with offline support.
 
 ## 🎯 Key Features
 

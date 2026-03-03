@@ -330,7 +330,7 @@ For GCash/PayMaya/Card orders, the timeout should be **30 minutes** (PayMongo ch
    - `success_url`: `{APP_URL}/order-confirmation/{order_id}?payment=success`
    - `cancel_url`: `{APP_URL}/order-confirmation/{order_id}?payment=cancelled`
    - `metadata`: `{ order_id, parent_id, type: "order" }`
-   - `description`: "School Canteen Order #{short_id}"
+   - `description`: "LOHECA Canteen Order #{short_id}"
 6. Saves `paymongo_checkout_id` on the order
 7. Returns `{ order_id, checkout_url, payment_due_at }` to frontend
 
@@ -381,7 +381,7 @@ const checkoutResponse = await fetch('https://api.paymongo.com/v1/checkout_sessi
         send_email_receipt: true,
         show_description: true,
         show_line_items: true,
-        description: `School Canteen Order`,
+        description: `LOHECA Canteen Order`,
         line_items: orderItems.map(item => ({
           name: item.product_name,
           quantity: item.quantity,
