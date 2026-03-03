@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCart } from '../../../src/hooks/useCart';
+import { getTodayLocal } from '../../../src/utils/dateUtils';
 
 // Mock supabase client — each from() call returns a fresh self-referencing chain
 // so vi.clearAllMocks() never breaks the mock structure.
@@ -53,7 +54,9 @@ vi.mock('../../../src/services/payments', () => ({
 }));
 
 describe('useCart Hook', () => {
-  const today = new Date().toLocaleDateString('en-CA');
+  // Use Asia/Manila timezone (same as the hook) to avoid CI failures
+  // when UTC date differs from Manila date (UTC 16:00–23:59)
+  const today = getTodayLocal();
   
   const mockProduct = {
     product_id: 'product-1',

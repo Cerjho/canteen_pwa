@@ -5,13 +5,14 @@
  * These tests focus on the local state management and computed values.
  */
 import { describe, it, expect } from 'vitest';
-import { format, addDays } from 'date-fns';
+import { addDays } from 'date-fns';
+import { getTodayLocal, formatDateLocal } from '../../../src/utils/dateUtils';
 
 // Test utilities for multi-day cart logic
 describe('Multi-Day Cart Logic', () => {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-  const dayAfter = format(addDays(new Date(), 2), 'yyyy-MM-dd');
+  const today = getTodayLocal();
+  const tomorrow = formatDateLocal(addDays(new Date(), 1));
+  const dayAfter = formatDateLocal(addDays(new Date(), 2));
 
   const mockStudentA = {
     id: 'student-a',
