@@ -93,12 +93,15 @@ test.describe('Navigation', () => {
 
   test('should redirect to login when accessing protected routes', async ({ page }) => {
     await page.goto('/menu');
+    await page.waitForURL(/\/login/, { timeout: 10000 });
     await expect(page).toHaveURL(/\/login/);
 
     await page.goto('/dashboard');
+    await page.waitForURL(/\/login/, { timeout: 10000 });
     await expect(page).toHaveURL(/\/login/);
 
     await page.goto('/staff');
+    await page.waitForURL(/\/login/, { timeout: 10000 });
     await expect(page).toHaveURL(/\/login/);
   });
 });
