@@ -294,12 +294,16 @@ function incrementOrderRetryCount(db: IDBDatabase, id: string): Promise<void> {
 }
 
 async function getStoredAuthToken(): Promise<string | null> {
-  // Try to get token from IndexedDB or Cache
-  // This is a simplified version - in production, use secure storage
   try {
     const cache = await caches.open('auth-cache');
     const response = await cache.match('auth-token');
     if (response) {
+      // Reject tokens older than 1 hour (Supabase tokens expire in 1h)
+      const storedAt = Number(response.headers.get('X-Stored-At') || '0');
+      if (storedAt > 0 && Date.now() - storedAt > 3600_000) {
+        await cache.delete('auth-token');
+        return null;
+      }
       return await response.text();
     }
   } catch (error) {
@@ -377,10 +381,16 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   
-  // Store auth token for background sync
+  // Store auth token for background sync (short-lived, cleared on activate)
   if (event.data?.type === 'STORE_AUTH_TOKEN') {
+    const token = event.data.token;
+    if (typeof token !== 'string' || !token) return;
     caches.open('auth-cache').then((cache) => {
-      cache.put('auth-token', new Response(event.data.token));
+      // Store with timestamp header so we can expire stale tokens
+      const headers = new Headers({
+        'X-Stored-At': String(Date.now()),
+      });
+      cache.put('auth-token', new Response(token, { headers }));
     });
   }
 
