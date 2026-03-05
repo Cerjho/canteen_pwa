@@ -217,7 +217,7 @@ describe('Menu Page', () => {
       checkoutDate: vi.fn(),
       selectedStudentId: null,
       setSelectedStudentId: vi.fn()
-    });
+    } as unknown as ReturnType<typeof useCart>);
 
     // Mock useAuth
     vi.mocked(useAuth).mockReturnValue({
@@ -480,7 +480,7 @@ describe('Menu Page', () => {
         checkoutDate: vi.fn(),
         selectedStudentId: null,
         setSelectedStudentId: vi.fn()
-      });
+      } as unknown as ReturnType<typeof useCart>);
       
       renderMenu();
       
@@ -594,7 +594,7 @@ describe('Menu Page - Canteen Closed', () => {
       checkoutDate: vi.fn(),
       selectedStudentId: null,
       setSelectedStudentId: vi.fn()
-    });
+    } as unknown as ReturnType<typeof useCart>);
 
     // Create dates with holiday info - ALL dates are holidays so it can't auto-select an open day
     const mon = new Date('2026-03-16');
@@ -702,7 +702,7 @@ describe('Menu Page - Empty States', () => {
       checkoutDate: vi.fn(),
       selectedStudentId: null,
       setSelectedStudentId: vi.fn()
-    });
+    } as unknown as ReturnType<typeof useCart>);
 
     const mon = new Date('2026-03-16');
 
