@@ -343,7 +343,7 @@ serve(async (req) => {
         payment_method: 'cash',
         notes: notes || null,
         scheduled_for: day.scheduled_for,
-        client_order_id: `WO-${weeklyOrder.id.substring(0, 8)}-${day.scheduled_for}`,
+        client_order_id: crypto.randomUUID(),
       };
     });
 
