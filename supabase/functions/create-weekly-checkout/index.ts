@@ -169,7 +169,9 @@ serve(async (req) => {
     }
 
     // ── Validate weekly cutoff ──
-    const cutoffDay = (settings.get('weekly_cutoff_day') as string) || 'Friday';
+    // DB stores lowercase (e.g. "friday"), normalize to title case for dayNames lookup
+    const rawCutoffDay = (settings.get('weekly_cutoff_day') as string) || 'Friday';
+    const cutoffDay = rawCutoffDay.charAt(0).toUpperCase() + rawCutoffDay.slice(1).toLowerCase();
     const cutoffTime = (settings.get('weekly_cutoff_time') as string) || '17:00';
 
     const phNow = getPhilippineTime();

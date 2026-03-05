@@ -166,7 +166,9 @@ serve(async (req) => {
 
     // ── Validate weekly cutoff ──
     // Default: Friday 17:00 Manila time
-    const cutoffDay = (settings.get('weekly_cutoff_day') as string) || 'Friday';
+    // DB stores lowercase (e.g. "friday"), normalize to title case for dayNames lookup
+    const rawCutoffDay = (settings.get('weekly_cutoff_day') as string) || 'Friday';
+    const cutoffDay = rawCutoffDay.charAt(0).toUpperCase() + rawCutoffDay.slice(1).toLowerCase();
     const cutoffTime = (settings.get('weekly_cutoff_time') as string) || '17:00';
 
     const phNow = getPhilippineTime();
@@ -359,7 +361,7 @@ serve(async (req) => {
     }
 
     // ── Create payment record ──
-    const { data: payment } = await supabaseAdmin
+    const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
         parent_id,
@@ -372,7 +374,16 @@ serve(async (req) => {
       .select('id')
       .single();
 
-    if (payment) {
+    if (paymentError || !payment) {
+      console.error('Payment record insert error:', paymentError);
+      // Rollback: delete order items, daily orders, and weekly order
+      await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
+      await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
+      await supabaseAdmin.from('weekly_orders').delete().eq('id', weeklyOrder.id);
+      return errorResponse(corsHeaders, 500, 'PAYMENT_RECORD_FAILED', 'Failed to create payment record');
+    }
+
+    {
       const allocations = createdOrders.map(o => ({
         payment_id: payment.id,
         order_id: o.id,

@@ -296,13 +296,20 @@ export default function Menu() {
       // If checkout redirected to external payment page, don't navigate
       if (result?.redirecting) return;
       
+      // If no successful orders, don't navigate to confirmation
+      const firstSuccessful = result?.orders?.find(o => o.weekly_order_id);
+      if (!firstSuccessful) {
+        showToastRef.current('Order could not be placed. Please try again.', 'error');
+        return;
+      }
+      
       // Invalidate weekly orders cache
       queryClient.invalidateQueries({ queryKey: ['weekly-orders'] });
       
       // Navigate to confirmation page
       navigate('/order-confirmation', {
         state: {
-          orderId: result?.orders?.[0]?.weekly_order_id || crypto.randomUUID(),
+          orderId: firstSuccessful.weekly_order_id,
           orderCount: result?.orders?.length || 1,
           totalAmount: checkoutTotal,
           studentName: studentNames || 'Your students',

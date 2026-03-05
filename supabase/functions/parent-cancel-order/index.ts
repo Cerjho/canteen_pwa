@@ -6,6 +6,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
+import { createRefund as createPayMongoRefund, toCentavos } from '../_shared/paymongo.ts';
 
 interface CancelOrderRequest {
   order_id: string; // The daily order to cancel
@@ -95,7 +96,7 @@ serve(async (req) => {
     }
 
     // Cancel the order
-    const { error: updateError } = await supabaseAdmin
+    const { data: cancelledOrder, error: updateError } = await supabaseAdmin
       .from('orders')
       .update({
         status: 'cancelled',
@@ -104,9 +105,11 @@ serve(async (req) => {
       })
       .eq('id', order_id)
       .eq('parent_id', user.id)
-      .in('status', ['pending', 'confirmed']);
+      .in('status', ['pending', 'confirmed'])
+      .select('id, payment_method, total_amount')
+      .single();
 
-    if (updateError) {
+    if (updateError || !cancelledOrder) {
       console.error('Order cancel error:', updateError);
       return jsonResponse(
         { error: 'CANCEL_FAILED', message: 'Failed to cancel order' },
@@ -119,7 +122,70 @@ serve(async (req) => {
     // trg_recalculate_weekly_order_total trigger when status → cancelled.
     // weekly_orders status is auto-transitioned by trg_transition_weekly_order_status.
 
-    const cancelledAmount = validation?.total_amount ?? 0;
+    const cancelledAmount = validation?.total_amount ?? cancelledOrder.total_amount ?? 0;
+
+    // ── Initiate PayMongo refund for online payments ──
+    const onlineMethods = ['gcash', 'paymaya', 'card'];
+    let refundEstimate = '';
+
+    if (onlineMethods.includes(cancelledOrder.payment_method)) {
+      // Look up the PayMongo payment ID via payment_allocations → payments
+      const { data: alloc } = await supabaseAdmin
+        .from('payment_allocations')
+        .select('payment_id')
+        .eq('order_id', order_id)
+        .limit(1)
+        .single();
+
+      let paymongoPaymentId: string | null = null;
+      if (alloc) {
+        const { data: origPayment } = await supabaseAdmin
+          .from('payments')
+          .select('paymongo_payment_id')
+          .eq('id', alloc.payment_id)
+          .eq('type', 'payment')
+          .single();
+        paymongoPaymentId = origPayment?.paymongo_payment_id ?? null;
+      }
+
+      if (paymongoPaymentId) {
+        try {
+          const refundResult = await createPayMongoRefund(
+            paymongoPaymentId,
+            toCentavos(cancelledAmount),
+            'requested_by_customer',
+            `Parent cancelled daily order ${order_id}`,
+          );
+          console.log(`[AUDIT] PayMongo refund initiated for order ${order_id}:`, refundResult.id);
+
+          // Create refund payment record
+          await supabaseAdmin.from('payments').insert({
+            parent_id: user.id,
+            type: 'refund',
+            amount_total: cancelledAmount,
+            method: cancelledOrder.payment_method,
+            status: 'completed',
+            reference_id: `PAYMONGO-REFUND-${refundResult.id}`,
+            external_ref: `PAYMONGO-REFUND-${refundResult.id}`,
+            paymongo_refund_id: refundResult.id,
+          });
+
+          if (cancelledOrder.payment_method === 'gcash') {
+            refundEstimate = ' Refund will be processed to your GCash within 1 business day.';
+          } else if (cancelledOrder.payment_method === 'paymaya') {
+            refundEstimate = ' Refund will be processed to your PayMaya within 1-3 business days.';
+          } else {
+            refundEstimate = ' Refund will be processed to your card within 5-10 business days.';
+          }
+        } catch (refundErr) {
+          // Log but don't fail the cancellation — order is already cancelled
+          console.error(`[WARN] PayMongo refund failed for order ${order_id}:`, refundErr);
+          refundEstimate = ' Automatic refund is being processed. Please contact support if not received within 10 business days.';
+        }
+      } else {
+        console.log(`[INFO] No PayMongo payment ID for order ${order_id} — order was likely unpaid, no refund needed`);
+      }
+    }
 
     console.log(`[AUDIT] Parent ${user.email} cancelled daily order ${order_id} for ${validation?.scheduled_for}. Amount: ₱${cancelledAmount}`);
 
@@ -129,7 +195,7 @@ serve(async (req) => {
         order_id,
         scheduled_for: validation?.scheduled_for,
         cancelled_amount: cancelledAmount,
-        message: `Day cancelled successfully. ₱${Number(cancelledAmount).toFixed(2)} will be refunded.`,
+        message: `Day cancelled successfully. ₱${Number(cancelledAmount).toFixed(2)} will be refunded.${refundEstimate}`,
       },
       200,
       origin

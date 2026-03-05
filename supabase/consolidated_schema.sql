@@ -368,9 +368,11 @@ CREATE TABLE IF NOT EXISTS makeup_days (
   date DATE NOT NULL UNIQUE,
   name TEXT NOT NULL DEFAULT 'Make-up Class',
   reason TEXT,
+  acts_as_day INT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id),
-  CONSTRAINT makeup_days_saturday_only CHECK (EXTRACT(DOW FROM date) = 6)
+  CONSTRAINT makeup_days_saturday_only CHECK (EXTRACT(DOW FROM date) = 6),
+  CONSTRAINT makeup_days_acts_as_day_check CHECK (acts_as_day IS NULL OR (acts_as_day >= 1 AND acts_as_day <= 5))
 );
 
 -- Menu date overrides (override the weekly template for specific dates)
@@ -873,15 +875,16 @@ DECLARE
   v_now_ph       TIMESTAMPTZ;
   v_today        DATE;
   v_dow          INT;
+  v_today_isodow INT;
   v_cutoff_time  TEXT;
   v_cutoff_ts    TIMESTAMPTZ;
   v_this_friday  DATE;
   v_next_monday  DATE;
-  v_next_friday  DATE;
 BEGIN
   v_now_ph := NOW() AT TIME ZONE 'Asia/Manila';
   v_today  := v_now_ph::DATE;
   v_dow    := EXTRACT(ISODOW FROM NEW.scheduled_for);
+  v_today_isodow := EXTRACT(ISODOW FROM v_today)::INT;
 
   IF NEW.scheduled_for < v_today THEN
     RAISE EXCEPTION 'Cannot add items for past dates.' USING ERRCODE = 'P0010';
@@ -908,27 +911,33 @@ BEGIN
     RAISE EXCEPTION 'Canteen is closed on this holiday.' USING ERRCODE = 'P0013';
   END IF;
 
-  v_next_monday := v_today + ((8 - EXTRACT(ISODOW FROM v_today)::INT) % 7 + 1);
+  -- C1 FIX: Correct next-Monday formula
+  -- (7 - ISODOW) % 7 + 1 gives days-until-next-Monday for any day:
+  --   Mon(1)->7, Tue(2)->6, Wed(3)->5, Thu(4)->4, Fri(5)->3, Sat(6)->2, Sun(7)->1
+  v_next_monday := v_today + ((7 - v_today_isodow) % 7 + 1);
 
   SELECT COALESCE(
     (SELECT value #>> '{}' FROM system_settings WHERE key = 'weekly_cutoff_time'),
     '17:00'
   ) INTO v_cutoff_time;
 
-  v_this_friday := v_today + (5 - EXTRACT(ISODOW FROM v_today)::INT);
+  v_this_friday := v_today + (5 - v_today_isodow);
 
-  IF EXTRACT(ISODOW FROM v_today) BETWEEN 1 AND 5 THEN
+  IF v_today_isodow BETWEEN 1 AND 5 THEN
+    -- Weekday: check Friday cutoff
     v_cutoff_ts := (v_this_friday::TEXT || ' ' || v_cutoff_time)::TIMESTAMPTZ
                    AT TIME ZONE 'Asia/Manila';
     IF v_now_ph > v_cutoff_ts THEN
       v_next_monday := v_next_monday + INTERVAL '7 days';
     END IF;
+  ELSE
+    -- Saturday/Sunday: cutoff already passed, push to week after next
+    v_next_monday := v_next_monday + INTERVAL '7 days';
   END IF;
 
-  v_next_friday := v_next_monday + INTERVAL '4 days';
-
-  IF NEW.scheduled_for < v_next_monday OR NEW.scheduled_for > v_next_friday THEN
-    RAISE EXCEPTION 'Items can only be added for next week (% to %).', v_next_monday, v_next_friday
+  -- Only enforce the floor: scheduled_for must be >= next orderable Monday
+  IF NEW.scheduled_for < v_next_monday THEN
+    RAISE EXCEPTION 'Items can only be added for dates starting from next week (%). Current and past weeks are not allowed.', v_next_monday
       USING ERRCODE = 'P0014';
   END IF;
 

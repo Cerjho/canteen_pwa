@@ -136,6 +136,7 @@ serve(async (req) => {
 
         // Sanitize description
         const sanitizedDescription = description?.trim().slice(0, 255) || null;
+        const sanitizedName = (name || 'Holiday').trim().slice(0, 100);
 
         // Check if already exists
         const { data: existing } = await supabaseAdmin
@@ -272,6 +273,7 @@ serve(async (req) => {
             date,
             name: sanitizedMakeupName,
             reason: sanitizedReason,
+            acts_as_day: acts_as_day,
             created_by: user.id
           })
           .select()

@@ -1,28 +1,25 @@
--- Migration: Saturday support for menu_schedules + relax cart_items trigger
+-- Migration: Critical bug fixes (Phase 1)
 -- Fixes:
---   1. day_of_week CHECK constraint: allow 6 (Saturday) for makeup days
---   2. Correct existing Saturday rows that were clamped to day_of_week=5
---   3. Relax validate_cart_item_date() to allow any future school day from next Monday onward
---      (instead of restricting to exactly one week)
+--   C1: validate_cart_item_date() next_monday formula off-by-one (calculated Tuesday instead of Monday)
+--   C4: makeup_days table missing acts_as_day column
+--   M14: Weekend cutoff logic undefined in cart trigger (Saturday/Sunday before cutoff treated inconsistently)
 
 -- ═══════════════════════════════════════════════════
--- 1. Widen day_of_week constraint to include Saturday
+-- C4: Add acts_as_day column to makeup_days table
+--     Stores which day of the week the makeup day replaces (1=Mon..5=Fri)
 -- ═══════════════════════════════════════════════════
-ALTER TABLE menu_schedules DROP CONSTRAINT IF EXISTS menu_schedules_day_of_week_check;
-ALTER TABLE menu_schedules ADD CONSTRAINT menu_schedules_day_of_week_check
-  CHECK (day_of_week >= 1 AND day_of_week <= 6);
+ALTER TABLE makeup_days ADD COLUMN IF NOT EXISTS acts_as_day INT;
+ALTER TABLE makeup_days ADD CONSTRAINT makeup_days_acts_as_day_check
+  CHECK (acts_as_day IS NULL OR (acts_as_day >= 1 AND acts_as_day <= 5));
 
--- Fix existing Saturday rows that were incorrectly stored as day_of_week=5
-UPDATE menu_schedules
-SET day_of_week = 6,
-    updated_at = NOW()
-WHERE EXTRACT(ISODOW FROM scheduled_date) = 6
-  AND day_of_week = 5;
+COMMENT ON COLUMN makeup_days.acts_as_day IS 'ISODOW of the weekday this makeup Saturday replaces (1=Mon..5=Fri)';
 
 -- ═══════════════════════════════════════════════════
--- 2. Relax validate_cart_item_date() trigger
---    Allow any school day from the next orderable Monday onward
---    (removes the single-week ceiling, keeps the floor)
+-- C1 + M14: Fix validate_cart_item_date() trigger function
+--   C1:  Formula was (8 - ISODOW) % 7 + 1, which always adds 1 extra day (Tuesday).
+--        Correct formula: (7 - ISODOW) % 7 + 1 → always lands on next Monday.
+--   M14: Weekend (Sat/Sun) was falling through the BETWEEN 1 AND 5 check,
+--        meaning cutoff was never evaluated. Now handled explicitly.
 -- ═══════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION validate_cart_item_date()
 RETURNS TRIGGER AS $$
@@ -30,6 +27,7 @@ DECLARE
   v_now_ph       TIMESTAMPTZ;
   v_today        DATE;
   v_dow          INT;
+  v_today_isodow INT;
   v_cutoff_time  TEXT;
   v_cutoff_ts    TIMESTAMPTZ;
   v_this_friday  DATE;
@@ -38,6 +36,7 @@ BEGIN
   v_now_ph := NOW() AT TIME ZONE 'Asia/Manila';
   v_today  := v_now_ph::DATE;
   v_dow    := EXTRACT(ISODOW FROM NEW.scheduled_for);
+  v_today_isodow := EXTRACT(ISODOW FROM v_today)::INT;
 
   -- No past dates
   IF NEW.scheduled_for < v_today THEN
@@ -68,9 +67,10 @@ BEGIN
     RAISE EXCEPTION 'Canteen is closed on this holiday.' USING ERRCODE = 'P0013';
   END IF;
 
-  -- Determine the next orderable Monday (earliest date parents may order for)
-  -- (7 - ISODOW) % 7 + 1: Mon(1)→7, Tue(2)→6, ..., Sat(6)→2, Sun(7)→1
-  v_next_monday := v_today + ((7 - EXTRACT(ISODOW FROM v_today)::INT) % 7 + 1);
+  -- C1 FIX: Correct next-Monday formula
+  -- (7 - ISODOW) % 7 + 1 gives days-until-next-Monday for any day:
+  --   Mon(1)→7, Tue(2)→6, Wed(3)→5, Thu(4)→4, Fri(5)→3, Sat(6)→2, Sun(7)→1
+  v_next_monday := v_today + ((7 - v_today_isodow) % 7 + 1);
 
   SELECT COALESCE(
     (SELECT value #>> '{}' FROM system_settings WHERE key = 'weekly_cutoff_time'),
@@ -78,20 +78,22 @@ BEGIN
   ) INTO v_cutoff_time;
 
   -- Friday of the current week
-  v_this_friday := v_today + (5 - EXTRACT(ISODOW FROM v_today)::INT);
+  v_this_friday := v_today + (5 - v_today_isodow);
 
-  -- If today is Mon–Fri, check whether we are still before cutoff
-  IF EXTRACT(ISODOW FROM v_today) BETWEEN 1 AND 5 THEN
+  -- M14 FIX: Handle all days including weekends
+  IF v_today_isodow BETWEEN 1 AND 5 THEN
+    -- Weekday: check Friday cutoff
     v_cutoff_ts := (v_this_friday::TEXT || ' ' || v_cutoff_time)::TIMESTAMPTZ
                    AT TIME ZONE 'Asia/Manila';
     IF v_now_ph > v_cutoff_ts THEN
-      -- Past cutoff → shift target to the week after next
       v_next_monday := v_next_monday + INTERVAL '7 days';
     END IF;
+  ELSE
+    -- Saturday (6) or Sunday (7): cutoff already passed, push to week after next
+    v_next_monday := v_next_monday + INTERVAL '7 days';
   END IF;
 
   -- Only enforce the floor: scheduled_for must be >= next orderable Monday
-  -- No ceiling: parents can order for any future published week
   IF NEW.scheduled_for < v_next_monday THEN
     RAISE EXCEPTION 'Items can only be added for dates starting from next week (%). Current and past weeks are not allowed.', v_next_monday
       USING ERRCODE = 'P0014';

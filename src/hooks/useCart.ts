@@ -909,6 +909,9 @@ export function useCart() {
       }
 
       // Clear checked-out items from local state and DB
+      // For online payments: keep cart items in DB until payment is confirmed via webhook.
+      // Only clear from local state so user sees updated UI; items remain recoverable on payment failure.
+      const isOnline = isOnlinePaymentMethod(effectiveMethod);
       const checkedOutStudents = new Set(
         results.filter(r => r.weekly_order_id).map(r => r.student_id)
       );
@@ -919,18 +922,21 @@ export function useCart() {
         return !checkedOutStudents.has(item.student_id);
       }));
 
-      // Delete checked-out items from DB
-      for (const item of checkedOutItems) {
-        await supabase
-          .from('cart_items')
-          .delete()
-          .match({
-            user_id: user.id,
-            student_id: item.student_id,
-            product_id: item.product_id,
-            scheduled_for: item.scheduled_for,
-            meal_period: item.meal_period,
-          });
+      // Only delete DB cart items for cash payments.
+      // Online payment items are cleaned up by the webhook handler after payment confirmation.
+      if (!isOnline) {
+        for (const item of checkedOutItems) {
+          await supabase
+            .from('cart_items')
+            .delete()
+            .match({
+              user_id: user.id,
+              student_id: item.student_id,
+              product_id: item.product_id,
+              scheduled_for: item.scheduled_for,
+              meal_period: item.meal_period,
+            });
+        }
       }
 
       // Reset notes/payment if all items cleared

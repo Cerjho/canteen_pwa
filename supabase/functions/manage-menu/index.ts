@@ -499,8 +499,9 @@ serve(async (req) => {
           }
         }
 
+        const failedDates: string[] = [];
         for (const targetDate of targetDates) {
-          // Clear target date
+          // Delete then insert atomically per date; on insert failure, log and continue
           await supabaseAdmin
             .from('menu_schedules')
             .delete()
@@ -516,7 +517,18 @@ serve(async (req) => {
             is_active: item.is_active
           }));
 
-          await supabaseAdmin.from('menu_schedules').insert(newItems);
+          const { error: insertErr } = await supabaseAdmin.from('menu_schedules').insert(newItems);
+          if (insertErr) {
+            console.error(`[WARN] copy-week insert failed for ${targetDate}:`, insertErr);
+            failedDates.push(targetDate);
+          }
+        }
+
+        if (failedDates.length === targetDates.length && targetDates.length > 0) {
+          return new Response(
+            JSON.stringify({ error: 'COPY_FAILED', message: 'Failed to copy menu to all target dates', failedDates }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         console.log(`[AUDIT] Admin ${user.email} copied menu from ${from_date} to all weekdays (${sourceMenu.length} items, skipped holidays: ${skippedHolidays.join(', ') || 'none'})`);
@@ -524,9 +536,10 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: true, 
-            copied_to_dates: targetDates, 
+            copied_to_dates: targetDates.filter(d => !failedDates.includes(d)), 
             items_per_day: sourceMenu.length,
-            skipped_holidays: skippedHolidays
+            skipped_holidays: skippedHolidays,
+            failed_dates: failedDates.length > 0 ? failedDates : undefined,
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
