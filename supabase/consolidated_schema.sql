@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS invitations (
 CREATE TABLE IF NOT EXISTS menu_schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 5),
+  day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 6),
   scheduled_date DATE,
   is_active BOOLEAN DEFAULT TRUE,
   menu_status TEXT NOT NULL DEFAULT 'draft'

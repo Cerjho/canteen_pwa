@@ -138,18 +138,17 @@ export interface WeekdayInfo {
   isSaturday?: boolean;
 }
 
-// Get remaining school days of the current week with their status.
-// Shows Mon–Fri (+ any makeup Saturday) of the current week, starting from today.
-// If today is a regular Saturday or Sunday, shows the following Mon–Fri(+Sat) instead.
-export async function getWeekdaysWithStatus(): Promise<WeekdayInfo[]> {
+// Get school days for a given week with their holiday/makeup status.
+// When weekStart is provided (Monday YYYY-MM-DD), returns the full Mon–Sat of that week.
+// When omitted, returns remaining days of the current week (legacy behavior).
+export async function getWeekdaysWithStatus(weekStart?: string): Promise<WeekdayInfo[]> {
   const weekdays: WeekdayInfo[] = [];
   const today = getPhilippineToday();
-  const todayStr = formatDateLocal(today);
   
   // Fetch holidays and makeup days in parallel
   const [{ data: holidays }, { data: makeupDays }] = await Promise.all([
     supabase.from('holidays').select('date, name, is_recurring'),
-    supabase.from('makeup_days').select('date, name, reason').gte('date', todayStr),
+    supabase.from('makeup_days').select('date, name, reason'),
   ]);
   
   // Build lookup maps
@@ -164,20 +163,27 @@ export async function getWeekdaysWithStatus(): Promise<WeekdayInfo[]> {
   const makeupDayMap = new Map<string, string>();
   makeupDays?.forEach(m => makeupDayMap.set(m.date.split('T')[0], m.name));
 
-  // Determine the start of the school week window
-  const startDate = new Date(today);
-  const dow = startDate.getDay();
-  if (dow === 0) {
-    // Sunday → next Monday
-    startDate.setDate(startDate.getDate() + 1);
-  } else if (dow === 6 && !makeupDayMap.has(formatDateLocal(startDate))) {
-    // Regular Saturday → next Monday
-    startDate.setDate(startDate.getDate() + 2);
-  }
+  let startDate: Date;
+  let endDate: Date;
 
-  // End of the school week = the Saturday of the week that startDate falls in
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + (6 - startDate.getDay()));
+  if (weekStart) {
+    // Explicit week: show full Mon–Sat of the target week
+    const [y, mo, da] = weekStart.split('-').map(Number);
+    startDate = new Date(y, mo - 1, da); // Monday
+    endDate = new Date(y, mo - 1, da);
+    endDate.setDate(endDate.getDate() + 5); // Saturday
+  } else {
+    // Legacy: current week from today to Saturday
+    startDate = new Date(today);
+    const dow = startDate.getDay();
+    if (dow === 0) {
+      startDate.setDate(startDate.getDate() + 1);
+    } else if (dow === 6 && !makeupDayMap.has(formatDateLocal(startDate))) {
+      startDate.setDate(startDate.getDate() + 2);
+    }
+    endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + (6 - startDate.getDay()));
+  }
 
   // Walk startDate → endDate (inclusive), collecting valid school days
   const cursor = new Date(startDate);

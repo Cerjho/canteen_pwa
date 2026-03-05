@@ -41,9 +41,14 @@ vi.mock('../../../src/hooks/useSystemSettings', () => ({
   useSystemSettings: vi.fn()
 }));
 
-vi.mock('../../../src/hooks/useProducts', () => ({
-  useSurplusItems: vi.fn()
-}));
+vi.mock('../../../src/utils/dateUtils', async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>;
+  return {
+    ...actual,
+    getNextOrderableWeek: vi.fn().mockReturnValue('2026-03-16'),
+    getWeekLabel: vi.fn().mockReturnValue('Mar 16\u201320, 2026'),
+  };
+});
 
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
@@ -71,8 +76,8 @@ import { useFavorites } from '../../../src/hooks/useFavorites';
 import { useCart } from '../../../src/hooks/useCart';
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useSystemSettings } from '../../../src/hooks/useSystemSettings';
-import { useSurplusItems } from '../../../src/hooks/useProducts';
 import { getProductsForDate, getCanteenStatus, getAvailableOrderDates, getWeekdaysWithStatus } from '../../../src/services/products';
+import { getNextOrderableWeek, getWeekLabel } from '../../../src/utils/dateUtils';
 
 const mockNavigate = vi.fn();
 
@@ -127,7 +132,7 @@ const mockCartItems = [
     price: 65, 
     quantity: 2, 
     image_url: '',
-    scheduled_for: new Date().toISOString().split('T')[0],
+    scheduled_for: '2026-03-16',
     meal_period: 'lunch' as const
   }
 ];
@@ -248,35 +253,21 @@ describe('Menu Page', () => {
       isSurplusClosed: vi.fn().mockReturnValue(false),
     } as unknown as ReturnType<typeof useSystemSettings>);
 
-    // Mock useSurplusItems
-    vi.mocked(useSurplusItems).mockReturnValue({
-      data: [],
-      isLoading: false,
-      error: null,
-      isError: false,
-      isPending: false,
-      isSuccess: true,
-      status: 'success',
-    } as unknown as ReturnType<typeof useSurplusItems>);
-
-    // Create dates for testing
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayAfter = new Date(today);
-    dayAfter.setDate(dayAfter.getDate() + 2);
+    // Create dates for testing - use next orderable week (matches mock weekStart '2026-03-16')
+    const mon = new Date('2026-03-16');
+    const tue = new Date('2026-03-17');
+    const wed = new Date('2026-03-18');
 
     // Mock getWeekdaysWithStatus - this is what the Menu component actually uses
     vi.mocked(getWeekdaysWithStatus).mockResolvedValue([
-      { date: today, dateStr: today.toISOString().split('T')[0], isOpen: true, isHoliday: false },
-      { date: tomorrow, dateStr: tomorrow.toISOString().split('T')[0], isOpen: true, isHoliday: false },
-      { date: dayAfter, dateStr: dayAfter.toISOString().split('T')[0], isOpen: true, isHoliday: false }
+      { date: mon, dateStr: '2026-03-16', isOpen: true, isHoliday: false },
+      { date: tue, dateStr: '2026-03-17', isOpen: true, isHoliday: false },
+      { date: wed, dateStr: '2026-03-18', isOpen: true, isHoliday: false }
     ]);
 
     vi.mocked(getProductsForDate).mockResolvedValue(mockProducts);
     vi.mocked(getCanteenStatus).mockResolvedValue({ isOpen: true });
-    vi.mocked(getAvailableOrderDates).mockResolvedValue([today, tomorrow, dayAfter]);
+    vi.mocked(getAvailableOrderDates).mockResolvedValue([mon, tue, wed]);
   });
 
   describe('Rendering', () => {
@@ -431,22 +422,23 @@ describe('Menu Page', () => {
   });
 
   describe('Date Selection', () => {
-    it('renders date navigation controls', async () => {
+    it('renders week navigation controls', async () => {
       renderMenu();
       
       await waitFor(() => {
-        // Should have "Today" label in date selector buttons
-        expect(screen.getByRole('button', { name: /today/i })).toBeInTheDocument();
+        // Should show week label from getWeekLabel mock — use getAllByText since day tabs also show Mar 16
+        const matches = screen.getAllByText(/Mar 16/);
+        expect(matches.length).toBeGreaterThanOrEqual(1);
       });
     });
 
     // Canteen closed message tested in dedicated describe block below
-    it('shows date label in header', async () => {
+    it('shows week label in header', async () => {
       renderMenu();
       
       await waitFor(() => {
-        // Should show today's date indicator in subtitle
-        expect(screen.getByText(/today's menu/i)).toBeInTheDocument();
+        // Week label rendered by the week navigator (mocked as 'Mar 16–20, 2026')
+        expect(screen.getByText(/Mar 16\u201320, 2026/)).toBeInTheDocument();
       });
     });
   });
@@ -605,15 +597,13 @@ describe('Menu Page - Canteen Closed', () => {
     });
 
     // Create dates with holiday info - ALL dates are holidays so it can't auto-select an open day
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const mon = new Date('2026-03-16');
+    const tue = new Date('2026-03-17');
 
     // Mock weekdays - ALL are holidays so component shows closed state
     vi.mocked(getWeekdaysWithStatus).mockResolvedValue([
-      { date: today, dateStr: today.toISOString().split('T')[0], isOpen: false, isHoliday: true, holidayName: 'New Year' },
-      { date: tomorrow, dateStr: tomorrow.toISOString().split('T')[0], isOpen: false, isHoliday: true, holidayName: 'Holiday 2' }
+      { date: mon, dateStr: '2026-03-16', isOpen: false, isHoliday: true, holidayName: 'New Year' },
+      { date: tue, dateStr: '2026-03-17', isOpen: false, isHoliday: true, holidayName: 'Holiday 2' }
     ]);
 
     vi.mocked(getCanteenStatus).mockResolvedValue({
@@ -623,7 +613,7 @@ describe('Menu Page - Canteen Closed', () => {
     });
     
     vi.mocked(getProductsForDate).mockResolvedValue([]);
-    vi.mocked(getAvailableOrderDates).mockResolvedValue([today, tomorrow]);
+    vi.mocked(getAvailableOrderDates).mockResolvedValue([mon, tue]);
   });
 
   it('shows canteen closed message when all dates are holidays', async () => {
@@ -714,15 +704,14 @@ describe('Menu Page - Empty States', () => {
       setSelectedStudentId: vi.fn()
     });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const mon = new Date('2026-03-16');
 
     vi.mocked(getWeekdaysWithStatus).mockResolvedValue([
-      { date: today, dateStr: today.toISOString().split('T')[0], isOpen: true, isHoliday: false }
+      { date: mon, dateStr: '2026-03-16', isOpen: true, isHoliday: false }
     ]);
     vi.mocked(getProductsForDate).mockResolvedValue([]);
     vi.mocked(getCanteenStatus).mockResolvedValue({ isOpen: true });
-    vi.mocked(getAvailableOrderDates).mockResolvedValue([today]);
+    vi.mocked(getAvailableOrderDates).mockResolvedValue([mon]);
   });
 
   it('shows empty state when no products available', async () => {

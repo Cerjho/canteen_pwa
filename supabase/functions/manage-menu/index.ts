@@ -171,8 +171,8 @@ serve(async (req) => {
 
         // Calculate day_of_week from scheduled_date
         const rawDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
-        // Clamp to 1-5 for DB CHECK constraint; weekend makeup days store as nearest weekday
-        const calculatedDayOfWeek = Math.min(rawDayOfWeek, 5);
+        // Clamp to 1-6 for DB CHECK constraint (1=Mon..6=Sat for makeup days)
+        const calculatedDayOfWeek = Math.min(rawDayOfWeek, 6);
 
         const { data: newSchedule, error: insertError } = await supabaseAdmin
           .from('menu_schedules')
@@ -236,8 +236,8 @@ serve(async (req) => {
 
         // Calculate day_of_week from scheduled_date
         const rawDayOfWeek = day_of_week ?? getDayOfWeek(scheduled_date);
-        // Clamp to 1-5 for DB CHECK constraint; weekend makeup days store as nearest weekday
-        const calculatedDayOfWeek = Math.min(rawDayOfWeek, 5);
+        // Clamp to 1-6 for DB CHECK constraint (1=Mon..6=Sat for makeup days)
+        const calculatedDayOfWeek = Math.min(rawDayOfWeek, 6);
 
         const schedules = newProductIds.map(pid => ({
           product_id: pid,
@@ -381,8 +381,8 @@ serve(async (req) => {
           .delete()
           .eq('scheduled_date', to_date);
 
-        // Calculate day_of_week for target date (clamp to 1-5 for DB constraint)
-        const toDayOfWeek = Math.min(getDayOfWeek(to_date), 5);
+        // Calculate day_of_week for target date (clamp to 1-6 for DB constraint, supports Saturday makeup days)
+        const toDayOfWeek = Math.min(getDayOfWeek(to_date), 6);
 
         // Copy items
         const newItems = sourceMenu.map(item => ({
@@ -444,15 +444,30 @@ serve(async (req) => {
           console.log(`[DEBUG copy-week] Holidays: ${JSON.stringify(allHolidays.map(h => ({ name: h.name, date: h.date, is_recurring: h.is_recurring })))}`);
         }
 
-        // Copy to all weekdays (Mon-Fri) of the week, skipping holidays
+        // Copy to all weekdays (Mon-Sat) of the week, skipping holidays and non-makeup Saturdays
         const targetDates: string[] = [];
         const skippedHolidays: string[] = [];
         
-        for (let i = 0; i < 5; i++) {
+        // Fetch makeup days for this week to know if Saturday is a school day
+        const { data: weekMakeupDays } = await supabaseAdmin
+          .from('makeup_days')
+          .select('date')
+          .gte('date', week_start)
+          .lte('date', addDays(week_start, 5));
+        const makeupDaySet = new Set((weekMakeupDays || []).map(m => m.date.split('T')[0]));
+
+        for (let i = 0; i < 6; i++) {
           const targetDate = addDays(week_start, i);
           const targetMonthDay = targetDate.slice(5); // MM-DD
           console.log(`[DEBUG copy-week] Day ${i}: targetDate=${targetDate}, targetMonthDay=${targetMonthDay}`);
           
+          // Skip non-makeup Saturdays
+          const targetDow = getDayOfWeek(targetDate);
+          if (targetDow === 6 && !makeupDaySet.has(targetDate)) {
+            console.log(`[DEBUG copy-week] Skipping ${targetDate} - regular Saturday (not a makeup day)`);
+            continue;
+          }
+
           if (targetDate !== from_date) {
             // Check if target date is a holiday (inline check for better debugging)
             
@@ -491,8 +506,8 @@ serve(async (req) => {
             .delete()
             .eq('scheduled_date', targetDate);
 
-          // Calculate day_of_week (clamp to 1-5 for DB constraint)
-          const targetDayOfWeek = Math.min(getDayOfWeek(targetDate), 5);
+          // Calculate day_of_week (clamp to 1-6 for DB constraint, supports Saturday makeup days)
+          const targetDayOfWeek = Math.min(getDayOfWeek(targetDate), 6);
 
           const newItems = sourceMenu.map(item => ({
             product_id: item.product_id,
@@ -554,8 +569,8 @@ serve(async (req) => {
           );
         }
 
-        // Calculate week end (Friday)
-        const weekEnd = addDays(week_start, 4);
+        // Calculate week end (Saturday — includes makeup days)
+        const weekEnd = addDays(week_start, 5);
 
         const { data: deleted, error: deleteError } = await supabaseAdmin
           .from('menu_schedules')
@@ -593,9 +608,8 @@ serve(async (req) => {
           : action === 'lock-week' ? 'locked'
           : 'draft';
 
-        // If locking, only allow from published state
-        // If unpublishing, only allow from published state
-        const weekEndPublish = addDays(week_start, 4);
+        // Include Saturday for makeup days
+        const weekEndPublish = addDays(week_start, 5);
 
         const { data: updated, error: updateError } = await supabaseAdmin
           .from('menu_schedules')
@@ -627,7 +641,7 @@ serve(async (req) => {
           );
         }
 
-        const weekEndStatus = addDays(week_start, 4);
+        const weekEndStatus = addDays(week_start, 5);
         const { data: statusRows, error: statusError } = await supabaseAdmin
           .from('menu_schedules')
           .select('menu_status')

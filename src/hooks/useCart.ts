@@ -415,6 +415,13 @@ export function useCart() {
       return;
     }
 
+    // Validate date is not in the current week (must be next orderable week or later)
+    const nextOrderableMonday = getNextOrderableWeek();
+    if (item.scheduled_for < nextOrderableMonday) {
+      setError('Ordering for this week has closed. Please select next week or later.');
+      return;
+    }
+
     setError(null);
     
     // Optimistic update

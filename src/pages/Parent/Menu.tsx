@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus, Clock } from 'lucide-react';
+import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, isTomorrow, startOfWeek } from 'date-fns';
+import { format, isTomorrow } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus, formatDateLocal } from '../../services/products';
 import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
@@ -14,7 +14,6 @@ import { SearchBar } from '../../components/SearchBar';
 import { ProductCardSkeleton, Skeleton } from '../../components/Skeleton';
 import { WeeklyCartSummary } from '../../components/WeeklyCartSummary';
 import { CutoffCountdown } from '../../components/CutoffCountdown';
-import { SurplusItemCard } from '../../components/SurplusItemCard';
 import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -23,7 +22,7 @@ import type { ProductCategory, MealPeriod, PaymentMethod } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
 import { autoMealPeriod, MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 import { useSystemSettings } from '../../hooks/useSystemSettings';
-import { useSurplusItems } from '../../hooks/useProducts';
+import { getNextOrderableWeek, getWeekLabel } from '../../utils/dateUtils';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -68,10 +67,47 @@ export default function Menu() {
   } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { data: students, isLoading: studentsLoading } = useStudents();
-  const { settings, isSurplusClosed } = useSystemSettings();
+  const { settings, isWeeklyCutoffPassed } = useSystemSettings();
 
-  // Surplus items (available when today is selected and canteen has extras)
-  const { data: surplusItems } = useSurplusItems();
+  // ── Week navigation ─────────────────────────────────────────
+  // Compute the earliest orderable week (the "floor")
+  const minWeekStart = useMemo(
+    () => getNextOrderableWeek(settings.weekly_cutoff_day, settings.weekly_cutoff_time),
+    [settings.weekly_cutoff_day, settings.weekly_cutoff_time]
+  );
+  const [currentWeekStart, setCurrentWeekStart] = useState<string | null>(null);
+  // Initialize currentWeekStart once minWeekStart resolves (settings may load async)
+  useEffect(() => {
+    if (minWeekStart && !currentWeekStart) {
+      setCurrentWeekStart(minWeekStart);
+    }
+  }, [minWeekStart, currentWeekStart]);
+
+  // Week label for display: "Mar 10–14, 2026"
+  const weekLabel = currentWeekStart ? getWeekLabel(currentWeekStart) : '';
+
+  // Is the currently displayed week past cutoff? (shouldn't normally happen since we enforce floor)
+  const weekCutoffPassed = currentWeekStart ? isWeeklyCutoffPassed(currentWeekStart) : false;
+
+  const handlePrevWeek = useCallback(() => {
+    if (!currentWeekStart || !minWeekStart) return;
+    // Go back one week, but never before minWeekStart
+    const prevMonday = new Date(currentWeekStart + 'T00:00:00');
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    const prevStr = formatDateLocal(prevMonday);
+    if (prevStr >= minWeekStart) {
+      setCurrentWeekStart(prevStr);
+      setSelectedDate(null); // reset day selection
+    }
+  }, [currentWeekStart, minWeekStart]);
+
+  const handleNextWeek = useCallback(() => {
+    if (!currentWeekStart) return;
+    const nextMonday = new Date(currentWeekStart + 'T00:00:00');
+    nextMonday.setDate(nextMonday.getDate() + 7);
+    setCurrentWeekStart(formatDateLocal(nextMonday));
+    setSelectedDate(null); // reset day selection
+  }, [currentWeekStart]);
 
   // Query active orders for the cart (merge detection)
   const { data: activeOrders } = useQuery({
@@ -88,10 +124,11 @@ export default function Menu() {
     staleTime: 30_000,
   });
   
-  // Get weekdays with status (including holidays)
+  // Get weekdays with status for the selected week
   const { data: weekdaysInfo } = useQuery({
-    queryKey: ['weekdays-with-status'],
-    queryFn: () => getWeekdaysWithStatus()
+    queryKey: ['weekdays-with-status', currentWeekStart],
+    queryFn: () => getWeekdaysWithStatus(currentWeekStart!),
+    enabled: !!currentWeekStart
   });
   
   // Get selected weekday info for checking holiday status
@@ -118,17 +155,9 @@ export default function Menu() {
   );
   const effectiveDate = useMemo(() => new Date(effectiveDateStr + 'T00:00:00'), [effectiveDateStr]);
 
-  // Compute the Monday of the week being viewed
-  const weekStart = useMemo(() => {
-    if (!weekdaysInfo || weekdaysInfo.length === 0) return null;
-    const monday = startOfWeek(weekdaysInfo[0].date, { weekStartsOn: 1 });
-    return formatDateLocal(monday);
-  }, [weekdaysInfo]);
+  // Compute the Monday of the week being viewed (just use currentWeekStart)
+  const weekStart = currentWeekStart;
 
-  // Surplus visibility: only when viewing today and items exist
-  const surplusClosed = isSurplusClosed();
-  const showSurplus = surplusItems && surplusItems.length > 0 && formatDateLocal(effectiveDate) === formatDateLocal(new Date());
-  
   // Check canteen status for selected date (use weekdayInfo if available)
   const { data: canteenStatus } = useQuery({
     queryKey: ['canteen-status', formatDateLocal(effectiveDate)],
@@ -300,7 +329,7 @@ export default function Menu() {
   const hasNoStudents = studentsLoaded && students.length === 0;
 
   // Loading state for weekdays info
-  const weekdaysLoading = weekdaysInfo === undefined;
+  const weekdaysLoading = weekdaysInfo === undefined || !currentWeekStart;
 
   // Navigate to next/prev date
   const handlePrevDate = useCallback(() => {
@@ -490,7 +519,7 @@ export default function Menu() {
           subtitle={
             <span className="flex items-center gap-1.5">
               <Calendar size={14} className="text-primary-500 dark:text-primary-400" />
-              {formatDateLocal(effectiveDate) === formatDateLocal(new Date()) ? "Today's Menu" : `Menu for ${format(effectiveDate, 'EEE, MMM d')}`}
+              {`Menu for ${format(effectiveDate, 'EEE, MMM d')}`}
             </span>
           }
           action={
@@ -513,19 +542,42 @@ export default function Menu() {
           }
         />
 
-        {/* Date Selector for Advance Ordering */}
+        {/* Week Navigator + Day Selector */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-4">
+          {/* Week navigator row */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <Calendar size={16} className="text-primary-500 dark:text-primary-400" />
-              Order for:
-            </span>
-              {formatDateLocal(effectiveDate) !== formatDateLocal(new Date()) && (
-              <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                Advance Order
+            <button
+              onClick={handlePrevWeek}
+              disabled={!currentWeekStart || !minWeekStart || currentWeekStart <= minWeekStart}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-30 transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div className="text-center">
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                <Calendar size={14} className="text-primary-500" />
+                Week of {weekLabel}
               </span>
-            )}
+            </div>
+            <button
+              onClick={handleNextWeek}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
+
+          {/* Cutoff warning for this week */}
+          {weekCutoffPassed && (
+            <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 mb-2">
+              <AlertTriangle size={14} className="text-red-500 shrink-0" />
+              <span className="text-xs text-red-700 dark:text-red-400 font-medium">
+                Ordering for this week has closed. Please select a later week.
+              </span>
+            </div>
+          )}
+
+          {/* Day pills */}
           {weekdaysInfo && (
             <div className="flex gap-1 overflow-x-auto pb-1">
               {weekdaysInfo.map((dayInfo) => {
@@ -695,56 +747,9 @@ export default function Menu() {
                 isFavorite={isFavorite(product.id)}
                 onToggleFavorite={() => toggleFavorite(product.id)}
                 onAddToCart={handleAddToCart}
-                addDisabled={!selectedStudentId}
+                addDisabled={!selectedStudentId || weekCutoffPassed}
               />
             ))}
-          </div>
-        )}
-
-        {/* Surplus Items Section */}
-        {showSurplus && (
-          <div className="mt-8">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
-                <Clock size={16} className="text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Surplus Items</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Extra items from today — available while supplies last</p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {surplusItems.map((item, index) => {
-                const selectedStudent = students?.find(s => s.id === selectedStudentId);
-                return (
-                  <SurplusItemCard
-                    key={item.id}
-                    item={item}
-                    cartQuantity={0}
-                    onAdd={(surplusItem, qty) => {
-                      if (!selectedStudentId || !selectedStudent) {
-                        showToast('Select a student first', 'error');
-                        return;
-                      }
-                      addItem({
-                        product_id: surplusItem.product_id,
-                        student_id: selectedStudentId,
-                        student_name: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
-                        name: surplusItem.product?.name || 'Surplus Item',
-                        price: surplusItem.surplus_price,
-                        image_url: surplusItem.product?.image_url,
-                        quantity: qty,
-                        scheduled_for: formatDateLocal(new Date()),
-                        meal_period: 'lunch',
-                      });
-                      showToast(`Added ${qty} ${surplusItem.product?.name || 'item'}`, 'success');
-                    }}
-                    isClosed={surplusClosed}
-                    index={index}
-                  />
-                );
-              })}
-            </div>
           </div>
         )}
       </div>
