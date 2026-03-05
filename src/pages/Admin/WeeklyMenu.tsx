@@ -22,7 +22,11 @@ import {
   EyeOff,
   Layers,
   Trash,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  Send,
+  FileEdit,
+  Unlock
 } from 'lucide-react';
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, isSameWeek, isToday } from 'date-fns';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
@@ -494,6 +498,50 @@ export default function AdminWeeklyMenu() {
     onError: (error: Error) => showToast(friendlyError(error.message, 'remove make-up day'), 'error')
   });
 
+  // ── Menu Publish Status ──
+  type MenuStatus = 'empty' | 'draft' | 'published' | 'locked';
+
+  const { data: weekMenuStatus, isLoading: statusLoading } = useQuery<{ status: MenuStatus; total: number }>({
+    queryKey: ['menu-week-status', weekStartStr],
+    queryFn: async () => {
+      const result = await callManageMenu({ action: 'get-week-status', week_start: weekStartStr });
+      return { status: result.status as MenuStatus, total: result.total as number };
+    },
+    enabled: activeTab === 'menu',
+  });
+
+  const publishWeek = useMutation({
+    mutationFn: async () => callManageMenu({ action: 'publish-week', week_start: weekStartStr }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-week-status'] });
+      showToast('Menu published — parents can now order', 'success');
+    },
+    onError: (error: Error) => showToast(friendlyError(error.message, 'publish menu'), 'error'),
+  });
+
+  const unpublishWeek = useMutation({
+    mutationFn: async () => callManageMenu({ action: 'unpublish-week', week_start: weekStartStr }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-week-status'] });
+      showToast('Menu unpublished — hidden from parents', 'success');
+    },
+    onError: (error: Error) => showToast(friendlyError(error.message, 'unpublish menu'), 'error'),
+  });
+
+  const lockWeek = useMutation({
+    mutationFn: async () => callManageMenu({ action: 'lock-week', week_start: weekStartStr }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-week-status'] });
+      showToast('Menu locked — no further changes allowed', 'success');
+    },
+    onError: (error: Error) => showToast(friendlyError(error.message, 'lock menu'), 'error'),
+  });
+
+  const currentWeekStatus: MenuStatus = weekMenuStatus?.status ?? 'empty';
+  const isWeekLocked = currentWeekStatus === 'locked';
+  const isWeekPublished = currentWeekStatus === 'published';
+  const hasMenuItems = (weekMenuStatus?.total ?? 0) > 0;
+
   // Computed values - filter by specific date
   const getSelectedDate = () => {
     if (selectedDay === 6) {
@@ -715,6 +763,84 @@ export default function AdminWeeklyMenu() {
               </div>
             </div>
 
+            {/* Publish Status Banner */}
+            {!statusLoading && (
+              <div className={`rounded-xl p-4 flex items-center justify-between gap-3 ${
+                isWeekLocked
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
+                  : isWeekPublished
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  : hasMenuItems
+                  ? 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+                  : 'bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  {isWeekLocked ? (
+                    <Lock size={18} className="text-amber-600 dark:text-amber-400" />
+                  ) : isWeekPublished ? (
+                    <Send size={18} className="text-green-600 dark:text-green-400" />
+                  ) : (
+                    <FileEdit size={18} className="text-gray-500 dark:text-gray-400" />
+                  )}
+                  <div>
+                    <p className={`text-sm font-semibold ${
+                      isWeekLocked ? 'text-amber-700 dark:text-amber-300'
+                      : isWeekPublished ? 'text-green-700 dark:text-green-300'
+                      : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {isWeekLocked ? 'Menu Locked' : isWeekPublished ? 'Published' : hasMenuItems ? 'Draft' : 'No Menu'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {isWeekLocked ? 'Menu is locked — editing disabled'
+                        : isWeekPublished ? 'Parents can see and order from this menu'
+                        : hasMenuItems ? 'Not yet visible to parents'
+                        : 'Add menu items to get started'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isWeekLocked ? (
+                    <button
+                      onClick={() => unpublishWeek.mutate()}
+                      disabled={unpublishWeek.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                    >
+                      <Unlock size={14} />
+                      {unpublishWeek.isPending ? 'Unlocking...' : 'Unlock'}
+                    </button>
+                  ) : isWeekPublished ? (
+                    <>
+                      <button
+                        onClick={() => unpublishWeek.mutate()}
+                        disabled={unpublishWeek.isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        <FileEdit size={14} />
+                        {unpublishWeek.isPending ? '...' : 'Unpublish'}
+                      </button>
+                      <button
+                        onClick={() => lockWeek.mutate()}
+                        disabled={lockWeek.isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                      >
+                        <Lock size={14} />
+                        {lockWeek.isPending ? '...' : 'Lock'}
+                      </button>
+                    </>
+                  ) : hasMenuItems ? (
+                    <button
+                      onClick={() => publishWeek.mutate()}
+                      disabled={publishWeek.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                    >
+                      <Send size={14} />
+                      {publishWeek.isPending ? 'Publishing...' : 'Publish'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
             {viewMode === 'day' ? (
               <>
                 {/* Day Selector */}
@@ -825,9 +951,9 @@ export default function AdminWeeklyMenu() {
                 <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={() => setShowAddModal(true)}
-                    disabled={!!selectedDayHoliday}
+                    disabled={!!selectedDayHoliday || isWeekLocked}
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors ${
-                      selectedDayHoliday
+                      selectedDayHoliday || isWeekLocked
                         ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
@@ -841,7 +967,7 @@ export default function AdminWeeklyMenu() {
                       {/* Copy dropdown */}
                       <div className="relative group">
                         <button 
-                          disabled={copyToDay.isPending || copyToAllDays.isPending}
+                          disabled={copyToDay.isPending || copyToAllDays.isPending || isWeekLocked}
                           className={`px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl font-medium text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-2 ${
                             copyToDay.isPending || copyToAllDays.isPending
                               ? 'opacity-70 cursor-wait'
@@ -904,7 +1030,12 @@ export default function AdminWeeklyMenu() {
                       {/* Clear button */}
                       <button
                         onClick={() => { setClearTarget('day'); setShowClearConfirm(true); }}
-                        className="px-4 py-3 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-xl font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        disabled={isWeekLocked}
+                        className={`px-4 py-3 rounded-xl font-medium transition-colors ${
+                          isWeekLocked
+                            ? 'bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                            : 'bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                        }`}
                       >
                         <Trash size={18} />
                       </button>
@@ -991,7 +1122,12 @@ export default function AdminWeeklyMenu() {
                                 </button>
                                 <button
                                   onClick={() => removeFromSchedule.mutate(schedule.id)}
-                                  className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+                                  disabled={isWeekLocked}
+                                  className={`p-2 rounded-lg ${
+                                    isWeekLocked
+                                      ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                      : 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
+                                  }`}
                                 >
                                   <Trash2 size={18} />
                                 </button>
@@ -1011,7 +1147,12 @@ export default function AdminWeeklyMenu() {
                   <h3 className="font-semibold">Week Overview</h3>
                   <button
                     onClick={() => { setClearTarget('week'); setShowClearConfirm(true); }}
-                    className="text-sm text-red-600 hover:underline flex items-center gap-1"
+                    disabled={isWeekLocked}
+                    className={`text-sm flex items-center gap-1 ${
+                      isWeekLocked
+                        ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                        : 'text-red-600 hover:underline'
+                    }`}
                   >
                     <Trash size={14} />
                     Clear Week

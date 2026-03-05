@@ -110,8 +110,8 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 400, 'INVALID_PAYMENT_METHOD', 'This endpoint handles cash only. Use create-weekly-checkout for online payments.');
     }
 
-    if (days.length > 5) {
-      return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', 'Weekly order can have at most 5 days (Mon-Fri)');
+    if (days.length > 6) {
+      return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', 'Weekly order can have at most 6 days (Mon-Sat)');
     }
 
     // Validate week_start is a Monday
@@ -122,7 +122,7 @@ serve(async (req) => {
 
     // Validate each day falls within the target week (Mon-Fri)
     const weekEndDate = new Date(weekStartDate);
-    weekEndDate.setDate(weekEndDate.getDate() + 4); // Friday
+    weekEndDate.setDate(weekEndDate.getDate() + 5); // Saturday (for makeup days)
     const weekEndStr = weekEndDate.toISOString().split('T')[0];
 
     for (const day of days) {
@@ -134,8 +134,19 @@ serve(async (req) => {
       }
       const dayDate = new Date(day.scheduled_for + 'T00:00:00');
       const dow = dayDate.getDay();
-      if (dow === 0 || dow === 6) {
-        return errorResponse(corsHeaders, 400, 'INVALID_DATE', `${day.scheduled_for} is a weekend day`);
+      if (dow === 0) {
+        return errorResponse(corsHeaders, 400, 'INVALID_DATE', `${day.scheduled_for} is a Sunday`);
+      }
+      if (dow === 6) {
+        // Saturday — only allowed if it's a makeup day
+        const { data: makeupDay } = await supabaseAdmin
+          .from('makeup_days')
+          .select('id')
+          .eq('date', day.scheduled_for)
+          .maybeSingle();
+        if (!makeupDay) {
+          return errorResponse(corsHeaders, 400, 'INVALID_DATE', `${day.scheduled_for} is a Saturday and not a makeup day`);
+        }
       }
       for (const item of day.items) {
         if (!item.product_id || item.quantity <= 0 || item.price_at_order < 0) {

@@ -249,11 +249,13 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
   }
   
   // Check for date-specific menu schedules (date-based system)
+  // Only show published menus to parents
   const { data: dateSchedules, error: scheduleError } = await supabase
     .from('menu_schedules')
     .select('product_id')
     .eq('scheduled_date', dateStr)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('menu_status', 'published');
   
   if (scheduleError) throw scheduleError;
   
@@ -329,11 +331,13 @@ export async function getMenuForWeek(
   const result = new Map<string, Product[]>();
 
   // Fetch all menu schedules for the week in one query
+  // Only show published menus to parents
   const { data: schedules, error: schedError } = await supabase
     .from('menu_schedules')
     .select('product_id, scheduled_date')
     .in('scheduled_date', dates)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('menu_status', 'published');
 
   if (schedError) throw schedError;
   if (!schedules || schedules.length === 0) {

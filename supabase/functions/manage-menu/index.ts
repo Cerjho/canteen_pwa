@@ -6,7 +6,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
-type Action = 'add' | 'add-bulk' | 'remove' | 'toggle' | 'copy-day' | 'copy-week' | 'clear-day' | 'clear-week';
+type Action = 'add' | 'add-bulk' | 'remove' | 'toggle' | 'copy-day' | 'copy-week' | 'clear-day' | 'clear-week' | 'publish-week' | 'unpublish-week' | 'lock-week' | 'get-week-status';
 
 interface ManageMenuRequest {
   action: Action;
@@ -114,7 +114,7 @@ serve(async (req) => {
     const { action, schedule_id, product_id, product_ids, scheduled_date, day_of_week, from_date, to_date, week_start, is_active } = body;
 
     // Validate action
-    const validActions: Action[] = ['add', 'add-bulk', 'remove', 'toggle', 'copy-day', 'copy-week', 'clear-day', 'clear-week'];
+    const validActions: Action[] = ['add', 'add-bulk', 'remove', 'toggle', 'copy-day', 'copy-week', 'clear-day', 'clear-week', 'publish-week', 'unpublish-week', 'lock-week', 'get-week-status'];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid action. Must be: ${validActions.join(', ')}` }),
@@ -575,6 +575,81 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, week_start, week_end: weekEnd, cleared: deleted?.length || 0 }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'publish-week':
+      case 'unpublish-week':
+      case 'lock-week': {
+        if (!week_start) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'week_start is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const targetStatus = action === 'publish-week' ? 'published'
+          : action === 'lock-week' ? 'locked'
+          : 'draft';
+
+        // If locking, only allow from published state
+        // If unpublishing, only allow from published state
+        const weekEndPublish = addDays(week_start, 4);
+
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from('menu_schedules')
+          .update({ menu_status: targetStatus })
+          .gte('scheduled_date', week_start)
+          .lte('scheduled_date', weekEndPublish)
+          .select('id');
+
+        if (updateError) {
+          return new Response(
+            JSON.stringify({ error: 'UPDATE_FAILED', message: `Failed to ${action.replace('-', ' ')}` }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[AUDIT] Admin ${user.email} ${action} for week ${week_start} (${updated?.length || 0} rows)`);
+
+        return new Response(
+          JSON.stringify({ success: true, week_start, status: targetStatus, updated: updated?.length || 0 }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get-week-status': {
+        if (!week_start) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'week_start is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const weekEndStatus = addDays(week_start, 4);
+        const { data: statusRows, error: statusError } = await supabaseAdmin
+          .from('menu_schedules')
+          .select('menu_status')
+          .gte('scheduled_date', week_start)
+          .lte('scheduled_date', weekEndStatus);
+
+        if (statusError) {
+          return new Response(
+            JSON.stringify({ error: 'QUERY_FAILED', message: 'Failed to get week status' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Determine aggregate status: if any locked → locked, any published → published, else draft
+        const statuses = new Set((statusRows || []).map(r => r.menu_status));
+        const aggregateStatus = statusRows?.length === 0 ? 'empty'
+          : statuses.has('locked') ? 'locked'
+          : statuses.has('published') ? 'published'
+          : 'draft';
+
+        return new Response(
+          JSON.stringify({ success: true, week_start, status: aggregateStatus, total: statusRows?.length || 0 }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
