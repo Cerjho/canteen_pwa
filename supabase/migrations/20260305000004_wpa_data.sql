@@ -8,11 +8,48 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- 1. Backfill weekly_orders from existing orders grouped by (parent, student, week)
+-- 0. Fix validate_weekly_order_cutoff timestamp bug (DATE - INTERVAL → TIMESTAMP)
+--    Migration 2 already applied this function, so re-create with the fix.
 -- ---------------------------------------------------------------------------
 
+CREATE OR REPLACE FUNCTION validate_weekly_order_cutoff()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_cutoff_time TEXT;
+  v_cutoff_ts   TIMESTAMPTZ;
+  v_now_manila  TIMESTAMPTZ;
+BEGIN
+  SELECT COALESCE(
+    (SELECT value #>> '{}' FROM system_settings WHERE key = 'weekly_cutoff_time'),
+    '17:00'
+  ) INTO v_cutoff_time;
+
+  -- Cast to DATE first: (DATE - INTERVAL) yields TIMESTAMP, whose ::TEXT includes '00:00:00'
+  v_cutoff_ts := ((NEW.week_start - INTERVAL '3 days')::DATE::TEXT
+                  || ' ' || v_cutoff_time)::TIMESTAMPTZ AT TIME ZONE 'Asia/Manila';
+  v_now_manila := NOW() AT TIME ZONE 'Asia/Manila';
+
+  IF v_now_manila > v_cutoff_ts THEN
+    RAISE EXCEPTION
+      'Weekly order cutoff has passed. Orders for the week of % closed on Friday at %.',
+      NEW.week_start, v_cutoff_time
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ---------------------------------------------------------------------------
+-- 1. Backfill weekly_orders from existing orders grouped by (parent, student, week)
+--    Disable cutoff trigger: historical weeks are past cutoff by definition.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE weekly_orders DISABLE TRIGGER trg_validate_weekly_order_cutoff;
+
 INSERT INTO weekly_orders (
-  id, parent_id, student_id, week_start, total_amount, status, payment_status, created_at, updated_at
+  id, parent_id, student_id, week_start, total_amount, status,
+  payment_method, payment_status, created_at, updated_at
 )
 SELECT
   gen_random_uuid(),
@@ -25,6 +62,11 @@ SELECT
     WHEN COUNT(*) FILTER (WHERE o.status IN ('completed','cancelled')) = COUNT(*) THEN 'completed'
     ELSE 'completed'
   END::TEXT                                  AS status,
+  -- Use the most common payment_method from the grouped orders, default 'cash'
+  COALESCE(
+    (MODE() WITHIN GROUP (ORDER BY o.payment_method)),
+    'cash'
+  )                                          AS payment_method,
   'paid'                                     AS payment_status,
   MIN(o.created_at)                          AS created_at,
   MAX(o.updated_at)                          AS updated_at
@@ -34,6 +76,8 @@ WHERE o.parent_id IS NOT NULL
   AND o.scheduled_for IS NOT NULL
 GROUP BY o.parent_id, o.student_id, date_trunc('week', o.scheduled_for)::DATE
 ON CONFLICT DO NOTHING;
+
+ALTER TABLE weekly_orders ENABLE TRIGGER trg_validate_weekly_order_cutoff;
 
 -- ---------------------------------------------------------------------------
 -- 2. Link existing orders to their weekly_orders

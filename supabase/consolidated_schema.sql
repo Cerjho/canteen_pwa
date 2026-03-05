@@ -949,7 +949,8 @@ BEGIN
     '17:00'
   ) INTO v_cutoff_time;
 
-  v_cutoff_ts := ((NEW.week_start - INTERVAL '3 days')::TEXT
+  -- Cast to DATE first: (DATE - INTERVAL) yields TIMESTAMP, whose ::TEXT includes '00:00:00'
+  v_cutoff_ts := ((NEW.week_start - INTERVAL '3 days')::DATE::TEXT
                   || ' ' || v_cutoff_time)::TIMESTAMPTZ AT TIME ZONE 'Asia/Manila';
   v_now_manila := NOW() AT TIME ZONE 'Asia/Manila';
 

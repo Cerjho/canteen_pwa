@@ -83,10 +83,6 @@ port = 54327
 vector_port = 54328
 
 # Edge Functions
-[functions.process-order]
-enabled = true
-verify_jwt = true
-
 [functions.refund-order]
 enabled = true
 verify_jwt = true
@@ -99,10 +95,6 @@ verify_jwt = true
 enabled = true
 verify_jwt = true
 
-[functions.create-topup-checkout]
-enabled = true
-verify_jwt = true
-
 [functions.retry-checkout]
 enabled = true
 verify_jwt = true
@@ -112,10 +104,6 @@ enabled = true
 verify_jwt = true
 
 [functions.confirm-cash-payment]
-enabled = true
-verify_jwt = true
-
-[functions.admin-topup]
 enabled = true
 verify_jwt = true
 
