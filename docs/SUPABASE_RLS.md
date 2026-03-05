@@ -59,7 +59,7 @@ WITH CHECK (auth.uid() = id);
 
 ---
 
-### **children** Table
+### **students** Table
 
 ```sql
 -- Parents can view their own children
@@ -293,16 +293,16 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 ### 3. **Validate Ownership**
 
-Always check parent owns child before creating order:
+Always check parent owns student before creating order:
 
 ```typescript
-const { data: child } = await supabaseAdmin
-  .from('children')
+const { data: student } = await supabaseAdmin
+  .from('students')
   .select('parent_id')
-  .eq('id', child_id)
+  .eq('id', student_id)
   .single();
 
-if (child.parent_id !== parent_id) {
+if (student.parent_id !== parent_id) {
   throw new Error('UNAUTHORIZED');
 }
 ```
@@ -317,12 +317,12 @@ if (child.parent_id !== parent_id) {
 -- Set session to parent user
 SET request.jwt.claims.sub = '<parent_uuid>';
 
--- Try to access another parent's child (should fail)
-SELECT * FROM children WHERE parent_id = '<other_parent_uuid>';
+-- Try to access another parent's student (should fail)
+SELECT * FROM students WHERE parent_id = '<other_parent_uuid>';
 -- Result: 0 rows
 
--- Access own child (should succeed)
-SELECT * FROM children WHERE parent_id = '<parent_uuid>';
+-- Access own student (should succeed)
+SELECT * FROM students WHERE parent_id = '<parent_uuid>';
 -- Result: rows returned
 ```
 
@@ -335,18 +335,18 @@ SET request.jwt.claims.sub = '<staff_uuid>';
 SELECT COUNT(*) FROM orders;
 -- Result: all orders
 
--- Cannot insert child
-INSERT INTO children (parent_id, first_name, last_name, grade_level)
-VALUES ('<parent_uuid>', 'Test', 'Child', 'Grade 1');
+-- Cannot insert student
+INSERT INTO students (parent_id, first_name, last_name, grade_level)
+VALUES ('<parent_uuid>', 'Test', 'student', 'Grade 1');
 -- Result: Error (no INSERT policy for staff)
 ```
 
 ### 3. Automated Tests
 
 ```typescript
-test('parent cannot access other parent children', async () => {
+test('parent cannot access other parent students', async () => {
   const { data, error } = await supabase
-    .from('children')
+    .from('students')
     .select('*')
     .eq('parent_id', otherParentId);
   
@@ -372,8 +372,8 @@ SET client_min_messages = 'log';
 
 **Debug**:
 
-1. Check if RLS is enabled: `SELECT * FROM pg_tables WHERE tablename = 'children';`
-2. List policies: `SELECT * FROM pg_policies WHERE tablename = 'children';`
+1. Check if RLS is enabled: `SELECT * FROM pg_tables WHERE tablename = 'students';`
+2. List policies: `SELECT * FROM pg_policies WHERE tablename = 'students';`
 3. Verify JWT: Check `auth.uid()` returns expected user ID
 
 **Issue**: "permission denied for table X"
@@ -381,7 +381,7 @@ SET client_min_messages = 'log';
 **Solution**: Enable RLS on table:
 
 ```sql
-ALTER TABLE children ENABLE ROW LEVEL SECURITY;
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ```
 
 ---
@@ -391,7 +391,7 @@ ALTER TABLE children ENABLE ROW LEVEL SECURITY;
 ### Index on Foreign Keys
 
 ```sql
-CREATE INDEX idx_children_parent_id ON children(parent_id);
+CREATE INDEX idx_children_parent_id ON students(parent_id);
 CREATE INDEX idx_orders_parent_id ON orders(parent_id);
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 ```
@@ -404,6 +404,6 @@ Keep policies simple. Use Edge Functions for complex authorization logic.
 
 ## Future Enhancements
 
-- [ ] Add `children.allergies` and enforce dietary restrictions
-- [ ] Implement spending limits per child
+- [ ] Add `students.dietary_restrictions` and enforce dietary restrictions
+- [ ] Implement spending limits per student
 - [ ] Add order approval workflow for large orders

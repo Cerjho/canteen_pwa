@@ -126,7 +126,7 @@ describe('createOrder', () => {
     
     const result = await createOrder({
       parent_id: 'parent-1',
-      child_id: 'child-1',
+      student_id: 'child-1',
       client_order_id: 'order-123',
       items: [{ product_id: 'prod-1', quantity: 2, price_at_order: 25.00 }],
       payment_method: 'cash'
@@ -158,25 +158,25 @@ afterEach(async () => {
   await supabase.from('orders').delete().neq('id', '');
 });
 
-test('parent can create order for their child', async () => {
-  // Insert test parent and child
+test('parent can create order for their student', async () => {
+  // Insert test parent and student
   const { data: parent } = await supabase.from('parents').insert({
     email: 'test@example.com',
     first_name: 'Test',
     last_name: 'Parent'
   }).select().single();
   
-  const { data: child } = await supabase.from('children').insert({
+  const { data: child } = await supabase.from('students').insert({
     parent_id: parent.id,
     first_name: 'Test',
-    last_name: 'Child',
+    last_name: 'Student',
     grade_level: 'Grade 1'
   }).select().single();
   
   // Create order
   const order = await createOrder({
     parent_id: parent.id,
-    child_id: child.id,
+    student_id: child.id,
     client_order_id: crypto.randomUUID(),
     items: [{ product_id: 'prod-1', quantity: 1, price_at_order: 45.00 }],
     payment_method: 'cash'
@@ -227,7 +227,7 @@ test.describe('Order Flow', () => {
   });
   
   test('parent can place order for child', async ({ page }) => {
-    // Select child
+    // Select student
     await page.selectOption('select', { label: 'Juan Dela Cruz - Grade 3' });
     
     // Add product to cart
@@ -248,12 +248,12 @@ test.describe('Order Flow', () => {
     await expect(page.locator('text=Order placed successfully')).toBeVisible();
   });
   
-  test('cannot place order without selecting child', async ({ page }) => {
+  test('cannot place order without selecting student', async ({ page }) => {
     await page.click('button:has-text("Add")');
     await page.click('[aria-label="Cart"]');
     await page.click('button:has-text("Checkout")');
     
-    await expect(page.locator('text=Please select a child')).toBeVisible();
+    await expect(page.locator('text=Please select a student')).toBeVisible();
   });
 });
 ```

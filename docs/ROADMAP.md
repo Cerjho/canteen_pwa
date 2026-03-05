@@ -2,7 +2,7 @@
 
 ## Vision
 
-To be LOHECA's leading canteen management solution, enabling parents to easily order nutritious meals for their children with transparency and convenience.
+To be LOHECA's leading canteen management solution, enabling parents to easily place weekly meal pre-orders for their students with transparency and convenience.
 
 ---
 
@@ -10,18 +10,34 @@ To be LOHECA's leading canteen management solution, enabling parents to easily o
 
 ### ✅ Completed
 
-- [x] MVP launch
-- [x] Parent authentication
-- [x] Basic order placement
-- [x] Offline support
-- [x] Staff dashboard
+- [x] MVP launch with parent authentication
+- [x] Basic order placement with offline support
+- [x] Staff dashboard for order processing
+- [x] **Weekly Pre-Order System** (full refactor)
+  - Weekly cart with Mon–Fri day grouping
+  - Configurable cutoff (Friday 5 PM default)
+  - Day-level cancellation (before 8 AM)
+  - Cutoff countdown timer
+- [x] **PayMongo Payment Integration**
+  - GCash, PayMaya, credit/debit card checkout
+  - Batch and weekly checkout sessions
+  - Webhook-based payment confirmation
+  - Self-healing payment status checks
+- [x] **Student Management System**
+  - Admin CSV import of students
+  - Auto-generated Student IDs (YY-XXXXX)
+  - Parent linking via Student ID
+  - Many-to-many parent-student relationships
+- [x] **Simplified Product Model**
+  - Removed stock tracking (availability toggle only)
+  - Removed wallet/balance system
+- [x] Surplus item management (staff-posted leftovers)
+- [x] Staff-initiated walk-in orders
 
 ### 🚧 In Progress
 
-- [ ] GCash integration
-- [ ] SMS notifications
-- [ ] Nutritional information display
-- [ ] Order scheduling (pre-order for future dates)
+- [ ] SMS notifications (Semaphore/Twilio)
+- [ ] Push notifications (OneSignal)
 
 ---
 
@@ -29,78 +45,70 @@ To be LOHECA's leading canteen management solution, enabling parents to easily o
 
 ### Features
 
-- [ ] **Payment Integration**
-  - PayMongo credit card processing
-  - GCash wallet top-up
-  - Transaction history export
+- [ ] **Weekly Reporting**
+  - Staff weekly prep summary (orders by day/meal period)
+  - Admin revenue reports (weekly, monthly)
+  - Parent spending summaries
+  - CSV/PDF export
 
-- [ ] **Enhanced Ordering**
-  - Recurring orders (weekly meal plans)
-  - Favorites/quick reorder
-  - Group orders for multiple children
+- [ ] **Enhanced Menu Management**
+  - School calendar integration (holidays auto-skip)
+  - Rotating weekly menus
+  - Nutritional information display
+  - Allergen warnings based on student dietary data
 
-- [ ] **Nutrition & Dietary**
-  - Allergen warnings
-  - Calorie and nutrition facts
-  - Dietary restriction enforcement
+- [ ] **Notification System**
+  - Order ready alerts
+  - Payment confirmation notifications
+  - Weekly cutoff reminders
+  - Day cancellation confirmations
 
-- [ ] **Communication**
-  - In-app messaging with canteen staff
-  - Announcement broadcast system
-  - Parent feedback surveys
+- [ ] **Favorites & Quick Reorder**
+  - Save favorite meal combinations
+  - One-tap weekly reorder from previous week
 
 ---
 
 ## Q3 2026
 
-### Q3 Features
+- [ ] **Advanced Analytics**
+  - Popular items dashboard
+  - Revenue trends and projections
+  - Parent ordering patterns
+  - Peak ordering times analysis
 
 - [ ] **Multi-School Support**
-  - White-label solution
+  - White-label configuration
   - School administrator portal
   - Cross-school reporting
 
-- [ ] **Advanced Analytics**
-  - Popular items dashboard
-  - Revenue projections
-  - Inventory forecasting
-  - Parent spending insights
-
-- [ ] **Loyalty Program**
-  - Points for purchases
-  - Referral bonuses
-  - Exclusive discounts
+- [ ] **Communication**
+  - In-app announcement broadcast
+  - Parent feedback surveys
+  - Canteen menu suggestions
 
 - [ ] **Mobile Apps**
-  - iOS app (React Native or Capacitor)
-  - Android app
+  - iOS/Android wrapper (Capacitor)
   - App Store/Play Store launch
 
 ---
 
 ## Q4 2026
 
-### Q4 Features
+- [ ] **Enhanced Parent Features**
+  - Spending limits per student
+  - Weekly/monthly budget tracking
+  - Multi-language support (Filipino, English)
 
 - [ ] **AI-Powered Features**
-  - Meal recommendations based on child preferences
-  - Inventory optimization
-  - Demand forecasting
+  - Meal recommendations based on student preferences
+  - Demand forecasting for the canteen
+  - Smart menu suggestions
 
 - [ ] **Expanded Payment Options**
-  - Buy Now Pay Later (BNPL)
-  - School billing integration
-  - Bulk pre-payment discounts
-
-- [ ] **Enhanced Parent Features**
-  - Spending limits per child
-  - Weekly budget tracking
-  - Approval workflow for high-value orders
-
-- [ ] **Marketplace**
-  - School supplies ordering
-  - Uniform sales
-  - Book orders
+  - Auto-charge for weekly orders (recurring payments)
+  - Convenience fee configuration
+  - Detailed transaction history with receipts
 
 ---
 
@@ -108,25 +116,12 @@ To be LOHECA's leading canteen management solution, enabling parents to easily o
 
 ### Vision Items
 
-- [ ] Franchise opportunities
+- [ ] Franchise/multi-canteen support
 - [ ] API for third-party integrations
-- [ ] Multi-language support (Filipino, Cebuano, Ilocano)
-- [ ] Blockchain-based loyalty tokens
+- [ ] Additional language support (Cebuano, Ilocano)
 - [ ] Voice ordering via smart assistants
-- [ ] AR menu visualization
 - [ ] Carbon footprint tracking for meals
-
----
-
-## Feature Requests
-
-Submit ideas via GitHub Discussions or Issues.
-
-### Top Community Requests
-
-1. Family account (multiple parents per child) - 45 votes
-2. Meal plan subscriptions - 32 votes
-3. Export data for tax purposes - 28 votes
+- [ ] Marketplace (school supplies, uniforms)
 
 ---
 
@@ -134,11 +129,11 @@ Submit ideas via GitHub Discussions or Issues.
 
 Items to address:
 
-- [ ] Migrate to React 19
-- [ ] Implement micro-frontends for scalability
-- [ ] Add comprehensive monitoring (Datadog/New Relic)
 - [ ] Improve test coverage to 90%+
-- [ ] Optimize bundle size (currently 180KB)
+- [ ] Optimize bundle size
+- [ ] Add comprehensive monitoring (Datadog/Sentry)
+- [ ] Migrate to React 19 when stable
+- [ ] E2E test coverage for payment flows
 
 ---
 
@@ -152,11 +147,11 @@ Items to address:
 
 ## Priorities
 
-1. **Security** - Always top priority
-2. **Performance** - Fast on slow devices
-3. **Accessibility** - WCAG 2.1 AA compliance
-4. **User Experience** - Intuitive and delightful
-5. **Scalability** - Support 10,000+ students per school
+1. **Security** — Always top priority (RLS, auth, payment security)
+2. **Reliability** — Payments and orders must never fail silently
+3. **Performance** — Fast on slow devices with spotty connectivity
+4. **User Experience** — Intuitive weekly ordering workflow
+5. **Scalability** — Support 10,000+ students per school
 
 ---
 
@@ -165,7 +160,8 @@ Items to address:
 | Metric | Current | Q2 Target | Q4 Target |
 | ------ | ------- | --------- | --------- |
 | Active parents | 250 | 1,000 | 5,000 |
-| Daily orders | 150 | 600 | 3,000 |
+| Weekly orders | 200 | 800 | 4,000 |
 | App rating | 4.2 | 4.5 | 4.7 |
 | Offline success rate | 92% | 98% | 99% |
 | Page load time | 2.8s | 2.0s | 1.5s |
+| Online payment adoption | 30% | 50% | 70% |

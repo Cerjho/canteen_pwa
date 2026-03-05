@@ -19,7 +19,7 @@ This document outlines security measures implemented across the stack.
 
 | Role | Permissions |
 | ---- | ----------- |
-| **Parent** | Manage own children, place orders, view own history |
+| **Parent** | Manage own students, place orders, view own history |
 | **Staff** | View all orders, update order status, manage inventory |
 | **Admin** | Full access, manage users, generate reports |
 
@@ -42,7 +42,7 @@ All database tables enforce RLS. See [SUPABASE_RLS.md](SUPABASE_RLS.md).
 | Data Type | Storage | Retention |
 | --------- | ------- | --------- |
 | Parent email/phone | Supabase Auth | Until account deletion |
-| Child profiles | Postgres | Until parent deletes |
+| Student profiles | Postgres | Until parent deletes |
 | Order history | Postgres | 2 years |
 | Payment info | Not stored | Tokenized via PayMongo |
 
@@ -55,12 +55,12 @@ All database tables enforce RLS. See [SUPABASE_RLS.md](SUPABASE_RLS.md).
 ```typescript
 // Zod schema validation
 const orderSchema = z.object({
-  child_id: z.string().uuid(),
+  student_id: z.string().uuid(),
   items: z.array(z.object({
     product_id: z.string().uuid(),
     quantity: z.number().int().positive().max(10)
   })).min(1).max(20),
-  payment_method: z.enum(['cash', 'balance', 'gcash'])
+  payment_method: z.enum(['cash', 'gcash', 'paymaya', 'card'])
 });
 
 orderSchema.parse(formData); // Throws if invalid
@@ -70,21 +70,22 @@ orderSchema.parse(formData); // Throws if invalid
 
 ```typescript
 // Never trust client input
-if (!child_id || !Array.isArray(items) || items.length === 0) {
+if (!student_id || !Array.isArray(items) || items.length === 0) {
   return new Response(
     JSON.stringify({ error: 'VALIDATION_ERROR' }),
     { status: 400 }
   );
 }
 
-// Validate ownership
-const { data: child } = await supabase
-  .from('children')
-  .select('parent_id')
-  .eq('id', child_id)
+// Validate ownership via parent_students junction table
+const { data: student } = await supabase
+  .from('parent_students')
+  .select('student_id')
+  .eq('student_id', student_id)
+  .eq('parent_id', parent_id)
   .single();
 
-if (!child || child.parent_id !== parent_id) {
+if (!student) {
   return new Response(
     JSON.stringify({ error: 'UNAUTHORIZED' }),
     { status: 401 }
@@ -263,15 +264,15 @@ await processPayment({ token: token.id });
 
 // Data export
 async function exportUserData(parentId: string) {
-  const { data: parent } = await supabase
-    .from('parents')
+  const { data: profile } = await supabase
+    .from('user_profiles')
     .select('*')
     .eq('id', parentId)
     .single();
   
-  const { data: children } = await supabase
-    .from('children')
-    .select('*')
+  const { data: students } = await supabase
+    .from('parent_students')
+    .select('*, student:students(*)')
     .eq('parent_id', parentId);
   
   const { data: orders } = await supabase
@@ -279,7 +280,7 @@ async function exportUserData(parentId: string) {
     .select('*, order_items(*)')
     .eq('parent_id', parentId);
   
-  return { parent, children, orders };
+  return { profile, students, orders };
 }
 
 // Data deletion

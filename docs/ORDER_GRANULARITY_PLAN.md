@@ -1,5 +1,7 @@
 # Order Granularity Hardening & Enhancement Plan
 
+> **⚠️ SUPERSEDED**: This plan has been superseded by the Weekly Pre-Order Refactor. See [WEEKLY_PREORDER_REFACTOR_PLAN.md](./WEEKLY_PREORDER_REFACTOR_PLAN.md) for the current system design. Many concepts from this plan (meal periods, scheduled ordering, batch payments) were incorporated into the weekly refactor. Stock management and wallet/balance references in this document are no longer applicable.
+
 ## Summary
 
 Five fixes rolled out incrementally across 4 phases. Each phase is a self-contained

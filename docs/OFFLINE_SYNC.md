@@ -54,7 +54,7 @@ interface QueuedOrder {
   // Order data (matches API)
   client_order_id: string;       // Idempotency key
   parent_id: string;
-  child_id: string;
+  student_id: string;
   items: Array<{
     product_id: string;
     quantity: number;
@@ -67,7 +67,7 @@ interface QueuedOrder {
 
 **Indexes**:
 
-- `child_id` - Group orders by child
+- `student_id` - Group orders by student
 - `queued_at` - Process oldest first
 
 ---
@@ -112,7 +112,7 @@ async function processQueue(): Promise<void> {
         },
         body: JSON.stringify({
           parent_id: order.parent_id,
-          child_id: order.child_id,
+          student_id: order.student_id,
           client_order_id: order.client_order_id,
           items: order.items,
           payment_method: order.payment_method,
@@ -350,7 +350,7 @@ channel.postMessage({ type: 'QUEUE_UPDATED' });
 
 ## Performance Considerations
 
-- **Queue Size**: Limit to 100 orders per child
+- **Queue Size**: Limit to 100 orders per student
 - **Batch Processing**: Process 10 orders at a time
 - **Throttling**: Wait 1s between batch requests
 
@@ -362,7 +362,7 @@ Log queue metrics:
 
 ```typescript
 analytics.track('offline_order_queued', {
-  child_id: order.child_id,
+  student_id: order.student_id,
   items_count: order.items.length,
   total_amount: calculateTotal(order.items)
 });

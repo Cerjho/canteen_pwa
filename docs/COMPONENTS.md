@@ -93,48 +93,48 @@ export function ProductCard({ id, name, description, price, image_url, available
 
 ---
 
-### ChildSelector
+### StudentSelector
 
-Dropdown for selecting which child to order for.
+Dropdown for selecting which student to order for.
 
 **Props**:
 
 ```typescript
-interface ChildSelectorProps {
-  children: Child[];
-  selectedChildId: string | null;
-  onSelect: (childId: string) => void;
+interface StudentSelectorProps {
+  students: Student[];
+  selectedStudentId: string | null;
+  onSelect: (studentId: string) => void;
 }
 ```
 
 **Usage**:
 
 ```tsx
-<ChildSelector
-  children={parentChildren}
-  selectedChildId={activeChildId}
-  onSelect={(id) => setActiveChildId(id)}
+<StudentSelector
+  students={parentStudents}
+  selectedStudentId={activestudentId}
+  onSelect={(id) => setActivestudentId(id)}
 />
 ```
 
 **Implementation**:
 
 ```tsx
-export function ChildSelector({ children, selectedChildId, onSelect }: ChildSelectorProps) {
+export function StudentSelector({ students, selectedStudentId, onSelect }: StudentSelectorProps) {
   return (
     <div className="mb-6">
       <label className="block text-sm font-medium text-gray-700 mb-2">
         Order for:
       </label>
       <select
-        value={selectedChildId || ''}
+        value={selectedStudentId || ''}
         onChange={(e) => onSelect(e.target.value)}
         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
       >
-        <option value="">Select a child</option>
-        {children.map((child) => (
-          <option key={child.id} value={child.id}>
-            {child.first_name} {child.last_name} - {child.grade_level}
+        <option value="">Select a student</option>
+        {students.map((student) => (
+          <option key={student.id} value={student.id}>
+            {student.first_name} {student.last_name} - {student.grade_level}
           </option>
         ))}
       </select>

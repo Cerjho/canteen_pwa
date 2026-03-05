@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PWA uses a serverless architecture with Supabase as the backend platform and a React frontend deployed on Vercel/Netlify.
+This PWA uses a serverless architecture with Supabase as the backend platform and a React frontend deployed on Vercel. The system implements a **weekly pre-ordering** model: parents place meal orders for the upcoming school week before a configurable cutoff (default: Friday 5 PM Manila time). There is no wallet/balance system — payments use cash or PayMongo (GCash, PayMaya, card) only.
 
 ## Architecture Diagram
 
@@ -11,9 +11,9 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 │                         CLIENT TIER                          │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │   React App (TypeScript + Vite + Tailwind)          │   │
-│  │   - Menu Browsing                                    │   │
-│  │   - Order Management                                 │   │
-│  │   - Child Profiles                                   │   │
+│  │   - Weekly Menu Browsing (next week's items)         │   │
+│  │   - Weekly Pre-Order Cart (grouped by day)           │   │
+│  │   - Student Profiles (link via Student ID)           │   │
 │  └───────────────────┬─────────────────────────────────┘   │
 │                      │                                       │
 │  ┌───────────────────▼─────────────────────────────────┐   │
@@ -41,27 +41,32 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 │                      │                                       │
 │  ┌───────────────────▼─────────────────────────────────┐   │
 │  │   Postgres Database + RLS                           │   │
-│  │   - parents, children, orders, products              │   │
+│  │   - user_profiles, students, parent_students         │   │
+│  │   - products, weekly_orders, orders, order_items      │   │
+│  │   - surplus_items                                    │   │
 │  │   - Row Level Security policies                      │   │
 │  └───────────────────┬─────────────────────────────────┘   │
 │                      │                                       │
 │  ┌───────────────────▼─────────────────────────────────┐   │
 │  │   Edge Functions (Deno)                             │   │
-│  │   - process-order (atomic stock, rollback)           │   │
-│  │   - create-batch-checkout (PayMongo batch)           │   │
-│  │   - paymongo-webhook (batch-aware)                   │   │
-│  │   - check-payment-status (batch self-heal)           │   │
-│  │   - cleanup-timeout-orders (wallet refund)           │   │
-│  │   - confirm-cash-payment                             │   │
-│  │   - manage-order (atomic stock restore)              │   │
-│  │   - notify (push/SMS)                                │   │
+│  │   - process-weekly-order (weekly batch creation)      │   │
+│  │   - create-weekly-checkout (PayMongo weekly total)    │   │
+│  │   - create-batch-checkout (PayMongo batch)            │   │
+│  │   - paymongo-webhook (batch-aware)                    │   │
+│  │   - check-payment-status (self-heal)                  │   │
+│  │   - cleanup-timeout-orders (expire unpaid)            │   │
+│  │   - confirm-cash-payment                              │   │
+│  │   - manage-order (status transitions)                 │   │
+│  │   - process-surplus-order (same-day surplus)          │   │
+│  │   - staff-place-order (staff-initiated orders)        │   │
+│  │   - notify (push/SMS)                                 │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   EXTERNAL SERVICES                          │
-│  - GCash / PayMongo (payments)                              │
+│  - PayMongo (GCash, PayMaya, Card payments)                  │
 │  - Semaphore / Twilio (SMS)                                  │
 │  - OneSignal (push notifications)                            │
 └─────────────────────────────────────────────────────────────┘
@@ -69,35 +74,56 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 
 ## Data Flow
 
-### Order Creation (Online)
+### Weekly Pre-Order Flow
 
-1. Parent selects child and adds items to cart
-2. Cart generates `client_order_id` (UUID v4)
-3. Frontend calls Supabase Edge Function `process-order` (cash/balance) or `create-batch-checkout` (online payment)
+1. Parent selects a student and browses next week's menu (Mon–Fri)
+2. Cart groups items by day; cutoff countdown shows remaining time
+3. At checkout, frontend calls `process-weekly-order` (cash) or `create-weekly-checkout` (online)
 4. Edge Function:
-   - Validates parent owns child
-   - Reserves stock via atomic `decrement_stock` RPC (with `FOR UPDATE` row lock)
-   - Creates order + order_items
-   - On any failure: rolls back reserved stock via `increment_stock` RPC
-   - For online payments: creates PayMongo checkout session, saves `paymongo_checkout_id` on ALL batch orders via `payment_group_id`
-   - Returns order confirmation (or checkout URL for online payments)
-5. Frontend updates UI and clears cart
+   - Validates parent owns student (via `parent_students` join)
+   - Validates cutoff not passed (default: Friday 5 PM Manila time)
+   - Creates `weekly_order` record for the week
+   - Creates individual `orders` + `order_items` for each day
+   - For online payments: creates PayMongo checkout for the weekly total
+   - Returns order confirmation (or checkout URL)
+5. Frontend navigates to confirmation page and clears cart
+
+### Day Cancellation Flow
+
+1. Parent views upcoming orders on Dashboard
+2. Before 8 AM on the day, they can cancel a specific day's order
+3. Edge function `manage-order` validates time constraint and updates status
+4. If online payment was used, refund is processed via PayMongo
+
+### Surplus Order Flow
+
+1. Staff marks leftover items as surplus (available today only)
+2. Parents browse surplus items on a dedicated tab
+3. Surplus orders bypass weekly cutoff but must be placed before 8 AM
+4. Edge function `process-surplus-order` handles creation
 
 ### Order Creation (Offline)
 
-1. Parent selects child and adds items to cart
+1. Parent selects student and adds items to cart
 2. Order queued in IndexedDB with `client_order_id`
 3. Service Worker detects online connectivity
-4. Background sync sends queued orders to `process-order`
+4. Background sync sends queued orders
 5. Edge Function uses `client_order_id` for idempotency
 6. IndexedDB queue cleared on success
 
 ### Order Fulfillment
 
-1. Staff views pending orders dashboard
-2. Staff marks order as "preparing" → "ready"
+1. Staff views today's pre-orders as a kitchen prep list
+2. Staff marks order as "preparing" → "ready" → "completed"
 3. Real-time subscription updates parent's UI
 4. Notification sent via Edge Function `notify`
+
+### Payment Webhook Flow
+
+1. PayMongo sends webhook to `paymongo-webhook` Edge Function
+2. Function verifies signature and event type (`checkout_session.payment.paid`)
+3. Updates ALL orders sharing the same `payment_group_id` to `paid`
+4. `check-payment-status` runs periodically as self-healing fallback
 
 ## Component Architecture
 
@@ -106,22 +132,28 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 ```text
 ┌─────────────────────────────────────────┐
 │            Pages (Routes)                │
-│  - Menu, Parent Dashboard, Staff Panel  │
+│  - Menu, Dashboard, OrderHistory         │
+│  - Staff Dashboard, Admin Panels         │
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
 │          Components                      │
-│  - ProductCard, CartDrawer, etc.        │
+│  - ProductCard, CartBottomSheet          │
+│  - WeeklyCartSummary, CutoffCountdown   │
+│  - StudentSelector, PaymentMethod        │
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
 │            Hooks                         │
 │  - useAuth, useOrders, useProducts       │
+│  - useCart, useStudents, useTheme         │
+│  - useOrderSubscription, useFavorites    │
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
 │          Services                        │
-│  - supabaseClient, orders, localQueue    │
+│  - supabaseClient, orders, payments      │
+│  - products, students, localQueue        │
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
@@ -135,22 +167,26 @@ This PWA uses a serverless architecture with Supabase as the backend platform an
 
 All Postgres tables enforce RLS:
 
-- **parents**: Users can only read/update their own record
-- **children**: Parents can only manage their own children
-- **orders**: Parents see only orders for their children
+- **user_profiles**: Users can only read/update their own profile
+- **students**: Accessible to parents who have linked them (via `parent_students`)
+- **parent_students**: Parents can read/insert/delete their own links
+- **orders**: Parents see only orders for their linked students
+- **weekly_orders**: Parents see only their own weekly orders
 - **products**: Public read, staff/admin write
 - **order_items**: Accessible via parent's orders
+- **surplus_items**: Public read, staff/admin write
+- **system_settings**: Public read, admin write
 
 ### Role Hierarchy
 
 ```text
 Admin (unrestricted)
   ↓
-Staff (read orders, manage inventory, view students)
+Staff (read orders, manage products, process orders, manage surplus)
   ↓
-Parent (link/view own children, place orders)
+Parent (link students, place weekly orders, view own orders)
   ↓
-Child/Student (represented as data, no auth - managed by admin)
+Student (represented as data, no auth - managed by admin)
 ```
 
 **Student Management Flow**:
@@ -158,11 +194,11 @@ Child/Student (represented as data, no auth - managed by admin)
 1. Admin adds students (individually or CSV import)
 2. System generates unique Student ID (YY-XXXXX format)
 3. School provides Student ID to parents
-4. Parent links child using Student ID in Profile page
+4. Parent links student using Student ID in Profile page
 
 ## Deployment Architecture
 
-### Frontend (Vercel/Netlify)
+### Frontend (Vercel)
 
 - Static build deployed to CDN
 - Service Worker served from root
@@ -186,7 +222,7 @@ GitHub Push → GitHub Actions → Tests → Build → Deploy
 
 - **Horizontal**: Supabase handles scaling automatically
 - **Caching**: Menu cached in service worker for 1 hour
-- **Database**: Indexed on `parent_id`, `child_id`, `created_at`
+- **Database**: Indexed on `parent_id`, `student_id`, `scheduled_for`, `created_at`
 - **Queue**: IndexedDB handles thousands of queued orders per client
 
 ## Technology Choices Rationale
@@ -194,15 +230,18 @@ GitHub Push → GitHub Actions → Tests → Build → Deploy
 | Technology | Reason |
 | ---------- | ------ |
 | Supabase | Managed Postgres + Auth + Edge Functions in one platform |
-| React Query | Declarative data fetching with caching |
-| IndexedDB | Robust offline storage (5MB+ quota) |
+| TanStack React Query v5 | Declarative data fetching with caching/mutations |
+| IndexedDB (idb) | Robust offline storage (5MB+ quota) |
 | Vite | Fast builds and HMR |
-| Tailwind | Utility-first CSS, small bundle |
+| Tailwind CSS | Utility-first CSS, small bundle |
 | TypeScript | Type safety across frontend/backend |
+| PayMongo | Philippine payment gateway (GCash, PayMaya, card) |
 
-## Future Enhancements
+## Key Business Rules
 
-- Real-time order updates via Supabase Realtime
-- Scheduled reports via cron Edge Functions
-- Multi-language support (Filipino, English)
-- Mobile app wrapper (Capacitor)
+- **Weekly cutoff**: Orders for next week must be placed before Friday 5 PM (configurable via `system_settings`)
+- **Day cancellation**: Individual days can be cancelled before 8 AM on that day
+- **Surplus**: Staff can post leftover items; parents order before 8 AM same-day
+- **Payment methods**: Cash, GCash, PayMaya, Card (no wallet/balance)
+- **Minimum online payment**: ₱20.00 (PayMongo requirement)
+- **Timezone**: All date/time logic uses `Asia/Manila` (UTC+8)

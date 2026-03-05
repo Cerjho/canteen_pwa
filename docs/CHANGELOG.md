@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Added — Weekly Pre-Order Refactor
+
+- **Weekly Pre-Order System**: Complete overhaul from daily to weekly ordering model
+  - Parents order Mon–Fri meals for the upcoming week before configurable cutoff (default: Friday 5 PM)
+  - Cart groups items by day with cutoff countdown timer
+  - Day-level cancellation allowed before 8 AM on the day
+  - `weekly_orders` table as aggregate container for daily orders
+  - `surplus_items` table for staff-posted leftover items
+  - New edge functions: `process-weekly-order`, `create-weekly-checkout`, `process-surplus-order`, `staff-place-order`
+
+### Removed — Weekly Pre-Order Refactor
+
+- **Wallet/Balance System**: Completely removed
+  - Removed `balance` column from `user_profiles`
+  - Removed `'balance'` from `PaymentMethod` type
+  - Removed `deduct_balance_with_payment()` and `credit_balance_with_payment()` RPCs
+  - Removed `admin-topup`, `create-topup-checkout` edge functions
+  - Removed `TopUpModal` component and Balance page
+- **Stock Tracking**: Completely removed
+  - Removed `stock_quantity` column from `products`
+  - Removed `decrement_stock()` and `increment_stock()` RPCs
+  - Products now use simple `available: boolean` toggle
+- **Legacy Types**: Renamed `Child` → `Student`, `children` references → `students` throughout
+
+### Changed — Weekly Pre-Order Refactor
+
+- `PaymentMethod` type: now `'cash' | 'gcash' | 'paymaya' | 'card'` only
+- `orders` table: `child_id` → `student_id`, added `weekly_order_id`, `order_type`
+- `students` table: replaces `children`, uses `parent_students` join table for many-to-many
+- All components/hooks/services updated to use `student` terminology
+- Payment model: `payments` + `payment_allocations` tables (replaces `transactions`)
+
+---
+
+### Added (Previous)
 
 - **Financial Hardening**: DB-level invariants for payment integrity
   - Allocation integrity trigger: `SUM(allocated_amount) ≤ amount_total` enforced on every insert/update/delete

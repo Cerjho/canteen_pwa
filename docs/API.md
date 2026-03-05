@@ -2,100 +2,293 @@
 
 ## Overview
 
-All backend logic runs on Supabase Edge Functions (Deno runtime). Frontend communicates via:
+The Loheca Canteen PWA backend runs on **Supabase Edge Functions** (Deno) and the **Supabase Client SDK**. All edge functions require JWT authentication via the `Authorization: Bearer <token>` header. The Supabase anon key is passed as `apikey` header.
 
-1. **Supabase Client SDK** for database CRUD
-2. **Edge Functions** for complex operations
-3. **Realtime Subscriptions** for live updates
+**Base URL**: `https://<project-ref>.supabase.co/functions/v1`
+
+**Payment methods**: `cash`, `gcash`, `paymaya`, `card` (no wallet/balance)
+
+**Timezone**: All date/time logic uses `Asia/Manila` (UTC+8)
+
+---
 
 ## Authentication
 
-All requests require a valid Supabase JWT token in the `Authorization` header:
+All API calls use Supabase Auth JWT tokens. Include both headers:
 
 ```text
-Authorization: Bearer <jwt_token>
+Authorization: Bearer <user-jwt>
+apikey: <supabase-anon-key>
 ```
-
-Tokens obtained via Supabase Auth SDK after parent login.
 
 ---
 
-## Edge Functions
+## Edge Functions — Orders
 
-### 1. **POST /functions/v1/process-order**
+### POST `/functions/v1/process-weekly-order`
 
-Process a new order with idempotency.
+Create a weekly pre-order (Mon–Fri) for a student. Enforces cutoff time.
 
-**Request Body**:
+**Auth**: Parent
+
+**Body**:
 
 ```json
 {
-  "parent_id": "uuid",
-  "child_id": "uuid",
-  "client_order_id": "uuid",
-  "items": [
-    {
-      "product_id": "uuid",
-      "quantity": 2,
-      "price_at_order": 25.00
-    }
-  ],
+  "student_id": "uuid",
+  "week_start": "2025-03-10",
   "payment_method": "cash",
-  "notes": "No onions"
+  "items": {
+    "2025-03-10": [{ "product_id": "uuid", "quantity": 1, "meal_period": "lunch" }],
+    "2025-03-11": [{ "product_id": "uuid", "quantity": 2, "meal_period": "morning_snack" }]
+  },
+  "notes": "No peanuts please"
 }
 ```
 
-**Response (200 OK)**:
+**Response** `200`:
 
 ```json
 {
-  "success": true,
-  "order_id": "uuid",
-  "status": "pending",
-  "total_amount": 50.00
+  "weekly_order_id": "uuid",
+  "daily_order_ids": ["uuid", "uuid"],
+  "total_amount": 150.00
 }
 ```
 
-**Error Responses**:
-
-- **400 Bad Request**:
-
-```json
-  {
-    "error": "INSUFFICIENT_STOCK",
-    "message": "Product 'Pancit' out of stock",
-    "product_id": "uuid"
-  }
-```
-
-- **401 Unauthorized**:
-
-```json
-  {
-    "error": "UNAUTHORIZED",
-    "message": "Parent does not own this child"
-  }
-```
-
-- **409 Conflict**:
-
-```json
-  {
-    "error": "DUPLICATE_ORDER",
-    "message": "Order with this client_order_id already exists",
-    "existing_order_id": "uuid"
-  }
-```
-
-**Idempotency**: If `client_order_id` already exists, returns existing order details with 409 status.
+**Errors**: `400` cutoff passed, `403` parent doesn't own student, `409` duplicate week
 
 ---
 
-### 2. **POST /functions/v1/refund-order**
+### POST `/functions/v1/create-weekly-checkout`
 
-Refund an order and restore inventory (admin only).
+Create a PayMongo checkout session for a weekly order total.
 
-**Request Body**:
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "student_id": "uuid",
+  "week_start": "2025-03-10",
+  "payment_method": "gcash",
+  "items": { ... },
+  "success_url": "https://app.example.com/orders?status=success",
+  "cancel_url": "https://app.example.com/orders?status=cancelled"
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "checkout_url": "https://checkout.paymongo.com/...",
+  "weekly_order_id": "uuid",
+  "checkout_id": "cs_xxx"
+}
+```
+
+---
+
+### POST `/functions/v1/process-batch-order`
+
+Create multiple individual orders in a batch (non-weekly).
+
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "orders": [
+    {
+      "student_id": "uuid",
+      "items": [{ "product_id": "uuid", "quantity": 1, "meal_period": "lunch" }],
+      "scheduled_for": "2025-03-12",
+      "payment_method": "cash",
+      "notes": ""
+    }
+  ]
+}
+```
+
+---
+
+### POST `/functions/v1/create-batch-checkout`
+
+Create a PayMongo checkout session for a batch of orders.
+
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "orders": [...],
+  "payment_method": "gcash",
+  "success_url": "...",
+  "cancel_url": "..."
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "checkout_url": "https://checkout.paymongo.com/...",
+  "checkout_id": "cs_xxx",
+  "payment_group_id": "uuid",
+  "order_ids": ["uuid", "uuid"]
+}
+```
+
+---
+
+### POST `/functions/v1/create-checkout`
+
+Create a PayMongo checkout for a single order (surplus/walk-in).
+
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "order_id": "uuid",
+  "payment_method": "gcash",
+  "success_url": "...",
+  "cancel_url": "..."
+}
+```
+
+---
+
+### POST `/functions/v1/process-surplus-order`
+
+Create an order for a surplus item (same-day, before 8 AM cutoff).
+
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "student_id": "uuid",
+  "surplus_item_id": "uuid",
+  "quantity": 1,
+  "payment_method": "cash"
+}
+```
+
+---
+
+### POST `/functions/v1/staff-place-order`
+
+Staff creates an order on behalf of a student (walk-in/counter).
+
+**Auth**: Staff/Admin
+
+**Body**:
+
+```json
+{
+  "student_id": "uuid",
+  "items": [{ "product_id": "uuid", "quantity": 1, "meal_period": "lunch" }],
+  "payment_method": "cash",
+  "scheduled_for": "2025-03-12"
+}
+```
+
+---
+
+### POST `/functions/v1/retry-checkout`
+
+Retry a failed/expired PayMongo checkout session.
+
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "order_id": "uuid",
+  "payment_method": "gcash",
+  "success_url": "...",
+  "cancel_url": "..."
+}
+```
+
+---
+
+## Edge Functions — Order Management
+
+### POST `/functions/v1/manage-order`
+
+Update an order's status (prepare, ready, complete, cancel).
+
+**Auth**: Staff/Admin
+
+**Body**:
+
+```json
+{
+  "order_id": "uuid",
+  "action": "prepare" | "ready" | "complete" | "cancel",
+  "staff_notes": "optional notes"
+}
+```
+
+**Status transitions enforced**:
+
+- `awaiting_payment` → `pending`, `cancelled`
+- `pending` → `preparing`, `cancelled`
+- `preparing` → `ready`, `cancelled`
+- `ready` → `completed`, `cancelled`
+
+---
+
+### POST `/functions/v1/parent-cancel-order`
+
+Parent cancels a specific day's order (before 8 AM cutoff on that day).
+
+**Auth**: Parent
+
+**Body**:
+
+```json
+{
+  "order_id": "uuid"
+}
+```
+
+**Errors**: `400` past 8 AM cutoff, `403` not parent's order
+
+---
+
+### POST `/functions/v1/confirm-cash-payment`
+
+Staff confirms a cash payment was received.
+
+**Auth**: Staff/Admin
+
+**Body**:
+
+```json
+{
+  "order_id": "uuid"
+}
+```
+
+---
+
+### POST `/functions/v1/refund-order`
+
+Admin refunds an order. For online payments, initiates PayMongo refund.
+
+**Auth**: Admin only
+
+**Body**:
 
 ```json
 {
@@ -104,404 +297,365 @@ Refund an order and restore inventory (admin only).
 }
 ```
 
-**Response (200 OK)**:
+---
+
+## Edge Functions — Payments
+
+### POST `/functions/v1/check-payment-status`
+
+Self-healing: checks PayMongo for payment status and syncs to DB.
+
+**Auth**: Parent or System
+
+**Body**:
 
 ```json
 {
-  "success": true,
-  "refunded_amount": 50.00,
-  "transaction_id": "uuid (payment record ID)"
+  "order_id": "uuid"
 }
 ```
 
-**Error Responses**:
+**Response** `200`:
 
-- **403 Forbidden**: Non-admin user
-- **404 Not Found**: Order not found
-- **400 Bad Request**: Order already refunded
+```json
+{
+  "status": "paid",
+  "payment_method": "gcash"
+}
+```
 
 ---
 
-### 3. **POST /functions/v1/notify**
+### POST `/functions/v1/paymongo-webhook`
 
-Send notification to parent (push/SMS).
+Receives PayMongo webhook events. Validates signature. Updates order/payment status.
 
-**Request Body**:
+**Auth**: PayMongo signature verification (no JWT)
 
-```json
-{
-  "parent_id": "uuid",
-  "type": "order_ready",
-  "order_id": "uuid",
-  "message": "Your order #1234 is ready for pickup"
-}
-```
+**Events handled**:
 
-**Response (200 OK)**:
+- `checkout_session.payment.paid` → marks orders as paid
+- `payment.failed` → marks orders as failed
+- `payment.refunded` → marks orders as refunded
 
-```json
-{
-  "success": true,
-  "channels": ["push", "sms"],
-  "message_id": "uuid"
-}
-```
-
-**Notification Types**:
-
-- `order_received`
-- `order_preparing`
-- `order_ready`
-- `order_cancelled`
-- `low_balance`
+All orders sharing the same `payment_group_id` are updated together.
 
 ---
 
-### 4. **POST /functions/v1/manage-student**
+### POST `/functions/v1/cleanup-timeout-orders`
 
-Admin-only student management (add, update, delete, unlink, import).
+Cron job: expires unpaid orders past their `payment_due_at` deadline.
 
-**Request Body** (Add):
+**Auth**: Service role (cron)
+
+**Behavior**: Sets `status = 'cancelled'`, `payment_status = 'timeout'` for expired orders.
+
+---
+
+## Edge Functions — Students
+
+### POST `/functions/v1/manage-student`
+
+Admin-only student management (CRUD + CSV import).
+
+**Auth**: Admin only
+
+**Body (add)**:
 
 ```json
 {
   "action": "add",
-  "data": {
-    "first_name": "John",
-    "last_name": "Doe",
-    "grade_level": "Grade 1",
-    "section": "A",
-    "dietary_restrictions": "None"
-  }
+  "first_name": "Juan",
+  "last_name": "Cruz",
+  "grade_level": "Grade 1",
+  "section": "A"
 }
 ```
 
-**Request Body** (Update):
-
-```json
-{
-  "action": "update",
-  "student_id": "uuid",
-  "data": {
-    "first_name": "John",
-    "last_name": "Doe",
-    "grade_level": "Grade 2",
-    "section": "B"
-  }
-}
-```
-
-**Request Body** (Delete):
-
-```json
-{
-  "action": "delete",
-  "student_id": "uuid"
-}
-```
-
-**Request Body** (Unlink):
-
-```json
-{
-  "action": "unlink",
-  "student_id": "uuid"
-}
-```
-
-**Request Body** (Import):
+**Body (import)**:
 
 ```json
 {
   "action": "import",
   "students": [
-    { "first_name": "John", "last_name": "Doe", "grade_level": "Grade 1", "section": "A" },
-    { "first_name": "Jane", "last_name": "Smith", "grade_level": "Grade 2" }
+    { "first_name": "Juan", "last_name": "Cruz", "grade_level": "Grade 1", "section": "A" }
   ]
 }
 ```
 
-**Response (200 OK)**:
-
-```json
-{
-  "success": true,
-  "student": { "id": "uuid", "student_id": "26-00001", ... }
-}
-```
-
-**Import Response**:
-
-```json
-{
-  "success": true,
-  "imported": 10,
-  "failed": 2,
-  "errors": ["Row 5: Invalid grade level"]
-}
-```
-
-**Error Responses**:
-
-- **403 Forbidden**: Non-admin user
-- **400 Bad Request**: Validation error
-- **404 Not Found**: Student not found
-- **400 Constraint Error**: Cannot delete student with orders
-
-**Security**:
-
-- Validates admin role from JWT token
-- Sanitizes all input strings
-- Server-side student ID generation
-- Validates grade levels against whitelist
+**Actions**: `add`, `update`, `delete`, `unlink`, `import`
 
 ---
 
-### 5. **POST /functions/v1/link-student**
+### POST `/functions/v1/link-student`
 
-Parent linking/unlinking students.
+Parent links/unlinks a student using their Student ID.
 
-**Request Body** (Link):
+**Auth**: Parent
+
+**Body (link)**:
 
 ```json
 {
   "action": "link",
-  "student_id": "26-00001"
+  "student_id_text": "25-00001"
 }
 ```
 
-**Request Body** (Unlink):
+**Body (unlink)**:
 
 ```json
 {
   "action": "unlink",
-  "student_id": "uuid"
+  "student_uuid": "uuid"
 }
 ```
-
-**Response (200 OK)**:
-
-```json
-{
-  "success": true,
-  "student": {
-    "id": "uuid",
-    "student_id": "26-00001",
-    "first_name": "John",
-    "last_name": "Doe",
-    "grade_level": "Grade 1"
-  }
-}
-```
-
-**Error Responses**:
-
-- **404 Not Found**: Student ID not found
-- **400 Already Linked**: Student already linked to parent
-- **400 Limit Reached**: Max 10 children per parent
-- **403 Forbidden**: Attempting to unlink other's child
-
-**Security**:
-
-- Verifies parent role from JWT
-- Prevents linking already-linked students
-- Race condition protection on link operation
-- Only allows unlinking own children
-- Logs security events
 
 ---
 
-### 6. **POST /functions/v1/update-dietary**
+### POST `/functions/v1/update-dietary`
 
-Parent updates child's dietary restrictions.
+Parent updates a linked student's dietary restrictions.
 
-**Request Body**:
+**Auth**: Parent
+
+**Body**:
 
 ```json
 {
-  "child_id": "uuid",
+  "student_id": "uuid",
   "dietary_restrictions": "No peanuts, lactose intolerant"
 }
 ```
 
-**Response (200 OK)**:
+---
+
+## Edge Functions — Products & Menu
+
+### POST `/functions/v1/manage-product`
+
+Staff/Admin creates or updates a product.
+
+**Auth**: Staff/Admin
+
+**Body**:
 
 ```json
 {
-  "success": true,
-  "child": {
-    "id": "uuid",
-    "student_id": "26-00001",
-    "first_name": "John",
-    "dietary_restrictions": "No peanuts, lactose intolerant"
-  }
+  "action": "create" | "update" | "delete",
+  "id": "uuid (for update/delete)",
+  "name": "Chicken Adobo",
+  "price": 45.00,
+  "category": "mains",
+  "available": true,
+  "description": "...",
+  "image_url": "..."
 }
 ```
 
-**Error Responses**:
+---
 
-- **403 Forbidden**: Not the child's parent
-- **404 Not Found**: Child not found
+### POST `/functions/v1/manage-menu`
 
-**Security**:
+Manage weekly menu assignments (which products are available on which days).
 
-- Verifies parent owns the child
-- Sanitizes input (max 500 chars, strips HTML)
-- Only allows dietary_restrictions update
+**Auth**: Staff/Admin
+
+---
+
+### POST `/functions/v1/manage-calendar`
+
+Manage school calendar (holidays, special events affecting ordering).
+
+**Auth**: Admin
+
+---
+
+### POST `/functions/v1/staff-product`
+
+Staff-specific product operations (toggle availability, etc.).
+
+**Auth**: Staff
+
+---
+
+## Edge Functions — User Management
+
+### POST `/functions/v1/register`
+
+Register a new parent account.
+
+**Body**:
+
+```json
+{
+  "email": "parent@example.com",
+  "password": "securePassword123",
+  "first_name": "Maria",
+  "last_name": "Cruz",
+  "phone_number": "09171234567"
+}
+```
+
+---
+
+### POST `/functions/v1/create-user`
+
+Admin creates a new staff or admin user.
+
+**Auth**: Admin only
+
+**Body**:
+
+```json
+{
+  "email": "staff@school.edu",
+  "password": "tempPassword123",
+  "first_name": "Staff",
+  "last_name": "Member",
+  "role": "staff"
+}
+```
+
+---
+
+### POST `/functions/v1/manage-profile`
+
+Update user profile information.
+
+**Auth**: Authenticated user
+
+---
+
+### POST `/functions/v1/list-staff`
+
+List all staff/admin users.
+
+**Auth**: Admin only
+
+---
+
+### POST `/functions/v1/send-invites`
+
+Send invitation emails to prospective parents.
+
+**Auth**: Admin
+
+---
+
+### POST `/functions/v1/verify-invitation`
+
+Verify an invitation code during registration.
+
+---
+
+## Edge Functions — System
+
+### POST `/functions/v1/manage-settings`
+
+Admin manages system settings (cutoff times, maintenance mode, etc.).
+
+**Auth**: Admin only
+
+**Body**:
+
+```json
+{
+  "action": "update",
+  "key": "weekly_cutoff_time",
+  "value": "17:00"
+}
+```
+
+---
+
+### POST `/functions/v1/notify`
+
+Send push/SMS notification to a parent.
+
+**Auth**: Staff/Admin
+
+**Body**:
+
+```json
+{
+  "parent_id": "uuid",
+  "title": "Order Ready",
+  "message": "Your child's lunch order is ready for pickup",
+  "channel": "push"
+}
+```
 
 ---
 
 ## Database Access (Supabase Client SDK)
 
-### Products
+These queries use the Supabase JS client directly (not edge functions).
 
-**Fetch Menu**:
+### Fetch Products
 
 ```typescript
-const { data, error } = await supabase
+const { data } = await supabase
   .from('products')
   .select('*')
   .eq('available', true)
-  .order('category', { ascending: true });
+  .order('category');
 ```
 
-**Response**:
-
-```json
-[
-  {
-    "id": "uuid",
-    "name": "Chicken Adobo",
-    "description": "Classic Filipino dish",
-    "price": 45.00,
-    "category": "mains",
-    "image_url": "https://...",
-    "available": true,
-    "stock_quantity": 20
-  }
-]
-```
-
----
-
-### Children
-
-**Fetch Parent's Children**:
+### Fetch Linked Students
 
 ```typescript
-const { data, error } = await supabase
-  .from('children')
-  .select('*')
-  .eq('parent_id', parentId);
+const { data } = await supabase
+  .from('parent_students')
+  .select('*, student:students(*)')
+  .eq('parent_id', userId);
 ```
 
-**Response**:
-
-```json
-[
-  {
-    "id": "uuid",
-    "parent_id": "uuid",
-    "first_name": "Juan",
-    "last_name": "Dela Cruz",
-    "grade_level": "Grade 3",
-    "section": "A",
-    "dietary_restrictions": "No shellfish"
-  }
-]
-```
-
-**Add Child**:
+### Fetch Order History
 
 ```typescript
-const { data, error } = await supabase
-  .from('children')
-  .insert({
-    parent_id: parentId,
-    first_name: 'Maria',
-    last_name: 'Santos',
-    grade_level: 'Grade 1',
-    section: 'B'
-  })
-  .select()
-  .single();
-```
-
----
-
-### Orders
-
-**Fetch Order History**:
-
-```typescript
-const { data, error } = await supabase
+const { data } = await supabase
   .from('orders')
   .select(`
     *,
-    child:children(first_name, last_name),
-    items:order_items(
-      *,
-      product:products(name, image_url)
-    )
+    student:students!orders_student_id_fkey(id, first_name, last_name),
+    items:order_items(*, product:products(name, image_url, category))
   `)
-  .eq('parent_id', parentId)
-  .order('created_at', { ascending: false })
-  .limit(20);
+  .eq('parent_id', userId)
+  .order('created_at', { ascending: false });
 ```
 
-**Response**:
+### Fetch Weekly Orders
 
-```json
-[
-  {
-    "id": "uuid",
-    "parent_id": "uuid",
-    "child_id": "uuid",
-    "client_order_id": "uuid",
-    "status": "ready",
-    "total_amount": 50.00,
-    "payment_method": "cash",
-    "created_at": "2026-01-01T08:00:00Z",
-    "child": {
-      "first_name": "Juan",
-      "last_name": "Dela Cruz"
-    },
-    "items": [
-      {
-        "product_id": "uuid",
-        "quantity": 2,
-        "price_at_order": 25.00,
-        "product": {
-          "name": "Pancit Canton",
-          "image_url": "https://..."
-        }
-      }
-    ]
-  }
-]
+```typescript
+const { data } = await supabase
+  .from('weekly_orders')
+  .select(`
+    *,
+    student:students(*),
+    daily_orders:orders(*, items:order_items(*, product:products(*)))
+  `)
+  .eq('parent_id', userId)
+  .order('week_start', { ascending: false });
 ```
 
 ---
 
 ## Realtime Subscriptions
 
-**Subscribe to Order Updates**:
+### Order Status Updates
 
 ```typescript
-const subscription = supabase
-  .channel('order_updates')
-  .on(
-    'postgres_changes',
-    {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'orders',
-      filter: `parent_id=eq.${parentId}`
-    },
-    (payload) => {
-      console.log('Order updated:', payload.new);
-    }
-  )
+supabase
+  .channel('order-updates')
+  .on('postgres_changes', {
+    event: 'UPDATE',
+    schema: 'public',
+    table: 'orders',
+    filter: `parent_id=eq.${userId}`,
+  }, (payload) => {
+    // Handle status change
+  })
   .subscribe();
 ```
 
@@ -509,79 +663,43 @@ const subscription = supabase
 
 ## Error Codes
 
-| Code | Description |
-| ---- | ----------- |
-| `INSUFFICIENT_STOCK` | Product out of stock |
-| `UNAUTHORIZED` | User lacks permission |
-| `DUPLICATE_ORDER` | Order already processed |
-| `INVALID_CHILD` | Child does not belong to parent |
-| `PAYMENT_FAILED` | Payment processing error |
-| `VALIDATION_ERROR` | Invalid request data |
+| Code | Meaning |
+| ---- | ------- |
+| `400` | Bad request / validation error / cutoff passed |
+| `401` | Unauthorized (missing or invalid JWT) |
+| `403` | Forbidden (role check failed, not owner) |
+| `404` | Resource not found |
+| `409` | Conflict (duplicate order, idempotency) |
+| `422` | Unprocessable entity |
+| `429` | Rate limited |
+| `500` | Internal server error |
 
 ---
 
 ## Rate Limiting
 
-Edge Functions are rate-limited to:
-
-- 100 requests/minute per user
-- 1000 requests/hour per IP
-
-Clients should implement exponential backoff on 429 responses.
+Supabase imposes default rate limits on Edge Functions. Custom rate limiting is not currently implemented at the application level. PayMongo webhook endpoint has no rate limit (signature verification provides security).
 
 ---
 
-## Webhooks
+## Payment Status Values
 
-### POST /functions/v1/paymongo-webhook
-
-Receives PayMongo webhook events. Verifies HMAC-SHA256 signature.
-
-**Handled Events**:
-
-| Event | Action |
-| ----- | ------ |
-| `checkout_session.payment.paid` | Marks order(s) as paid, creates transaction record |
-| `payment.failed` | Cancels ALL orders in batch via `payment_group_id`, restores stock |
-| `payment.refunded` | Confirms refund completed |
-
-**Batch Handling**: When a payment fails, the webhook queries all orders sharing the same `payment_group_id` and cancels each one, restoring stock via atomic `increment_stock` RPC.
-
----
-
-## RPC Functions (Database)
-
-### `decrement_stock(p_product_id UUID, p_quantity INTEGER)`
-
-Atomically decrements product stock with `FOR UPDATE` row lock. Raises exception on insufficient stock or missing product. Used by `process-order` and `create-batch-checkout`.
-
-### `increment_stock(p_product_id UUID, p_quantity INTEGER)`
-
-Atomically increments product stock. Used by `paymongo-webhook`, `cleanup-timeout-orders`, and `manage-order` for stock restoration on cancellation/failure.
-
----
-
-## Order Payment Status Values
-
-| Status | Description |
-| ------ | ----------- |
-| `awaiting_payment` | Order created, waiting for payment (cash or online) |
+| Status | Meaning |
+| ------ | ------- |
+| `awaiting_payment` | Order created, waiting for payment |
 | `paid` | Payment confirmed |
-| `timeout` | Payment deadline expired (set by cleanup-timeout-orders cron) |
-| `failed` | Payment explicitly failed (set by PayMongo webhook on payment.failed) |
-| `refunded` | Payment was refunded |
+| `timeout` | Payment deadline passed without confirmation |
+| `refunded` | Payment refunded |
+| `failed` | Payment attempt failed |
 
 ---
 
 ## Order Status Transitions (DB-Enforced)
 
-The `validate_order_status_transition` trigger enforces:
-
 ```text
-awaiting_payment → pending, cancelled
-pending → preparing, cancelled
-preparing → ready, cancelled
-ready → completed, cancelled
-completed → (terminal)
-cancelled → (terminal)
+awaiting_payment ──► pending ──► preparing ──► ready ──► completed
+       │                │           │          │
+       └── cancelled ◄──┴───────────┴──────────┘
 ```
+
+Enforced by `validate_order_status_transition` trigger at the database level.

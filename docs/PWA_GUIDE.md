@@ -25,7 +25,7 @@ Users can install the app to their home screen:
 ### 3. **Push Notifications**
 
 - Order status updates
-- Low balance alerts
+- Order status alerts
 - Promotional messages
 
 ### 4. **Background Sync**
@@ -172,7 +172,7 @@ interface QueuedOrder {
   id: string; // Local ID
   client_order_id: string; // Server idempotency key
   parent_id: string;
-  child_id: string;
+  student_id: string;
   items: OrderItem[];
   payment_method: string;
   notes: string;
@@ -188,7 +188,7 @@ interface QueuedOrder {
 await localQueue.enqueue({
   client_order_id: crypto.randomUUID(),
   parent_id: user.id,
-  child_id: selectedChild.id,
+  student_id: selectedStudent.id,
   items: cartItems,
   payment_method: 'cash',
   notes: ''

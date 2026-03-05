@@ -1,5 +1,7 @@
 # LOHECA Canteen PWA — Comprehensive Code Review
 
+> **⚠️ PARTIALLY OBSOLETE**: This review was written before the Weekly Pre-Order Refactor. Findings related to wallet/balance operations, stock tracking, and the `children` table have been resolved by those features' removal. Architecture and security observations may still apply.
+
 **Review Date:** March 1, 2026  
 **Reviewer:** Senior Full-Stack Engineer (Supabase & PWA Specialist)  
 **Tech Stack:** React 18 + Vite 6 + TypeScript 5 + Tailwind + Supabase (PostgREST + Edge Functions + Realtime + Storage) + Workbox 7 + PayMongo  

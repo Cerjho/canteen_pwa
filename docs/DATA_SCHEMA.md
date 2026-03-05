@@ -2,172 +2,229 @@
 
 ## Overview
 
-Supabase Postgres database with 6 core tables enforcing referential integrity and Row Level Security.
+Supabase Postgres database with 9 core tables enforcing referential integrity and Row Level Security. The schema supports weekly pre-ordering with cash and online (PayMongo) payment methods. There is no wallet/balance system and no stock tracking.
 
 ---
 
 ## Entity Relationship Diagram
 
 ```text
-┌─────────────┐
-│   parents   │
-└──────┬──────┘
-       │ 1
-       │
-       │ N
-┌──────▼──────┐     N ┌─────────────┐
-│  children   ├───────►   orders    │
-└─────────────┘       └──────┬──────┘
-                             │ 1
-                             │
-                             │ N
-                      ┌──────▼──────────┐
-                      │  order_items    │
-                      └──────┬──────────┘
-                             │ N
-                             │
-                             │ 1
-                      ┌──────▼──────┐
-                      │  products   │
-                      └─────────────┘
+┌──────────────────┐
+│  user_profiles   │
+└────────┬─────────┘
+         │ 1
+         │
+         │ N
+┌────────▼─────────┐     N ┌──────────────────┐
+│ parent_students  ├───────►    students      │
+└──────────────────┘       └──────────────────┘
+         │                         │
+         │                         │ 1
+         │                         │
+         │            ┌────────────▼─────────────┐
+         │            │      weekly_orders       │
+         │            └────────────┬─────────────┘
+         │                         │ 1
+         │                         │
+         │                         │ N
+         │                  ┌──────▼──────┐
+         └─────────────────►│   orders    │
+                            └──────┬──────┘
+                                   │ 1
+                                   │
+                                   │ N
+                            ┌──────▼──────────┐
+                            │  order_items    │
+                            └──────┬──────────┘
+                                   │ N
+                                   │ 1
+                            ┌──────▼──────┐
+                            │  products   │
+                            └─────────────┘
 
-┌─────────────┐      ┌──────────────────────┐
-│  payments   │─────>│ payment_allocations  │  (linked to orders)
-└─────────────┘      └──────────────────────┘
+┌──────────────┐      ┌──────────────────────┐
+│   payments   │─────►│ payment_allocations  │  (linked to orders)
+└──────────────┘      └──────────────────────┘
+
+┌───────────────┐
+│ surplus_items │───► products
+└───────────────┘
 ```
 
 ---
 
 ## Tables
 
-### **parents**
+### **user_profiles**
 
-Stores parent/guardian accounts.
+Stores parent/guardian accounts. Synced with Supabase Auth via trigger.
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY, DEFAULT uuid_generate_v4() | User ID (matches Supabase Auth) |
+| `id` | uuid | PRIMARY KEY | Matches `auth.users.id` |
 | `email` | text | UNIQUE, NOT NULL | Parent email |
 | `phone_number` | text | | Philippine mobile number |
 | `first_name` | text | NOT NULL | |
 | `last_name` | text | NOT NULL | |
-| `balance` | numeric(10,2) | DEFAULT 0.00 | Prepaid balance (PHP) |
+| `role` | text | NOT NULL, DEFAULT 'parent' | 'parent', 'staff', 'admin' |
 | `created_at` | timestamptz | DEFAULT now() | |
 | `updated_at` | timestamptz | DEFAULT now() | |
 
-**Indexes**:
+**Indexes**: `email`
 
-- `idx_parents_email` on `email`
-
-**RLS**: Parents can only read/update their own record.
+**RLS**: Users can only read/update their own record. Admins can read all.
 
 ---
 
-### **children**
+### **students**
 
-Stores student profiles (managed by school admin, linked by parents).
+Student profiles managed by school admin, linked by parents via `parent_students`.
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY | |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
 | `student_id` | text | UNIQUE, NOT NULL | Auto-generated ID (YY-XXXXX format) |
-| `parent_id` | uuid | FOREIGN KEY → parents(id), NULL | Nullable until parent links |
 | `first_name` | text | NOT NULL | |
 | `last_name` | text | NOT NULL | |
 | `grade_level` | text | NOT NULL | e.g., "Grade 1" |
 | `section` | text | | e.g., "A" |
 | `dietary_restrictions` | text | | Allergies, preferences |
+| `is_active` | boolean | DEFAULT true | Soft-delete flag |
 | `created_by` | uuid | FOREIGN KEY → auth.users(id) | Admin who created the record |
 | `created_at` | timestamptz | DEFAULT now() | |
 | `updated_at` | timestamptz | DEFAULT now() | |
 
-**Indexes**:
-
-- `idx_children_parent_id` on `parent_id`
-- `idx_children_student_id` on `student_id` (UNIQUE)
+**Indexes**: `student_id` (UNIQUE)
 
 **RLS Policies**:
 
 - **Admins**: Full CRUD access to all students
-- **Parents**: Can view linked children, link unlinked students, update dietary info only
+- **Parents**: Can view linked students, link unlinked students by student_id, update dietary info only
 - **Staff**: Can view all students (for order processing)
 
 **Note**: Students are added by school administrators only. Parents link to existing students using the Student ID provided by the school.
 
 ---
 
-### **products**
+### **parent_students**
 
-Canteen menu items.
+Join table linking parents to students (many-to-many).
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY | |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
+| `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | |
+| `student_id` | uuid | FOREIGN KEY → students(id), NOT NULL | |
+| `relationship` | text | | e.g., "mother", "father", "guardian" |
+| `is_primary` | boolean | DEFAULT true | Primary guardian flag |
+| `linked_at` | timestamptz | DEFAULT now() | |
+
+**Indexes**: `parent_id`, `student_id`
+
+**Unique constraint**: `(parent_id, student_id)` — prevents duplicate links
+
+**RLS**: Parents can read/insert/delete their own links.
+
+---
+
+### **products**
+
+Canteen menu items. No stock tracking — only an `available` boolean toggle.
+
+| Column | Type | Constraints | Description |
+| ------ | ---- | ----------- | ----------- |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
 | `name` | text | NOT NULL | e.g., "Chicken Adobo" |
 | `description` | text | | |
 | `price` | numeric(10,2) | NOT NULL | Price in PHP |
 | `category` | text | NOT NULL | "mains", "snacks", "drinks" |
 | `image_url` | text | | Product photo URL |
-| `available` | boolean | DEFAULT true | In stock flag |
-| `stock_quantity` | integer | DEFAULT 0 | Current inventory |
+| `available` | boolean | DEFAULT true | Whether item can be ordered |
 | `created_at` | timestamptz | DEFAULT now() | |
 | `updated_at` | timestamptz | DEFAULT now() | |
 
-**Indexes**:
-
-- `idx_products_category` on `category`
-- `idx_products_available` on `available`
+**Indexes**: `category`, `available`
 
 **RLS**: Public read, staff/admin write.
 
 ---
 
-### **orders**
+### **weekly_orders**
 
-Parent orders for children.
+Aggregate container for a parent's weekly pre-order (Mon–Fri). Links to individual daily `orders`.
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY | |
-| `parent_id` | uuid | FOREIGN KEY → parents(id), NOT NULL | |
-| `child_id` | uuid | FOREIGN KEY → children(id), NOT NULL | |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
+| `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | |
+| `student_id` | uuid | FOREIGN KEY → students(id), NOT NULL | |
+| `week_start` | date | NOT NULL | Monday of the order week |
+| `status` | text | NOT NULL, DEFAULT 'submitted' | "submitted", "active", "completed", "cancelled" |
+| `total_amount` | numeric(10,2) | NOT NULL | Sum of all daily orders |
+| `payment_method` | text | NOT NULL | "cash", "gcash", "paymaya", "card" |
+| `payment_status` | payment_status | DEFAULT 'awaiting_payment' | "awaiting_payment", "paid", "timeout", "refunded", "failed" |
+| `paymongo_checkout_id` | text | | PayMongo checkout session ID |
+| `paymongo_checkout_url` | text | | PayMongo redirect URL |
+| `payment_due_at` | timestamptz | | Payment deadline |
+| `notes` | text | | General order notes |
+| `submitted_at` | timestamptz | | When parent submitted the order |
+| `created_at` | timestamptz | DEFAULT now() | |
+| `updated_at` | timestamptz | DEFAULT now() | |
+
+**Indexes**: `parent_id`, `student_id`, `week_start`, `status`
+
+**Unique constraint**: `(parent_id, student_id, week_start)` — one weekly order per student per week
+
+**RLS**: Parents see only their own weekly orders.
+
+---
+
+### **orders**
+
+Individual daily orders. May belong to a `weekly_order` (pre-orders) or be standalone (surplus/walk-in).
+
+| Column | Type | Constraints | Description |
+| ------ | ---- | ----------- | ----------- |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
+| `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | |
+| `student_id` | uuid | FOREIGN KEY → students(id), NOT NULL | |
 | `client_order_id` | uuid | UNIQUE, NOT NULL | Idempotency key |
+| `weekly_order_id` | uuid | FOREIGN KEY → weekly_orders(id) | NULL for surplus/walk-in |
+| `order_type` | text | DEFAULT 'pre_order' | "pre_order", "surplus", "walk_in" |
 | `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "preparing", "ready", "completed", "cancelled", "awaiting_payment" |
 | `total_amount` | numeric(10,2) | NOT NULL | |
-| `payment_method` | text | NOT NULL | "cash", "balance", "gcash", "paymaya", "card", "paymongo" |
+| `payment_method` | text | NOT NULL | "cash", "gcash", "paymaya", "card" |
 | `payment_status` | payment_status | DEFAULT 'paid' | "awaiting_payment", "paid", "timeout", "refunded", "failed" |
 | `payment_due_at` | timestamptz | | Deadline for payment (cash: 4hrs, online: 30min) |
 | `payment_group_id` | uuid | | Groups batch orders for shared payment tracking |
 | `paymongo_checkout_id` | text | | PayMongo checkout session ID |
 | `paymongo_payment_id` | text | | PayMongo payment ID (set after payment confirmed) |
 | `notes` | text | | Special instructions |
-| `scheduled_for` | date | | Scheduled delivery date |
-| `meal_period` | text | | "morning_snack", "lunch", "afternoon_snack" |
+| `scheduled_for` | date | NOT NULL | Delivery/preparation date |
 | `created_at` | timestamptz | DEFAULT now() | |
 | `updated_at` | timestamptz | DEFAULT now() | |
 | `completed_at` | timestamptz | | Fulfillment timestamp |
 
 **Indexes**:
 
-- `idx_orders_parent_id` on `parent_id`
-- `idx_orders_child_id` on `child_id`
-- `idx_orders_status` on `status`
-- `idx_orders_created_at` on `created_at` (DESC)
-- `idx_orders_client_order_id` on `client_order_id` (UNIQUE)
-- `idx_orders_payment_status` on `payment_status` WHERE `payment_status = 'awaiting_payment'`
-- `idx_orders_payment_group` on `payment_group_id` WHERE `payment_group_id IS NOT NULL`
-- `idx_orders_paymongo_checkout_id` on `paymongo_checkout_id` WHERE NOT NULL
+- `parent_id`, `student_id`, `status`, `created_at` (DESC)
+- `client_order_id` (UNIQUE)
+- `payment_status` WHERE `payment_status = 'awaiting_payment'`
+- `payment_group_id` WHERE NOT NULL
+- `paymongo_checkout_id` WHERE NOT NULL
+- `weekly_order_id` WHERE NOT NULL
+- `scheduled_for`
 
-**RLS**: Parents see only their orders, staff see all.
+**RLS**: Parents see only their orders, staff/admin see all.
 
 **Constraints**:
 
 - CHECK: `status IN ('awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled')`
-- CHECK: `payment_method IN ('cash', 'balance', 'gcash', 'paymaya', 'card', 'paymongo')`
+- CHECK: `payment_method IN ('cash', 'gcash', 'paymaya', 'card')`
 
 **Triggers**:
 
-- `validate_order_status_transition` — Enforces valid status transitions at DB level:
+- `validate_order_status_transition` — Enforces valid status transitions:
   - `awaiting_payment` → `pending`, `cancelled`
   - `pending` → `preparing`, `cancelled`
   - `preparing` → `ready`, `cancelled`
@@ -182,39 +239,62 @@ Line items for each order.
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY | |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
 | `order_id` | uuid | FOREIGN KEY → orders(id), NOT NULL | |
 | `product_id` | uuid | FOREIGN KEY → products(id), NOT NULL | |
 | `quantity` | integer | NOT NULL, CHECK > 0 | |
-| `price_at_order` | numeric(10,2) | NOT NULL | Historical price |
+| `price_at_order` | numeric(10,2) | NOT NULL | Historical price at time of order |
+| `status` | text | DEFAULT 'confirmed' | "confirmed", "unavailable" |
+| `meal_period` | text | | "morning_snack", "lunch", "afternoon_snack" |
 | `created_at` | timestamptz | DEFAULT now() | |
 
-**Indexes**:
+**Indexes**: `order_id`
 
-- `idx_order_items_order_id` on `order_id`
+**Unique constraint**: `(order_id, product_id, meal_period)` — prevents duplicate items
 
 **RLS**: Accessible via parent's orders.
 
 ---
 
-### **payments**
+### **surplus_items**
 
-One row per real money movement (payment, refund, top-up).
-Replaces the legacy `transactions` table (renamed to `transactions_legacy`).
+Leftover items marked by staff for same-day ordering.
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY | |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
+| `product_id` | uuid | FOREIGN KEY → products(id), NOT NULL | |
+| `scheduled_date` | date | NOT NULL | Date the surplus is available |
+| `meal_period` | text | | "morning_snack", "lunch", "afternoon_snack" |
+| `quantity_available` | integer | NOT NULL, CHECK > 0 | |
+| `marked_by` | uuid | FOREIGN KEY → auth.users(id) | Staff who marked the surplus |
+| `is_active` | boolean | DEFAULT true | Whether still available |
+| `created_at` | timestamptz | DEFAULT now() | |
+
+**Indexes**: `product_id`, `scheduled_date`, `is_active`
+
+**RLS**: Public read, staff/admin write.
+
+---
+
+### **payments**
+
+One row per real money movement (payment or refund).
+
+| Column | Type | Constraints | Description |
+| ------ | ---- | ----------- | ----------- |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
 | `parent_id` | uuid | FOREIGN KEY → user_profiles(id), NOT NULL | **Immutable** after insert |
-| `type` | text | NOT NULL | "payment", "refund", "topup" — **immutable** after insert |
+| `type` | text | NOT NULL | "payment", "refund" — **immutable** after insert |
 | `amount_total` | numeric(10,2) | NOT NULL | Total payment amount — **immutable** after insert |
-| `method` | text | NOT NULL | "cash", "gcash", "paymaya", "card", "paymongo", "balance" |
+| `method` | text | NOT NULL | "cash", "gcash", "paymaya", "card" |
 | `status` | text | NOT NULL, DEFAULT 'pending' | "pending", "completed", "failed" — guarded transitions only |
 | `external_ref` | text | | External reference (e.g. PAYMONGO-xxx) |
 | `paymongo_checkout_id` | text | UNIQUE (partial, non-null) | PayMongo checkout session ID |
 | `paymongo_payment_id` | text | UNIQUE (partial, non-null) | PayMongo payment ID |
 | `paymongo_refund_id` | text | UNIQUE (partial, non-null) | PayMongo refund ID |
 | `payment_group_id` | text | | Groups payments from batch checkout |
+| `weekly_order_id` | uuid | FOREIGN KEY → weekly_orders(id) | Links payment to weekly order |
 | `reference_id` | text | | Internal reference ID |
 | `original_payment_id` | uuid | FOREIGN KEY → payments(id) | For refunds: links back to original payment |
 | `metadata` | jsonb | DEFAULT '{}' | Flexible key-value data |
@@ -239,7 +319,7 @@ Links a payment to one or more orders. Enables batch payments (1 payment → N o
 
 | Column | Type | Constraints | Description |
 | ------ | ---- | ----------- | ----------- |
-| `id` | uuid | PRIMARY KEY | |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | |
 | `payment_id` | uuid | FOREIGN KEY → payments(id) ON DELETE CASCADE, NOT NULL | **Immutable** after insert |
 | `order_id` | uuid | FOREIGN KEY → orders(id) ON DELETE CASCADE, NOT NULL | **Immutable** after insert |
 | `allocated_amount` | numeric(10,2) | NOT NULL | Amount allocated to this order — **immutable** after insert |
@@ -256,12 +336,20 @@ Links a payment to one or more orders. Enables batch payments (1 payment → N o
 
 ---
 
-### **Atomic Wallet RPCs**
+### **system_settings**
 
-| Function | Purpose |
-| -------- | ------- |
-| `deduct_balance_with_payment(parent_id, expected_balance, amount, order_ids[], order_amounts[])` | Atomically deducts wallet + creates completed payment + allocations in one DB transaction |
-| `credit_balance_with_payment(parent_id, amount, type, method, ...)` | Atomically credits wallet + creates payment record + optional allocation (used for refunds & top-ups) |
+Global configuration values managed by admin.
+
+| Column | Type | Constraints | Description |
+| ------ | ---- | ----------- | ----------- |
+| `key` | text | PRIMARY KEY | Setting identifier |
+| `value` | jsonb | NOT NULL | Setting value (type varies) |
+| `updated_at` | timestamptz | DEFAULT now() | |
+| `updated_by` | uuid | FOREIGN KEY → auth.users(id) | Admin who last modified |
+
+**Known keys**: `weekly_cutoff_day`, `weekly_cutoff_time`, `maintenance_mode`, `school_name`, `allowed_payment_methods`
+
+**RLS**: Public read, admin write.
 
 ---
 
@@ -272,7 +360,9 @@ Links a payment to one or more orders. Enables batch payments (1 payment → N o
 - `numeric(10,2)`: Decimal with 10 total digits, 2 after decimal
 - `integer`: Whole number
 - `boolean`: true/false
+- `date`: Calendar date (no time component)
 - `timestamptz`: Timestamp with timezone
+- `jsonb`: Binary JSON
 
 ---
 
@@ -281,35 +371,23 @@ Links a payment to one or more orders. Enables batch payments (1 payment → N o
 ### Products
 
 ```sql
-INSERT INTO products (name, description, price, category, available, stock_quantity) VALUES
-('Chicken Adobo', 'Filipino classic with rice', 45.00, 'mains', true, 20),
-('Pancit Canton', 'Stir-fried noodles', 30.00, 'mains', true, 15),
-('Lumpia', '3 pieces spring rolls', 25.00, 'snacks', true, 30),
-('Turon', 'Banana spring roll', 15.00, 'snacks', true, 25),
-('Gulaman', 'Refreshing jelly drink', 10.00, 'drinks', true, 50);
+INSERT INTO products (name, description, price, category, available) VALUES
+('Chicken Adobo', 'Filipino classic with rice', 45.00, 'mains', true),
+('Pancit Canton', 'Stir-fried noodles', 30.00, 'mains', true),
+('Lumpia', '3 pieces spring rolls', 25.00, 'snacks', true),
+('Turon', 'Banana spring roll', 15.00, 'snacks', true),
+('Gulaman', 'Refreshing jelly drink', 10.00, 'drinks', true);
 ```
 
 ---
 
 ## Naming Conventions
 
-- Table names: lowercase, plural
+- Table names: lowercase, plural (or snake_case compound)
 - Column names: snake_case
 - Foreign keys: `<table_singular>_id`
 - Timestamps: `_at` suffix
-- Boolean flags: `is_` or bare adjective (e.g., `available`)
-
----
-
-## RPC Functions
-
-### `increment_stock(p_product_id UUID, p_quantity INTEGER)`
-
-Atomically increments a product's `stock_quantity`. Used when restoring stock for cancelled/failed/refunded orders. Raises exception if product not found.
-
-### `decrement_stock(p_product_id UUID, p_quantity INTEGER)`
-
-Atomically decrements a product's `stock_quantity` with `FOR UPDATE` row lock to prevent concurrent deductions. Raises exception if product not found or insufficient stock. Used during order creation to reserve inventory.
+- Boolean flags: `is_` prefix or bare adjective (e.g., `available`)
 
 ---
 

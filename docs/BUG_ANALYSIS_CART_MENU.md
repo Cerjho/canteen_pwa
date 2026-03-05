@@ -1,5 +1,7 @@
 # Comprehensive Bug Analysis: Parent Menu & Cart Bottom Sheet
 
+> **⚠️ PARTIALLY OBSOLETE**: This analysis was written before the Weekly Pre-Order Refactor. Findings related to wallet/balance, stock quantity tracking, and the `children` table have been resolved by removing those features entirely. The cart/menu rendering and payment flow analysis may still be partially relevant.
+
 **Date:** March 2, 2026  
 **Components Analyzed:**
 

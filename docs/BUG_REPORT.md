@@ -1,5 +1,7 @@
 # 🐛 Comprehensive Bug Report - LOHECA Canteen PWA
 
+> **⚠️ PARTIALLY OBSOLETE**: This report was written before the Weekly Pre-Order Refactor. All bugs related to wallet/balance, top-up sessions, and stock quantity have been resolved by removing those features entirely. Payment flow and UI bugs may still be relevant.
+
 **Generated:** January 2, 2026  
 **Analysis Scope:** Full codebase analysis including components, hooks, services, pages, Supabase functions, and configuration files.
 
