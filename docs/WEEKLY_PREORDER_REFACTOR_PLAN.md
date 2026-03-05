@@ -119,19 +119,27 @@ Week of Mar 2–6 (fulfillment):
 
 |--------|------|--------|
 | `wallets` | TABLE | Wallet removed |
-| All 6 `wallets` RLS policies | POLICY | Wallet removed |
+| All 5 `wallets` RLS policies | POLICY | Wallet removed |
 | `topup_sessions` | TABLE | Top-up removed |
+| `topup_sessions` RLS policy | POLICY | Top-up removed |
+| `transactions_legacy` | TABLE | Dead read-only locked table |
 | `deduct_balance_with_payment()` | FUNCTION | Wallet removed |
 | `credit_balance_with_payment()` | FUNCTION | Wallet removed |
 | `increment_stock()` | FUNCTION | Stock tracking removed |
 | `decrement_stock()` | FUNCTION | Stock tracking removed |
-| `products.stock_quantity` | COLUMN | Stock tracking removed |
+| `block_legacy_writes()` | FUNCTION | `transactions_legacy` table dropped |
+| `get_todays_menu()` | FUNCTION | Redundant — use `get_menu_for_date()` |
+| `get_menu_for_day(INT)` | FUNCTION | Redundant — use `get_menu_for_date()` |
+| `is_menu_available()` | FUNCTION | Duplicate of `is_canteen_open()` |
+| `get_dashboard_stats()` | FUNCTION | Legacy — replaced by `get_admin_dashboard_stats()` |
+| `merge_order_items()` | FUNCTION | Auto-merge not needed — weekly orders submitted as complete unit |
 | `validate_cart_item_max_advance()` | TRIGGER FUNC | Replaced by weekly cutoff |
+| `products.stock_quantity` | COLUMN | Stock tracking removed |
+| `orders.meal_period` | COLUMN | Deprecated — already on `order_items` |
+| `orders.paymongo_payment_id` | COLUMN | Redundant — tracked on `payments` table |
 | `order_cutoff_time` setting | SETTING | Replaced by `weekly_cutoff_time` |
 | `max_future_days` setting | SETTING | Replaced by weekly cutoff |
 | `low_stock_threshold` setting | SETTING | Stock tracking removed |
-| `orders.meal_period` | COLUMN | Deprecated — already on `order_items` |
-| `get_todays_menu()` | FUNCTION | Replaced by week-based menu queries |
 
 ---
 
@@ -142,16 +150,15 @@ Week of Mar 2–6 (fulfillment):
 ```sql
 CREATE TABLE weekly_orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  parent_id UUID NOT NULL REFERENCES auth.users(id),
-  student_id UUID NOT NULL REFERENCES students(id),
-  week_start DATE NOT NULL, -- Monday of target week
+  parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
+  week_start DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'submitted'
     CHECK (status IN ('submitted', 'active', 'completed', 'cancelled')),
-  total_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+  total_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
   payment_method TEXT NOT NULL
     CHECK (payment_method IN ('cash', 'gcash', 'paymaya', 'card')),
-  payment_status TEXT DEFAULT 'awaiting_payment'
-    CHECK (payment_status IN ('awaiting_payment', 'paid', 'timeout', 'refunded', 'failed')),
+  payment_status payment_status DEFAULT 'awaiting_payment',
   paymongo_checkout_id TEXT,
   paymongo_checkout_url TEXT,
   paymongo_payment_intent_id TEXT,
@@ -161,20 +168,29 @@ CREATE TABLE weekly_orders (
   submitted_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (student_id, week_start)
+  CONSTRAINT uq_weekly_order_student_week UNIQUE (student_id, week_start),
+  CONSTRAINT chk_week_start_is_monday CHECK (EXTRACT(ISODOW FROM week_start) = 1)
 );
 ```
+
+> See [DATABASE_REARCHITECTURE_PLAN.md](DATABASE_REARCHITECTURE_PLAN.md#51-weekly_orders) for full DDL with indexes, comments, and status transitions.
 
 ### 2.2 Modify `orders` Table
 
 ```sql
 ALTER TABLE orders
-  ADD COLUMN weekly_order_id UUID REFERENCES weekly_orders(id),
+  ADD COLUMN weekly_order_id UUID REFERENCES weekly_orders(id) ON DELETE SET NULL,
   ADD COLUMN order_type TEXT NOT NULL DEFAULT 'pre_order'
     CHECK (order_type IN ('pre_order', 'surplus', 'walk_in'));
 
--- Drop deprecated column
+-- Drop deprecated columns
 ALTER TABLE orders DROP COLUMN meal_period;
+ALTER TABLE orders DROP COLUMN paymongo_payment_id;
+
+-- Update payment_method constraint — remove 'balance' and 'paymongo'
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
+ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
+  CHECK (payment_method IN ('cash','gcash','paymaya','card'));
 ```
 
 ### 2.3 New `surplus_items` Table
@@ -182,15 +198,17 @@ ALTER TABLE orders DROP COLUMN meal_period;
 ```sql
 CREATE TABLE surplus_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID NOT NULL REFERENCES products(id),
-  scheduled_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  scheduled_date DATE NOT NULL,
   meal_period TEXT CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   marked_by UUID NOT NULL REFERENCES auth.users(id),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (product_id, scheduled_date, meal_period)
+  CONSTRAINT uq_surplus_product_date_meal UNIQUE (product_id, scheduled_date, meal_period)
 );
 ```
+
+> See [DATABASE_REARCHITECTURE_PLAN.md](DATABASE_REARCHITECTURE_PLAN.md#52-surplus_items) for full DDL with indexes and comments.
 
 ### 2.4 Updated System Settings
 
@@ -212,10 +230,25 @@ CREATE TABLE surplus_items (
 | `validate_weekly_order_cutoff()` | Trigger on `weekly_orders` INSERT — blocks creation after Friday 5 PM for target week |
 | `validate_surplus_order_cutoff()` | Trigger on `orders` INSERT where `order_type = 'surplus'` — blocks after 8 AM |
 | `validate_daily_cancellation()` | RPC — validates cancellation is before 8 AM of target date |
+| `transition_weekly_order_status()` | Trigger on `orders` UPDATE — auto-transitions weekly order to completed/cancelled when all daily orders reach terminal state |
+| `recalculate_weekly_order_total()` | Trigger on `orders` UPDATE — recalculates `weekly_orders.total_amount` when a daily order is cancelled |
+| `update_weekly_orders_updated_at` | Trigger — auto-updates `weekly_orders.updated_at` on row change |
 | `get_weekly_order_summary(week_start DATE)` | RPC — aggregated counts per product per day for kitchen prep |
 | `get_weekly_report(week_start DATE)` | RPC — weekly revenue, order counts, per-student summaries |
 
+### 2.5a Additional Schema Modifications
+
+| Table | Change | Purpose |
+
+|-------|--------|---------|
+| `payments` | ADD `weekly_order_id UUID REFERENCES weekly_orders(id)` | Optional direct link from payment to weekly order |
+| `menu_schedules` | ADD `menu_status TEXT NOT NULL DEFAULT 'draft' CHECK (menu_status IN ('draft','published','locked'))` | Publish workflow: admin must publish menu before parents can order |
+| `payments` | UPDATE `method` CHECK — remove `'balance'`; UPDATE `type` CHECK — remove `'topup'` | Clean up wallet references from payment constraints |
+| `cart_state` | UPDATE `payment_method` CHECK — remove `'balance'` | Clean up wallet reference |
+
 **Modify**: `validate_cart_item_date()` → target NEXT week's Mon–Fri dates
+
+> See [DATABASE_REARCHITECTURE_PLAN.md](DATABASE_REARCHITECTURE_PLAN.md) for full SQL of all functions, triggers, indexes, and RLS policies.
 
 ### 2.6 Data Migration
 
