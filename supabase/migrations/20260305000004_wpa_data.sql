@@ -62,9 +62,13 @@ SELECT
     WHEN COUNT(*) FILTER (WHERE o.status IN ('completed','cancelled')) = COUNT(*) THEN 'completed'
     ELSE 'completed'
   END::TEXT                                  AS status,
-  -- Use the most common payment_method from the grouped orders, default 'cash'
+  -- Use the most common VALID payment_method; map deprecated 'balance' → 'cash'
   COALESCE(
-    (MODE() WITHIN GROUP (ORDER BY o.payment_method)),
+    (MODE() WITHIN GROUP (ORDER BY
+      CASE WHEN o.payment_method IN ('cash','gcash','paymaya','card')
+           THEN o.payment_method
+           ELSE 'cash' END
+    )),
     'cash'
   )                                          AS payment_method,
   'paid'                                     AS payment_status,
