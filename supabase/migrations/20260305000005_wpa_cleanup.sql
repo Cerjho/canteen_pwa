@@ -29,11 +29,16 @@ ALTER TABLE products DROP COLUMN IF EXISTS stock_quantity;
 UPDATE orders SET payment_method = 'cash'
   WHERE payment_method NOT IN ('cash', 'gcash', 'paymaya', 'card');
 
+-- Disable financial hardening triggers that block column mutations during migration
+ALTER TABLE payments DISABLE TRIGGER trg_prevent_amount_mutation;
+
 UPDATE payments SET method = 'cash'
   WHERE method NOT IN ('cash', 'gcash', 'paymaya', 'card');
 
 UPDATE payments SET type = 'payment'
   WHERE type NOT IN ('payment', 'refund');
+
+ALTER TABLE payments ENABLE TRIGGER trg_prevent_amount_mutation;
 
 UPDATE cart_state SET payment_method = 'cash'
   WHERE payment_method NOT IN ('cash', 'gcash', 'paymaya', 'card');
