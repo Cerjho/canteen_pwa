@@ -123,20 +123,22 @@ export function getWeeklyCutoffDeadline(
   let dayNum = typeof cutoffDay === 'number' ? cutoffDay : DEFAULT_CUTOFF_DAY;
   if (isNaN(dayNum) || dayNum < 0 || dayNum > 6) dayNum = DEFAULT_CUTOFF_DAY;
 
-  const monday = new Date(targetWeekStart + 'T00:00:00');
-  // Go back to the previous week's cutoff day
-  // Monday (1) - cutoffDay (5) = -4 → previous Friday
-  const diff = dayNum - monday.getDay(); // e.g. 5 - 1 = 4
-  const cutoffDate = new Date(monday);
-  cutoffDate.setDate(monday.getDate() + diff - 7); // subtract 7 to get previous week
+  // targetWeekStart is always a Monday (day 1).
+  // We want the cutoff day of the PREVIOUS week, e.g. Friday (5) = Monday - 3.
+  // Formula: daysOffset = cutoffDay - 8  (always negative: Fri → 5-8=-3)
+  const daysOffset = dayNum - 8;
+
+  // Use noon Manila time as reference to avoid midnight DST/boundary edge cases.
+  const mondayMs = new Date(targetWeekStart + 'T12:00:00+08:00').getTime();
+  const cutoffMs = mondayMs + daysOffset * 24 * 60 * 60 * 1000;
+  const cutoffDateStr = new Date(cutoffMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
   const parts = (cutoffTime || '17:00').split(':').map(Number);
-  const h = isNaN(parts[0]) ? DEFAULT_CUTOFF_HOUR : parts[0];
-  const m = isNaN(parts[1]) ? DEFAULT_CUTOFF_MINUTE : parts[1];
-  // Return as a Manila-time-equivalent UTC Date
-  // Manila is UTC+8, so subtract 8 hours from Manila time to get UTC
-  cutoffDate.setUTCHours(h - 8, m, 0, 0);
-  return cutoffDate;
+  const hh = String(isNaN(parts[0]) ? DEFAULT_CUTOFF_HOUR : parts[0]).padStart(2, '0');
+  const mm = String(isNaN(parts[1]) ? DEFAULT_CUTOFF_MINUTE : parts[1]).padStart(2, '0');
+
+  // Construct as an explicit Manila-timezone ISO string to avoid any UTC/local mixing.
+  return new Date(`${cutoffDateStr}T${hh}:${mm}:00+08:00`);
 }
 
 /**
