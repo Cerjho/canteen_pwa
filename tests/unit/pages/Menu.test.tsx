@@ -77,7 +77,7 @@ import { useCart } from '../../../src/hooks/useCart';
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useSystemSettings } from '../../../src/hooks/useSystemSettings';
 import { getProductsForDate, getCanteenStatus, getAvailableOrderDates, getWeekdaysWithStatus } from '../../../src/services/products';
-import { getNextOrderableWeek, getWeekLabel } from '../../../src/utils/dateUtils';
+import { getNextOrderableWeek as _getNextOrderableWeek, getWeekLabel as _getWeekLabel } from '../../../src/utils/dateUtils';
 
 const mockNavigate = vi.fn();
 
