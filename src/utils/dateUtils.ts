@@ -119,14 +119,20 @@ export function getWeeklyCutoffDeadline(
   cutoffDay = DEFAULT_CUTOFF_DAY,
   cutoffTime = `${DEFAULT_CUTOFF_HOUR}:${String(DEFAULT_CUTOFF_MINUTE).padStart(2, '0')}`,
 ): Date {
+  // Coerce cutoffDay to a valid number (DB may store a string day-name)
+  let dayNum = typeof cutoffDay === 'number' ? cutoffDay : DEFAULT_CUTOFF_DAY;
+  if (isNaN(dayNum) || dayNum < 0 || dayNum > 6) dayNum = DEFAULT_CUTOFF_DAY;
+
   const monday = new Date(targetWeekStart + 'T00:00:00');
   // Go back to the previous week's cutoff day
   // Monday (1) - cutoffDay (5) = -4 → previous Friday
-  const diff = cutoffDay - monday.getDay(); // e.g. 5 - 1 = 4
+  const diff = dayNum - monday.getDay(); // e.g. 5 - 1 = 4
   const cutoffDate = new Date(monday);
   cutoffDate.setDate(monday.getDate() + diff - 7); // subtract 7 to get previous week
 
-  const [h, m] = cutoffTime.split(':').map(Number);
+  const parts = (cutoffTime || '17:00').split(':').map(Number);
+  const h = isNaN(parts[0]) ? DEFAULT_CUTOFF_HOUR : parts[0];
+  const m = isNaN(parts[1]) ? DEFAULT_CUTOFF_MINUTE : parts[1];
   // Return as a Manila-time-equivalent UTC Date
   // Manila is UTC+8, so subtract 8 hours from Manila time to get UTC
   cutoffDate.setUTCHours(h - 8, m, 0, 0);

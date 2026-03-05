@@ -69,6 +69,19 @@ export function useSystemSettings() {
           }
         });
 
+        // The DB stores weekly_cutoff_day as a day-name string (e.g. "friday")
+        // but the frontend expects a number (0=Sun .. 6=Sat). Normalise here.
+        if (typeof parsed.weekly_cutoff_day === 'string') {
+          const DAY_MAP: Record<string, number> = {
+            sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+            thursday: 4, friday: 5, saturday: 6,
+          };
+          parsed.weekly_cutoff_day =
+            DAY_MAP[(parsed.weekly_cutoff_day as unknown as string).toLowerCase()] ?? defaultSettings.weekly_cutoff_day;
+        } else if (typeof parsed.weekly_cutoff_day !== 'number') {
+          parsed.weekly_cutoff_day = defaultSettings.weekly_cutoff_day;
+        }
+
         return parsed;
       };
 
