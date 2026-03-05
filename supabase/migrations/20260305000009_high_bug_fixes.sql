@@ -41,6 +41,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ═══════════════════════════════════════════════════
 -- M13: get_menu_for_date — use acts_as_day for Saturday makeup days
 -- ═══════════════════════════════════════════════════
+-- DROP first because PostgreSQL disallows changing a function's return type via CREATE OR REPLACE
+DROP FUNCTION IF EXISTS get_menu_for_date(DATE);
 CREATE OR REPLACE FUNCTION get_menu_for_date(target_date DATE)
 RETURNS TABLE (
   product_id UUID,
