@@ -24,7 +24,8 @@ export async function getStudents(parentId: string): Promise<Student[]> {
         updated_at
       )
     `)
-    .eq('parent_id', parentId);
+    .eq('parent_id', parentId)
+    .eq('students.is_active', true);
 
   if (error) throw error;
   

@@ -534,7 +534,7 @@ export default function ParentDashboard() {
                     : 'Student';
                   const activeDays = wo.daily_orders?.filter(o => o.status !== 'cancelled').length ?? 0;
                   const totalDays = wo.daily_orders?.length ?? 0;
-                  const weekEnd = format(addDays(parseISO(wo.week_start), 4), 'MMM d');
+                  const weekEnd = format(addDays(parseISO(wo.week_start), 5), 'MMM d');
                   const weekStart = format(parseISO(wo.week_start), 'MMM d');
 
                   return (

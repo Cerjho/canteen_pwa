@@ -92,13 +92,14 @@ export function getNextOrderableWeek(
 }
 
 /**
- * Returns an array of Mon–Fri date strings for the given week.
+ * Returns an array of date strings for the given week.
  * @param weekStart Monday YYYY-MM-DD string.
+ * @param days Number of days to include (default 5 = Mon–Fri, 6 = Mon–Sat).
  */
-export function getWeekDates(weekStart: string): string[] {
+export function getWeekDates(weekStart: string, days = 5): string[] {
   const monday = new Date(weekStart + 'T00:00:00');
   const dates: string[] = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < days; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     dates.push(formatDateLocal(d));
@@ -212,22 +213,23 @@ export function isDailyCancelCutoffPassed(
 
 /**
  * Formatted week label: "Mar 2–6, 2026"
+ * @param days Number of days in the week (default 5 = Mon–Fri, 6 = Mon–Sat).
  */
-export function getWeekLabel(weekStart: string): string {
+export function getWeekLabel(weekStart: string, days = 5): string {
   const monday = new Date(weekStart + 'T00:00:00');
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
+  const lastDay = new Date(monday);
+  lastDay.setDate(monday.getDate() + days - 1);
 
   const monMonth = monday.toLocaleDateString('en-US', { month: 'short' });
-  const friMonth = friday.toLocaleDateString('en-US', { month: 'short' });
+  const lastMonth = lastDay.toLocaleDateString('en-US', { month: 'short' });
   const year = monday.getFullYear();
   const monDay = monday.getDate();
-  const friDay = friday.getDate();
+  const lastDayNum = lastDay.getDate();
 
-  if (monMonth === friMonth) {
-    return `${monMonth} ${monDay}–${friDay}, ${year}`;
+  if (monMonth === lastMonth) {
+    return `${monMonth} ${monDay}–${lastDayNum}, ${year}`;
   }
-  return `${monMonth} ${monDay} – ${friMonth} ${friDay}, ${year}`;
+  return `${monMonth} ${monDay} – ${lastMonth} ${lastDayNum}, ${year}`;
 }
 
 /**

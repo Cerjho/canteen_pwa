@@ -935,17 +935,13 @@ export function useCart() {
       // Only delete DB cart items for cash payments.
       // Online payment items are cleaned up by the webhook handler after payment confirmation.
       if (!isOnline) {
-        for (const item of checkedOutItems) {
+        const idsToDelete = checkedOutItems.map(i => i.id).filter(Boolean);
+        if (idsToDelete.length > 0) {
           await supabase
             .from('cart_items')
             .delete()
-            .match({
-              user_id: user.id,
-              student_id: item.student_id,
-              product_id: item.product_id,
-              scheduled_for: item.scheduled_for,
-              meal_period: item.meal_period,
-            });
+            .eq('user_id', user.id)
+            .in('id', idsToDelete);
         }
       }
 
@@ -961,6 +957,13 @@ export function useCart() {
       if (redirectUrl) {
         navigatingRef.current = true;
         window.location.href = redirectUrl;
+        // Safety: if redirect is blocked (popup blocker, etc.), reset loading after 5s
+        setTimeout(() => {
+          if (navigatingRef.current) {
+            navigatingRef.current = false;
+            setIsLoading(false);
+          }
+        }, 5000);
         return {
           redirecting: true,
           orders: results,

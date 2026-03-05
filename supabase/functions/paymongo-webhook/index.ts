@@ -190,6 +190,8 @@ async function handleOrderPaymentPaid(
 
   const paymentId = checkout.attributes.payments?.[0]?.id || null;
   const paymentMethod = resolvePaymentMethod(checkout.attributes.payments || []);
+  // Extract paid amount in centavos from the checkout payment
+  const paidAmountCentavos = checkout.attributes.payments?.[0]?.attributes?.amount ?? null;
 
   // ── Batch payment: update all orders in the payment group ──
   if (paymentGroupId) {
@@ -207,6 +209,17 @@ async function handleOrderPaymentPaid(
       // Fall through to single-order handling if orderId is present
       if (!orderId) return;
     } else {
+      // Validate total paid amount matches sum of order totals
+      if (paidAmountCentavos != null) {
+        const expectedCentavos = Math.round(
+          groupOrders.reduce((s, o) => s + o.total_amount, 0) * 100
+        );
+        if (Math.abs(paidAmountCentavos - expectedCentavos) > 1) {
+          console.error(`Batch amount mismatch for group ${paymentGroupId}: paid ${paidAmountCentavos} centavos, expected ${expectedCentavos} centavos`);
+          return;
+        }
+      }
+
       let confirmedCount = 0;
       for (const order of groupOrders) {
         if (order.payment_status === 'paid') {
@@ -246,6 +259,17 @@ async function handleOrderPaymentPaid(
       .eq('payment_status', 'awaiting_payment');
 
     if (childOrders) {
+      // Validate total paid amount matches sum of child order totals
+      if (paidAmountCentavos != null) {
+        const expectedCentavos = Math.round(
+          childOrders.reduce((s, o) => s + o.total_amount, 0) * 100
+        );
+        if (Math.abs(paidAmountCentavos - expectedCentavos) > 1) {
+          console.error(`Weekly order amount mismatch for ${weeklyOrderId}: paid ${paidAmountCentavos} centavos, expected ${expectedCentavos} centavos`);
+          return;
+        }
+      }
+
       for (const order of childOrders) {
         await confirmOrderPayment(supabaseAdmin, order, paymentId, paymentMethod, checkout.id);
       }
@@ -293,6 +317,15 @@ async function handleOrderPaymentPaid(
   if (order.payment_status === 'paid') {
     console.log('Order already paid (idempotent):', orderId);
     return;
+  }
+
+  // Validate payment amount matches order total (amounts in centavos vs pesos)
+  if (paidAmountCentavos != null) {
+    const expectedCentavos = Math.round(order.total_amount * 100);
+    if (Math.abs(paidAmountCentavos - expectedCentavos) > 1) {
+      console.error(`Amount mismatch for order ${orderId}: paid ${paidAmountCentavos} centavos, expected ${expectedCentavos} centavos`);
+      return;
+    }
   }
 
   await confirmOrderPayment(supabaseAdmin, order, paymentId, paymentMethod, checkout.id);

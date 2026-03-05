@@ -274,6 +274,30 @@ serve(async (req) => {
       }
     }
 
+    // ── Validate products against menu schedules ──
+    const { data: schedules } = await supabaseAdmin
+      .from('menu_schedules')
+      .select('product_id, day_of_week')
+      .eq('is_active', true)
+      .in('product_id', allProductIds);
+
+    const scheduleSet = new Set(
+      (schedules || []).map(s => `${s.product_id}_${s.day_of_week}`)
+    );
+
+    for (const day of days) {
+      const scheduledDate = new Date(day.scheduled_for + 'T00:00:00');
+      const dow = scheduledDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      for (const item of day.items) {
+        const product = productMap.get(item.product_id);
+        if (product && !scheduleSet.has(`${item.product_id}_${dow}`)) {
+          return errorResponse(corsHeaders, 400, 'NOT_ON_MENU',
+            `'${product.name}' is not on the menu for ${day.scheduled_for}`,
+            { product_id: item.product_id, scheduled_for: day.scheduled_for });
+        }
+      }
+    }
+
     console.log('Processing weekly order:', { parent_id, student_id, week_start, days_count: days.length, total: weeklyTotal });
 
     // ── Create weekly_orders record ──

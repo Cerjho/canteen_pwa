@@ -648,14 +648,21 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Check if canteen is open on a given date (weekday + not a holiday)
+-- Check if canteen is open on a given date (weekday + not a holiday, or makeup Saturday)
 CREATE OR REPLACE FUNCTION is_canteen_open(check_date DATE DEFAULT CURRENT_DATE)
 RETURNS BOOLEAN AS $$
 DECLARE
   day_num INTEGER;
 BEGIN
   day_num := EXTRACT(DOW FROM check_date)::INTEGER;
-  RETURN day_num >= 1 AND day_num <= 5 AND NOT is_holiday(check_date);
+  -- Sunday: always closed
+  IF day_num = 0 THEN RETURN FALSE; END IF;
+  -- Holiday: closed
+  IF is_holiday(check_date) THEN RETURN FALSE; END IF;
+  -- Monday-Friday: open
+  IF day_num >= 1 AND day_num <= 5 THEN RETURN TRUE; END IF;
+  -- Saturday: open only if it's a makeup day
+  RETURN EXISTS (SELECT 1 FROM makeup_days WHERE date = check_date);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -672,11 +679,22 @@ RETURNS TABLE (
 ) AS $$
 DECLARE
   day_num INTEGER;
+  effective_day INTEGER;
 BEGIN
   day_num := EXTRACT(DOW FROM target_date);
 
-  IF day_num = 0 OR day_num = 6 THEN RETURN; END IF;
+  -- Sunday: never open
+  IF day_num = 0 THEN RETURN; END IF;
+  -- Holiday check
   IF EXISTS(SELECT 1 FROM holidays WHERE date = target_date) THEN RETURN; END IF;
+
+  IF day_num = 6 THEN
+    -- Saturday: only if it's a makeup day; use acts_as_day for menu lookup
+    SELECT md.acts_as_day INTO effective_day FROM makeup_days md WHERE md.date = target_date;
+    IF effective_day IS NULL THEN RETURN; END IF;
+  ELSE
+    effective_day := day_num;
+  END IF;
 
   RETURN QUERY
   SELECT
@@ -684,7 +702,7 @@ BEGIN
     p.category, p.image_url, p.available
   FROM products p
   INNER JOIN menu_schedules ms ON p.id = ms.product_id
-  WHERE ms.day_of_week = day_num
+  WHERE ms.day_of_week = effective_day
     AND ms.is_active = true
     AND p.available = true
   ORDER BY p.category, p.name;

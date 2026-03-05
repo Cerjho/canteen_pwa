@@ -68,7 +68,7 @@ function getStatusMeta(status: string) {
   return STATUS_META[status] ?? { icon: Clock, label: status, color: 'text-gray-600 bg-gray-100' };
 }
 
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /* ================================================================
    COMPONENT
@@ -84,11 +84,11 @@ export default function WeeklyOrderReview() {
 
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null);
 
-  // Build 5-day calendar grid from week_start
+  // Build calendar grid from week_start (Mon-Sat, 6 days to include makeup Saturdays)
   const calendarDays = useMemo(() => {
     if (!weeklyOrder) return [];
     const monday = parseISO(weeklyOrder.week_start);
-    return Array.from({ length: 5 }, (_, i) => {
+    return Array.from({ length: 6 }, (_, i) => {
       const date = addDays(monday, i);
       const dateStr = format(date, 'yyyy-MM-dd');
       const order = weeklyOrder.daily_orders?.find(
@@ -219,7 +219,7 @@ export default function WeeklyOrderReview() {
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {format(parseISO(weeklyOrder.week_start), 'MMM d')} –{' '}
-                {format(addDays(parseISO(weeklyOrder.week_start), 4), 'MMM d, yyyy')}
+                {format(addDays(parseISO(weeklyOrder.week_start), 5), 'MMM d, yyyy')}
               </p>
             </div>
             <div className="text-right">
