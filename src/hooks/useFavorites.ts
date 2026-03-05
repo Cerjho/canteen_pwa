@@ -11,6 +11,7 @@ export function useFavorites() {
   useEffect(() => {
     // Clear stale favorites immediately when user changes to prevent flash of old data
     setFavorites([]);
+    let cancelled = false;
 
     async function loadFavorites() {
       if (!user) {
@@ -25,6 +26,8 @@ export function useFavorites() {
           .select('product_id')
           .eq('user_id', user.id);
 
+        if (cancelled) return; // User changed during fetch — discard result
+
         if (error) {
           console.error('Failed to load favorites:', error);
           setFavorites([]);
@@ -32,14 +35,16 @@ export function useFavorites() {
           setFavorites(data.map(item => item.product_id));
         }
       } catch (err) {
+        if (cancelled) return;
         console.error('Failed to load favorites:', err);
         setFavorites([]);
       } finally {
-        setIsLoadingFavorites(false);
+        if (!cancelled) setIsLoadingFavorites(false);
       }
     }
 
     loadFavorites();
+    return () => { cancelled = true; };
   }, [user]);
 
   const addFavorite = useCallback(async (productId: string) => {

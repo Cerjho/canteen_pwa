@@ -53,7 +53,7 @@ export function EditProfileModal({ isOpen, profile, onClose, onSave, isLoading }
     onSave({
       first_name: formData.first_name.trim(),
       last_name: formData.last_name.trim(),
-      phone_number: formData.phone_number.trim(),
+      phone_number: formData.phone_number.replace(/[\s-]/g, ''),
     });
   };
 

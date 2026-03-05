@@ -294,11 +294,12 @@ serve(async (req) => {
               'Failed to add items to existing order.');
           }
 
-          // Recalculate total from all order items
+          // Recalculate total from all order items (only confirmed, exclude unavailable)
           const { data: allExistingItems } = await supabaseAdmin
             .from('order_items')
             .select('price_at_order, quantity')
-            .eq('order_id', existingOrder.id);
+            .eq('order_id', existingOrder.id)
+            .eq('status', 'confirmed');
 
           const recalcTotal = (allExistingItems || []).reduce(
             (s: number, i: any) => s + Number(i.price_at_order) * i.quantity, 0

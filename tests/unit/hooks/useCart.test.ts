@@ -64,6 +64,14 @@ vi.mock('../../../src/utils/dateUtils', async () => {
   };
 });
 
+// Mock useSystemSettings (used by useCart for cutoff validation)
+vi.mock('../../../src/hooks/useSystemSettings', () => ({
+  useSystemSettings: () => ({
+    settings: { weekly_cutoff_day: 'Friday', weekly_cutoff_time: '17:00' },
+    isLoading: false,
+  })
+}));
+
 describe('useCart Hook', () => {
   // Use Asia/Manila timezone (same as the hook) to avoid CI failures
   // when UTC date differs from Manila date (UTC 16:00–23:59)

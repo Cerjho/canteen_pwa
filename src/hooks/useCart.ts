@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createWeeklyOrder } from '../services/orders';
 import { createWeeklyCheckout } from '../services/payments';
 import { useAuth } from './useAuth';
+import { useSystemSettings } from './useSystemSettings';
 import { supabase } from '../services/supabaseClient';
 import { friendlyError } from '../utils/friendlyError';
 import { getTodayLocal, getNextOrderableWeek, getWeekDates } from '../utils/dateUtils';
@@ -105,8 +106,9 @@ export function useCart() {
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { settings } = useSystemSettings();
 
-  // Weekly order builder state
+  // Weekly order builder state — use system settings for cutoff
   const [selectedWeek, setSelectedWeek] = useState<string>(() => getNextOrderableWeek());
   const weekDates = useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
   
@@ -220,12 +222,15 @@ export function useCart() {
   }, [loadCart]);
 
   // BUG-055: Cross-tab cart synchronization via BroadcastChannel
+  // User-isolated channel name to prevent cross-user cart interference in multi-tab
+  const cartChannelName = user ? `cart-sync-${user.id}` : null;
+
   useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined') return;
-    const channel = new BroadcastChannel('cart-sync');
+    if (typeof BroadcastChannel === 'undefined' || !cartChannelName) return;
+    const channel = new BroadcastChannel(cartChannelName);
     channel.onmessage = () => loadCart();
     return () => channel.close();
-  }, [loadCart]);
+  }, [loadCart, cartChannelName]);
 
   // BUG-042: Refetch cart when tab becomes visible (catches server-side deletions)
   useEffect(() => {
@@ -239,15 +244,15 @@ export function useCart() {
   }, [loadCart]);
 
   const broadcastCartUpdate = useCallback(() => {
-    if (typeof BroadcastChannel === 'undefined') return;
+    if (typeof BroadcastChannel === 'undefined' || !cartChannelName) return;
     try {
-      const channel = new BroadcastChannel('cart-sync');
+      const channel = new BroadcastChannel(cartChannelName);
       channel.postMessage('updated');
       channel.close();
     } catch {
       // BroadcastChannel not supported or closed — ignore
     }
-  }, []);
+  }, [cartChannelName]);
 
   // =====================================================
   // COMPUTED VALUES - GROUPINGS
@@ -416,7 +421,7 @@ export function useCart() {
     }
 
     // Validate date is not in the current week (must be next orderable week or later)
-    const nextOrderableMonday = getNextOrderableWeek();
+    const nextOrderableMonday = getNextOrderableWeek(settings.weekly_cutoff_day, settings.weekly_cutoff_time);
     if (item.scheduled_for < nextOrderableMonday) {
       setError('Ordering for this week has closed. Please select next week or later.');
       return;
@@ -447,17 +452,22 @@ export function useCart() {
       return [...prevItems, { ...item, id: crypto.randomUUID() }];
     });
 
-    // Persist to database — single upsert to avoid race conditions
+    // Persist to database — use DB-side atomic increment to avoid race conditions
     try {
-      // Calculate the new total quantity from the optimistic state
-      const updatedItems = itemsRef.current;
-      const matchingItem = updatedItems.find(
-        (i) => i.product_id === item.product_id &&
-               i.student_id === item.student_id &&
-               i.scheduled_for === item.scheduled_for &&
-               i.meal_period === item.meal_period
-      );
-      const targetQuantity = matchingItem?.quantity ?? item.quantity;
+      // Read current DB quantity to avoid stale itemsRef race
+      const { data: existing } = await supabase
+        .from('cart_items')
+        .select('quantity')
+        .match({
+          user_id: user.id,
+          student_id: item.student_id,
+          product_id: item.product_id,
+          scheduled_for: item.scheduled_for,
+          meal_period: item.meal_period,
+        })
+        .maybeSingle();
+
+      const targetQuantity = (existing?.quantity ?? 0) + item.quantity;
 
       const { error } = await supabase
         .from('cart_items')
@@ -481,7 +491,7 @@ export function useCart() {
       const message = err instanceof Error ? err.message : 'Failed to add item';
       setError(friendlyError(message, 'add this item'));
     }
-  }, [user, loadCart, broadcastCartUpdate]);
+  }, [user, settings, loadCart, broadcastCartUpdate]);
 
   // Update item quantity
   const updateQuantity = useCallback(async (

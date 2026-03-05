@@ -152,6 +152,23 @@ serve(async (req) => {
             .eq('weekly_order_id', wo.id)
             .eq('payment_status', 'awaiting_payment');
 
+          // Mark associated payment records as failed
+          const { data: woPayment } = await supabaseAdmin
+            .from('payments')
+            .select('id')
+            .eq('weekly_order_id', wo.id)
+            .eq('status', 'pending');
+
+          if (woPayment) {
+            for (const p of woPayment) {
+              await supabaseAdmin
+                .from('payments')
+                .update({ status: 'failed' })
+                .eq('id', p.id)
+                .eq('status', 'pending');
+            }
+          }
+
           cancelledWeeklyOrders++;
         }
         console.log(`[CLEANUP] Cancelled ${cancelledWeeklyOrders} expired weekly orders`);

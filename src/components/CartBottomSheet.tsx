@@ -326,7 +326,10 @@ export function CartBottomSheet({
                 Cart
                 {items.length > 0 && (
                   <span className="ml-1 text-sm font-medium bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded-full">
-                    {items.reduce((s, i) => s + i.quantity, 0)} items
+                    {(selectedDates.size > 0
+                      ? items.filter(i => selectedDates.has(i.scheduled_for))
+                      : items
+                    ).reduce((s, i) => s + i.quantity, 0)} items
                   </span>
                 )}
               </Drawer.Title>

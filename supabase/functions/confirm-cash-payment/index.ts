@@ -134,14 +134,16 @@ serve(async (req) => {
 
       const now = new Date().toISOString();
 
-      // Update weekly order payment status
-      const { error: woUpdateErr } = await supabaseAdmin
+      // Update weekly order payment status (with optimistic lock + row count verification)
+      const { data: updatedWeekly, error: woUpdateErr } = await supabaseAdmin
         .from('weekly_orders')
         .update({ payment_status: 'paid', updated_at: now })
         .eq('id', weekly_order_id)
-        .eq('payment_status', 'awaiting_payment');
+        .eq('payment_status', 'awaiting_payment')
+        .select('id')
+        .single();
 
-      if (woUpdateErr) {
+      if (woUpdateErr || !updatedWeekly) {
         return new Response(
           JSON.stringify({ error: 'ALREADY_PAID', message: 'Payment was already confirmed by another request' }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

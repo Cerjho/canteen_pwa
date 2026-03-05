@@ -75,6 +75,15 @@ export default function Menu() {
     () => getNextOrderableWeek(settings.weekly_cutoff_day, settings.weekly_cutoff_time),
     [settings.weekly_cutoff_day, settings.weekly_cutoff_time]
   );
+  // Allow viewing current week (Mon of this week), even if cutoff passed
+  const viewFloor = useMemo(() => {
+    const today = new Date();
+    const day = today.getDay(); // 0=Sun
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday
+    const monday = new Date(today);
+    monday.setDate(diff);
+    return formatDateLocal(monday);
+  }, []);
   const [currentWeekStart, setCurrentWeekStart] = useState<string | null>(null);
   // Initialize currentWeekStart once minWeekStart resolves (settings may load async)
   useEffect(() => {
@@ -90,16 +99,16 @@ export default function Menu() {
   const weekCutoffPassed = currentWeekStart ? isWeeklyCutoffPassed(currentWeekStart) : false;
 
   const handlePrevWeek = useCallback(() => {
-    if (!currentWeekStart || !minWeekStart) return;
-    // Go back one week, but never before minWeekStart
+    if (!currentWeekStart) return;
     const prevMonday = new Date(currentWeekStart + 'T00:00:00');
     prevMonday.setDate(prevMonday.getDate() - 7);
     const prevStr = formatDateLocal(prevMonday);
-    if (prevStr >= minWeekStart) {
+    // Allow navigating back to current week (viewFloor), not just orderable week
+    if (prevStr >= viewFloor) {
       setCurrentWeekStart(prevStr);
       setSelectedDate(null); // reset day selection
     }
-  }, [currentWeekStart, minWeekStart]);
+  }, [currentWeekStart, viewFloor]);
 
   const handleNextWeek = useCallback(() => {
     if (!currentWeekStart) return;

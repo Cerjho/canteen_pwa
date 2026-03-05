@@ -526,6 +526,9 @@ export default function StaffDashboard() {
     };
   }, [orders, completedOrdersToday]);
 
+  // Track orders currently being updated to prevent concurrent status changes
+  const updatingOrdersRef = useRef(new Set<string>());
+
   // Swipe gesture handlers
   const handleTouchStart = useCallback((e: TouchEvent<HTMLDivElement>, orderId: string, status: string) => {
     // Only allow swipe for pending/preparing orders
@@ -726,6 +729,9 @@ export default function StaffDashboard() {
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
+    // Prevent concurrent updates on the same order
+    if (updatingOrdersRef.current.has(orderId)) return;
+    updatingOrdersRef.current.add(orderId);
     try {
       const accessToken = await ensureValidAccessToken();
 
@@ -757,6 +763,8 @@ export default function StaffDashboard() {
       refetch();
     } catch (error) {
       showToast(friendlyError(error instanceof Error ? error.message : '', 'update order'), 'error');
+    } finally {
+      updatingOrdersRef.current.delete(orderId);
     }
   };
 

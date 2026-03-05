@@ -701,8 +701,8 @@ BEGIN
   RETURN NEW;
 EXCEPTION
   WHEN OTHERS THEN
-    RAISE WARNING 'sync_user_role failed for user %: %', NEW.id, SQLERRM;
-    RETURN NEW;
+    RAISE LOG 'sync_user_role FAILED for user %: % (SQLSTATE %)', NEW.id, SQLERRM, SQLSTATE;
+    RAISE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
