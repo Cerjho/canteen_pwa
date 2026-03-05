@@ -1,7 +1,7 @@
 # Loheca Canteen — Weekly Pre-Order Refactor Plan
 
 > **Date**: March 4, 2026  
-> **Status**: Planning  
+> **Status**: Completed  
 > **Scope**: Full system refactor — database, edge functions, frontend, tests, docs
 
 ---

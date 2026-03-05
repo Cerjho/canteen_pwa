@@ -98,7 +98,7 @@ export interface Transaction {
   id: string;
   parent_id: string;
   order_id?: string;
-  type: 'payment' | 'refund' | 'topup';
+  type: 'payment' | 'refund';
   amount: number;
   method: string;
   status: 'pending' | 'completed' | 'failed';

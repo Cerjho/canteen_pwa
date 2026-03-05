@@ -22,10 +22,8 @@ SELECT
   SUM(o.total_amount)                       AS total_amount,
   CASE
     WHEN COUNT(*) FILTER (WHERE o.status = 'cancelled') = COUNT(*) THEN 'cancelled'
-    WHEN COUNT(*) FILTER (WHERE o.status = 'completed') = COUNT(*) THEN 'completed'
     WHEN COUNT(*) FILTER (WHERE o.status IN ('completed','cancelled')) = COUNT(*) THEN 'completed'
-    WHEN COUNT(*) FILTER (WHERE o.status = 'confirmed') > 0 THEN 'confirmed'
-    ELSE 'pending'
+    ELSE 'completed'
   END::TEXT                                  AS status,
   'paid'                                     AS payment_status,
   MIN(o.created_at)                          AS created_at,
@@ -78,6 +76,9 @@ ON CONFLICT (key) DO UPDATE
 
 DELETE FROM system_settings
 WHERE key IN (
+  'order_cutoff_time',
+  'max_future_days',
+  'low_stock_threshold',
   'topup_minimum',
   'topup_maximum',
   'balance_low_threshold',

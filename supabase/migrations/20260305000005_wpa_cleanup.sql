@@ -60,6 +60,9 @@ DROP TRIGGER IF EXISTS update_wallets_updated_at ON wallets;
 -- Block legacy writes trigger (references transactions_legacy)
 DROP TRIGGER IF EXISTS trg_block_legacy_writes ON transactions_legacy;
 
+-- Redundant orders updated_at trigger (plan §15.3)
+DROP TRIGGER IF EXISTS trg_orders_updated_at ON orders;
+
 -- ---------------------------------------------------------------------------
 -- 4. DROP deprecated FUNCTIONS
 -- ---------------------------------------------------------------------------

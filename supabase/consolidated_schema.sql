@@ -1,7 +1,8 @@
 -- ============================================
 -- CONSOLIDATED SCHEMA: LOHECA Canteen PWA
--- Generated from all migrations (001_init through 20260219_secure_role_app_metadata)
+-- Generated from all migrations (001_init through 20260305000005_wpa_cleanup)
 -- This script creates the FINAL state of the database schema from scratch.
+-- Reflects the Weekly Pre-Order Architecture (WPA) refactor.
 -- Safe to run on a fresh Supabase project.
 -- ============================================
 
@@ -22,13 +23,13 @@ DROP TABLE IF EXISTS menu_schedules    CASCADE;
 DROP TABLE IF EXISTS invitations       CASCADE;
 DROP TABLE IF EXISTS payment_allocations CASCADE;
 DROP TABLE IF EXISTS payments           CASCADE;
-DROP TABLE IF EXISTS transactions_legacy CASCADE;
+DROP TABLE IF EXISTS surplus_items      CASCADE;
 DROP TABLE IF EXISTS order_items       CASCADE;
 DROP TABLE IF EXISTS orders            CASCADE;
+DROP TABLE IF EXISTS weekly_orders     CASCADE;
 DROP TABLE IF EXISTS parent_students   CASCADE;
 DROP TABLE IF EXISTS products          CASCADE;
 DROP TABLE IF EXISTS students          CASCADE;
-DROP TABLE IF EXISTS wallets           CASCADE;
 DROP TABLE IF EXISTS user_profiles     CASCADE;
 DROP TABLE IF EXISTS system_settings   CASCADE;
 
@@ -87,7 +88,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- FINANCIAL HARDENING FUNCTIONS
 -- ============================================
 
--- Allocation integrity: SUM(allocated) ≤ payment.amount_total
+-- Allocation integrity: SUM(allocated) <= payment.amount_total
 CREATE OR REPLACE FUNCTION check_allocation_integrity()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -145,79 +146,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Status transition guard: only pending → completed | failed
+-- Status transition guard: only pending -> completed | failed
 CREATE OR REPLACE FUNCTION guard_payment_status_transition()
 RETURNS TRIGGER AS $$
 BEGIN
   IF OLD.status = NEW.status THEN RETURN NEW; END IF;
   IF OLD.status = 'pending' AND NEW.status IN ('completed', 'failed') THEN RETURN NEW; END IF;
-  RAISE EXCEPTION 'Invalid payment status transition: % → % (payment %)',
+  RAISE EXCEPTION 'Invalid payment status transition: % -> % (payment %)',
     OLD.status, NEW.status, OLD.id;
-END;
-$$ LANGUAGE plpgsql;
-
--- Atomic wallet debit + payment + allocations
-CREATE OR REPLACE FUNCTION deduct_balance_with_payment(
-  p_parent_id UUID, p_expected_balance NUMERIC(10,2), p_amount NUMERIC(10,2),
-  p_order_ids UUID[], p_order_amounts NUMERIC(10,2)[]
-) RETURNS UUID AS $$
-DECLARE v_payment_id UUID; v_new_balance NUMERIC(10,2); v_rows INT; i INT;
-BEGIN
-  IF array_length(p_order_ids,1) != array_length(p_order_amounts,1) THEN
-    RAISE EXCEPTION 'order_ids and order_amounts must match'; END IF;
-  v_new_balance := p_expected_balance - p_amount;
-  IF v_new_balance < 0 THEN RAISE EXCEPTION 'Insufficient balance'; END IF;
-  UPDATE wallets SET balance = v_new_balance, updated_at = NOW()
-    WHERE user_id = p_parent_id AND balance = p_expected_balance;
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows = 0 THEN RAISE EXCEPTION 'Balance changed concurrently'; END IF;
-  INSERT INTO payments (parent_id, type, amount_total, method, status)
-    VALUES (p_parent_id, 'payment', p_amount, 'balance', 'completed')
-    RETURNING id INTO v_payment_id;
-  FOR i IN 1..array_length(p_order_ids,1) LOOP
-    INSERT INTO payment_allocations (payment_id, order_id, allocated_amount)
-      VALUES (v_payment_id, p_order_ids[i], p_order_amounts[i]);
-  END LOOP;
-  RETURN v_payment_id;
-END;
-$$ LANGUAGE plpgsql;
-
--- Atomic wallet credit + payment record (refund/topup)
-CREATE OR REPLACE FUNCTION credit_balance_with_payment(
-  p_parent_id UUID, p_amount NUMERIC(10,2), p_type TEXT, p_method TEXT,
-  p_reference_id TEXT DEFAULT NULL, p_order_id UUID DEFAULT NULL,
-  p_external_ref TEXT DEFAULT NULL, p_paymongo_refund_id TEXT DEFAULT NULL,
-  p_paymongo_payment_id TEXT DEFAULT NULL, p_paymongo_checkout_id TEXT DEFAULT NULL,
-  p_original_payment_id UUID DEFAULT NULL
-) RETURNS UUID AS $$
-DECLARE v_payment_id UUID; v_current NUMERIC(10,2);
-BEGIN
-  SELECT balance INTO v_current FROM wallets WHERE user_id = p_parent_id FOR UPDATE;
-  IF NOT FOUND THEN
-    INSERT INTO wallets (user_id, balance) VALUES (p_parent_id, 0); v_current := 0;
-  END IF;
-  UPDATE wallets SET balance = v_current + p_amount, updated_at = NOW()
-    WHERE user_id = p_parent_id;
-  INSERT INTO payments (parent_id, type, amount_total, method, status,
-    reference_id, external_ref, paymongo_refund_id, paymongo_payment_id,
-    paymongo_checkout_id, original_payment_id)
-  VALUES (p_parent_id, p_type, p_amount, p_method, 'completed',
-    p_reference_id, p_external_ref, p_paymongo_refund_id, p_paymongo_payment_id,
-    p_paymongo_checkout_id, p_original_payment_id)
-  RETURNING id INTO v_payment_id;
-  IF p_order_id IS NOT NULL THEN
-    INSERT INTO payment_allocations (payment_id, order_id, allocated_amount)
-      VALUES (v_payment_id, p_order_id, p_amount);
-  END IF;
-  RETURN v_payment_id;
-END;
-$$ LANGUAGE plpgsql;
-
--- Legacy table lockdown
-CREATE OR REPLACE FUNCTION block_legacy_writes()
-RETURNS TRIGGER AS $$
-BEGIN
-  RAISE EXCEPTION 'transactions_legacy is read-only. Use payments + payment_allocations.';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -226,7 +162,6 @@ $$ LANGUAGE plpgsql;
 -- ============================================
 
 -- User profiles (all user types: parent, staff, admin)
--- Originally "parents", renamed in migration 20260112
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
@@ -234,15 +169,6 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   role TEXT DEFAULT 'parent',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Wallets (balance for parent users)
-CREATE TABLE IF NOT EXISTS wallets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID UNIQUE NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
-  balance NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -262,7 +188,7 @@ CREATE TABLE IF NOT EXISTS students (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Parent ↔ Student linking (many-to-many)
+-- Parent <-> Student linking (many-to-many)
 CREATE TABLE IF NOT EXISTS parent_students (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
@@ -273,7 +199,7 @@ CREATE TABLE IF NOT EXISTS parent_students (
   UNIQUE(parent_id, student_id)
 );
 
--- Products (menu items)
+-- Products (menu items - no stock tracking)
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -282,31 +208,59 @@ CREATE TABLE IF NOT EXISTS products (
   category TEXT NOT NULL,
   image_url TEXT,
   available BOOLEAN DEFAULT TRUE,
-  stock_quantity INTEGER DEFAULT 0 CHECK (stock_quantity >= 0),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Orders
+-- Weekly orders (groups Mon-Fri pre-orders for one student)
+CREATE TABLE IF NOT EXISTS weekly_orders (
+  id                         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id                  UUID         NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
+  student_id                 UUID         NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
+  week_start                 DATE         NOT NULL,
+  status                     TEXT         NOT NULL DEFAULT 'submitted'
+                               CHECK (status IN ('submitted','active','completed','cancelled')),
+  total_amount               NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+  payment_method             TEXT         NOT NULL
+                               CHECK (payment_method IN ('cash','gcash','paymaya','card')),
+  payment_status             payment_status DEFAULT 'awaiting_payment',
+  payment_due_at             TIMESTAMPTZ,
+  paymongo_checkout_id       TEXT,
+  paymongo_checkout_url      TEXT,
+  paymongo_payment_intent_id TEXT,
+  payment_group_id           UUID,
+  notes                      TEXT,
+  submitted_at               TIMESTAMPTZ  DEFAULT NOW(),
+  created_at                 TIMESTAMPTZ  DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ  DEFAULT NOW(),
+  CONSTRAINT uq_weekly_order_student_week UNIQUE (student_id, week_start),
+  CONSTRAINT chk_week_start_is_monday CHECK (EXTRACT(ISODOW FROM week_start) = 1)
+);
+
+COMMENT ON TABLE weekly_orders IS 'Groups Mon-Fri pre-orders for one student into a single weekly order with unified payment.';
+COMMENT ON COLUMN weekly_orders.week_start IS 'Always a Monday - the start of the school week.';
+COMMENT ON COLUMN weekly_orders.status IS 'submitted=placed, active=week in progress, completed=all days done, cancelled=fully cancelled.';
+
+-- Orders (daily orders - children of weekly_orders for pre-orders)
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
   student_id UUID REFERENCES students(id) ON DELETE RESTRICT,
   client_order_id UUID UNIQUE NOT NULL,
+  weekly_order_id UUID REFERENCES weekly_orders(id) ON DELETE SET NULL,
+  order_type TEXT NOT NULL DEFAULT 'pre_order'
+    CHECK (order_type IN ('pre_order','surplus','walk_in')),
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('awaiting_payment', 'pending', 'preparing', 'ready', 'completed', 'cancelled')),
   total_amount NUMERIC(10,2) NOT NULL CHECK (total_amount >= 0),
   payment_method TEXT NOT NULL
-    CHECK (payment_method IN ('cash', 'balance', 'gcash', 'paymaya', 'card', 'paymongo')),
+    CHECK (payment_method IN ('cash', 'gcash', 'paymaya', 'card')),
   payment_status payment_status DEFAULT 'paid',
   payment_due_at TIMESTAMPTZ,
   paymongo_checkout_id TEXT,
-  paymongo_payment_id TEXT,
   payment_group_id UUID,
   notes TEXT,
   scheduled_for DATE DEFAULT CURRENT_DATE,
-  meal_period TEXT NOT NULL DEFAULT 'lunch'
-    CHECK (meal_period IN ('morning_snack', 'lunch', 'afternoon_snack')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ
@@ -326,15 +280,28 @@ CREATE TABLE IF NOT EXISTS order_items (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Payments (one row per real money movement)
+-- Surplus items (staff-marked surplus for same-day ordering)
+CREATE TABLE IF NOT EXISTS surplus_items (
+  id             UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id     UUID    NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  scheduled_date DATE    NOT NULL,
+  meal_period    TEXT    CHECK (meal_period IN ('morning_snack','lunch','afternoon_snack')),
+  marked_by      UUID    NOT NULL REFERENCES auth.users(id),
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_surplus_product_date_meal UNIQUE (product_id, scheduled_date, meal_period)
+);
+
+-- Payments (one row per real money movement - no wallet/balance/topup)
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
-  type TEXT NOT NULL CHECK (type IN ('payment', 'refund', 'topup')),
+  type TEXT NOT NULL CHECK (type IN ('payment', 'refund')),
   amount_total NUMERIC(10,2) NOT NULL,
-  method TEXT NOT NULL CHECK (method IN ('cash', 'gcash', 'paymaya', 'card', 'paymongo', 'balance')),
+  method TEXT NOT NULL CHECK (method IN ('cash', 'gcash', 'paymaya', 'card')),
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'completed', 'failed')),
+  weekly_order_id UUID REFERENCES weekly_orders(id),
   external_ref TEXT,
   paymongo_checkout_id TEXT,
   paymongo_payment_id TEXT,
@@ -355,21 +322,6 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Top-up sessions (self-service wallet top-ups via PayMongo)
-CREATE TABLE IF NOT EXISTS topup_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  parent_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE RESTRICT,
-  amount NUMERIC(10,2) NOT NULL CHECK (amount >= 50 AND amount <= 50000),
-  paymongo_checkout_id TEXT NOT NULL,
-  paymongo_payment_id TEXT,
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'paid', 'expired', 'failed')),
-  payment_method TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  expires_at TIMESTAMPTZ NOT NULL
-);
-
 -- Invitations (for user registration)
 CREATE TABLE IF NOT EXISTS invitations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -384,16 +336,20 @@ CREATE TABLE IF NOT EXISTS invitations (
   created_by UUID REFERENCES auth.users(id)
 );
 
--- Menu schedules (weekly day-of-week pattern + optional date-specific overrides)
+-- Menu schedules (weekly day-of-week pattern + publish status)
 CREATE TABLE IF NOT EXISTS menu_schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 5),
   scheduled_date DATE,
   is_active BOOLEAN DEFAULT TRUE,
+  menu_status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (menu_status IN ('draft','published','locked')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+COMMENT ON COLUMN menu_schedules.menu_status IS 'draft=admin editing, published=visible to parents, locked=past cutoff.';
 
 -- Holidays
 CREATE TABLE IF NOT EXISTS holidays (
@@ -445,17 +401,18 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_by UUID REFERENCES auth.users(id)
 );
 
--- Default system settings
+-- Default system settings (weekly pre-order architecture)
 INSERT INTO system_settings (key, value, description) VALUES
-  ('canteen_name', '"LOHECA Canteen"', 'Name of the canteen displayed in the app'),
-  ('operating_hours', '{"open": "07:00", "close": "15:00"}', 'Operating hours for the canteen'),
-  ('order_cutoff_time', '"10:00"', 'Daily cutoff time for placing orders'),
-  ('allow_future_orders', 'true', 'Allow parents to order for future dates'),
-  ('max_future_days', '5', 'Maximum days ahead for future orders'),
-  ('low_stock_threshold', '10', 'Threshold for low stock warnings'),
-  ('auto_complete_orders', 'false', 'Automatically complete orders after pickup'),
-  ('notification_email', 'null', 'Email for admin notifications'),
-  ('maintenance_mode', 'false', 'Put the app in maintenance mode')
+  ('canteen_name',            '"LOHECA Canteen"',                    'Name of the canteen displayed in the app'),
+  ('operating_hours',         '{"open": "07:00", "close": "15:00"}', 'Operating hours for the canteen'),
+  ('allow_future_orders',     'true',                                'Allow parents to order for future dates'),
+  ('auto_complete_orders',    'false',                                'Automatically complete orders after pickup'),
+  ('notification_email',      'null',                                 'Email for admin notifications'),
+  ('maintenance_mode',        'false',                                'Put the app in maintenance mode'),
+  ('weekly_cutoff_day',       '"friday"',                             'Day of week when weekly ordering window closes'),
+  ('weekly_cutoff_time',      '"17:00"',                              'Time on cutoff day when ordering closes - 24h, Asia/Manila TZ'),
+  ('surplus_cutoff_time',     '"08:00"',                              'Daily deadline for surplus/walk-in orders - 24h, Asia/Manila TZ'),
+  ('daily_cancel_cutoff_time','"08:00"',                              'Daily deadline for parents to cancel individual days - 24h, Asia/Manila TZ')
 ON CONFLICT (key) DO NOTHING;
 
 -- Audit logs
@@ -494,11 +451,11 @@ CREATE TABLE IF NOT EXISTS cart_state (
   student_id UUID REFERENCES students(id) ON DELETE SET NULL,
   notes TEXT DEFAULT '',
   payment_method TEXT DEFAULT 'cash'
-    CHECK (payment_method IN ('cash', 'gcash', 'balance')),
+    CHECK (payment_method IN ('cash', 'gcash', 'paymaya', 'card')),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Favorites (user ↔ product)
+-- Favorites (user <-> product)
 CREATE TABLE IF NOT EXISTS favorites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -515,9 +472,6 @@ CREATE TABLE IF NOT EXISTS favorites (
 CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON user_profiles(role);
 
--- wallets
-CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
-
 -- students
 CREATE INDEX IF NOT EXISTS idx_students_student_id ON students(student_id);
 CREATE INDEX IF NOT EXISTS idx_students_grade_level ON students(grade_level);
@@ -531,8 +485,20 @@ CREATE INDEX IF NOT EXISTS idx_parent_students_student_id ON parent_students(stu
 -- products
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_products_available ON products(available);
-CREATE INDEX IF NOT EXISTS idx_products_stock_quantity
-  ON products(stock_quantity) WHERE available = true AND stock_quantity <= 10;
+
+-- weekly_orders
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_parent_id ON weekly_orders(parent_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_student_id ON weekly_orders(student_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_week_start ON weekly_orders(week_start);
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_status ON weekly_orders(status);
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_payment_status
+  ON weekly_orders(payment_status) WHERE payment_status = 'awaiting_payment';
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_payment_due_at
+  ON weekly_orders(payment_due_at) WHERE payment_due_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_paymongo_checkout_id
+  ON weekly_orders(paymongo_checkout_id) WHERE paymongo_checkout_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_weekly_orders_payment_group
+  ON weekly_orders(payment_group_id) WHERE payment_group_id IS NOT NULL;
 
 -- orders
 CREATE INDEX IF NOT EXISTS idx_orders_parent_id ON orders(parent_id);
@@ -545,6 +511,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_payment_status
   ON orders(payment_status) WHERE payment_status = 'awaiting_payment';
 CREATE INDEX IF NOT EXISTS idx_orders_payment_due_at
   ON orders(payment_due_at) WHERE payment_due_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_weekly_order_id
+  ON orders(weekly_order_id) WHERE weekly_order_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_order_type ON orders(order_type);
 
 -- Unique partial index: prevent duplicate active orders per student+date
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_order_per_student_date
@@ -555,11 +524,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_order_per_student_date
 CREATE INDEX IF NOT EXISTS idx_orders_student_date
   ON orders(student_id, scheduled_for);
 
--- DEPRECATED: orders.meal_period — use order_items.meal_period instead
-
 -- order_items
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+
+-- surplus_items
+CREATE INDEX IF NOT EXISTS idx_surplus_items_date ON surplus_items(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_surplus_items_active ON surplus_items(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_surplus_items_product_id ON surplus_items(product_id);
 
 -- payments
 CREATE INDEX IF NOT EXISTS idx_payments_parent_id ON payments(parent_id);
@@ -574,6 +546,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_paymongo_payment_id
 CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at);
 CREATE INDEX IF NOT EXISTS idx_payments_original_payment_id
   ON payments(original_payment_id) WHERE original_payment_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_weekly_order_id
+  ON payments(weekly_order_id) WHERE weekly_order_id IS NOT NULL;
 
 -- Unique indexes for webhook idempotency
 CREATE UNIQUE INDEX IF NOT EXISTS ux_payments_paymongo_payment_id
@@ -590,15 +564,8 @@ CREATE INDEX IF NOT EXISTS idx_payment_allocations_order_id ON payment_allocatio
 -- orders (PayMongo)
 CREATE INDEX IF NOT EXISTS idx_orders_paymongo_checkout_id
   ON orders(paymongo_checkout_id) WHERE paymongo_checkout_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_orders_paymongo_payment_id
-  ON orders(paymongo_payment_id) WHERE paymongo_payment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_payment_group
   ON orders(payment_group_id) WHERE payment_group_id IS NOT NULL;
-
--- topup_sessions
-CREATE INDEX IF NOT EXISTS idx_topup_sessions_parent_id ON topup_sessions(parent_id);
-CREATE INDEX IF NOT EXISTS idx_topup_sessions_checkout_id ON topup_sessions(paymongo_checkout_id);
-CREATE INDEX IF NOT EXISTS idx_topup_sessions_status ON topup_sessions(status) WHERE status = 'pending';
 
 -- invitations
 CREATE INDEX IF NOT EXISTS idx_invitations_code ON invitations(code);
@@ -690,84 +657,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Check if menu is available for a given date
-CREATE OR REPLACE FUNCTION is_menu_available(check_date DATE)
-RETURNS BOOLEAN AS $$
-DECLARE
-  day_num INTEGER;
-  is_hol BOOLEAN;
-BEGIN
-  day_num := EXTRACT(DOW FROM check_date);
-  IF day_num = 0 OR day_num = 6 THEN
-    RETURN FALSE;
-  END IF;
-  SELECT EXISTS(SELECT 1 FROM holidays WHERE date = check_date) INTO is_hol;
-  IF is_hol THEN
-    RETURN FALSE;
-  END IF;
-  RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Get today's menu (respects holidays)
-CREATE OR REPLACE FUNCTION get_todays_menu()
-RETURNS TABLE (
-  id UUID,
-  name TEXT,
-  description TEXT,
-  price NUMERIC(10,2),
-  category TEXT,
-  image_url TEXT,
-  available BOOLEAN,
-  stock_quantity INTEGER
-) AS $$
-DECLARE
-  today_dow INTEGER;
-BEGIN
-  IF NOT is_canteen_open(CURRENT_DATE) THEN
-    RETURN;
-  END IF;
-
-  today_dow := EXTRACT(DOW FROM CURRENT_DATE)::INTEGER;
-
-  RETURN QUERY
-  SELECT
-    p.id, p.name, p.description, p.price,
-    p.category, p.image_url, p.available, p.stock_quantity
-  FROM products p
-  INNER JOIN menu_schedules ms ON p.id = ms.product_id
-  WHERE ms.day_of_week = today_dow
-    AND ms.is_active = TRUE
-    AND p.available = TRUE
-  ORDER BY p.category, p.name;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Get menu for a specific day of week (1=Mon … 5=Fri)
-CREATE OR REPLACE FUNCTION get_menu_for_day(target_day INTEGER)
-RETURNS TABLE (
-  id UUID,
-  name TEXT,
-  description TEXT,
-  price NUMERIC(10,2),
-  category TEXT,
-  image_url TEXT,
-  available BOOLEAN,
-  stock_quantity INTEGER
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    p.id, p.name, p.description, p.price,
-    p.category, p.image_url, p.available, p.stock_quantity
-  FROM products p
-  INNER JOIN menu_schedules ms ON p.id = ms.product_id
-  WHERE ms.day_of_week = target_day
-    AND ms.is_active = TRUE
-  ORDER BY p.category, p.name;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- Get menu for a specific calendar date
 CREATE OR REPLACE FUNCTION get_menu_for_date(target_date DATE)
 RETURNS TABLE (
@@ -777,28 +666,20 @@ RETURNS TABLE (
   product_price NUMERIC,
   product_category TEXT,
   product_image_url TEXT,
-  product_available BOOLEAN,
-  product_stock_quantity INTEGER
+  product_available BOOLEAN
 ) AS $$
 DECLARE
   day_num INTEGER;
 BEGIN
   day_num := EXTRACT(DOW FROM target_date);
 
-  -- Weekend → nothing
-  IF day_num = 0 OR day_num = 6 THEN
-    RETURN;
-  END IF;
-
-  -- Holiday → nothing
-  IF EXISTS(SELECT 1 FROM holidays WHERE date = target_date) THEN
-    RETURN;
-  END IF;
+  IF day_num = 0 OR day_num = 6 THEN RETURN; END IF;
+  IF EXISTS(SELECT 1 FROM holidays WHERE date = target_date) THEN RETURN; END IF;
 
   RETURN QUERY
   SELECT
     p.id, p.name, p.description, p.price,
-    p.category, p.image_url, p.available, p.stock_quantity
+    p.category, p.image_url, p.available
   FROM products p
   INNER JOIN menu_schedules ms ON p.id = ms.product_id
   WHERE ms.day_of_week = day_num
@@ -808,14 +689,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Sync user role from auth.users app_metadata → user_profiles.role
+-- Sync user role from auth.users app_metadata -> user_profiles.role
 CREATE OR REPLACE FUNCTION sync_user_role()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE user_profiles
   SET role = COALESCE(NEW.raw_app_meta_data->>'role', role, 'parent')
   WHERE id = NEW.id;
-
   RETURN NEW;
 EXCEPTION
   WHEN OTHERS THEN
@@ -850,7 +730,6 @@ RETURNS TABLE (
   order_count BIGINT,
   avg_order_value NUMERIC,
   cash_revenue NUMERIC,
-  balance_revenue NUMERIC,
   gcash_revenue NUMERIC
 ) AS $$
 BEGIN
@@ -860,9 +739,8 @@ BEGIN
     COALESCE(SUM(o.total_amount), 0) as total_revenue,
     COUNT(*) as order_count,
     COALESCE(AVG(o.total_amount), 0) as avg_order_value,
-    COALESCE(SUM(CASE WHEN o.payment_method = 'cash'    THEN o.total_amount ELSE 0 END), 0) as cash_revenue,
-    COALESCE(SUM(CASE WHEN o.payment_method = 'balance' THEN o.total_amount ELSE 0 END), 0) as balance_revenue,
-    COALESCE(SUM(CASE WHEN o.payment_method = 'gcash'   THEN o.total_amount ELSE 0 END), 0) as gcash_revenue
+    COALESCE(SUM(CASE WHEN o.payment_method = 'cash'  THEN o.total_amount ELSE 0 END), 0) as cash_revenue,
+    COALESCE(SUM(CASE WHEN o.payment_method = 'gcash' THEN o.total_amount ELSE 0 END), 0) as gcash_revenue
   FROM orders o
   WHERE DATE(o.created_at) BETWEEN start_date AND end_date
     AND o.status NOT IN ('cancelled')
@@ -901,39 +779,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Basic dashboard stats (backward-compat)
-DROP FUNCTION IF EXISTS get_dashboard_stats();
-CREATE OR REPLACE FUNCTION get_dashboard_stats()
-RETURNS TABLE (
-  total_orders BIGINT,
-  total_revenue NUMERIC,
-  total_products BIGINT,
-  total_parents BIGINT,
-  pending_orders BIGINT,
-  completed_today BIGINT,
-  revenue_today NUMERIC,
-  revenue_this_week NUMERIC,
-  revenue_this_month NUMERIC
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    (SELECT COUNT(*) FROM orders)::BIGINT,
-    (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'completed')::NUMERIC,
-    (SELECT COUNT(*) FROM products WHERE available = true)::BIGINT,
-    (SELECT COUNT(*) FROM user_profiles WHERE
-      id IN (SELECT DISTINCT user_id FROM wallets) OR
-      id IN (SELECT DISTINCT parent_id FROM parent_students)
-    )::BIGINT,
-    (SELECT COUNT(*) FROM orders WHERE status = 'pending')::BIGINT,
-    (SELECT COUNT(*) FROM orders WHERE status = 'completed' AND DATE(created_at) = CURRENT_DATE)::BIGINT,
-    (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'completed' AND DATE(created_at) = CURRENT_DATE)::NUMERIC,
-    (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'completed' AND created_at >= date_trunc('week', CURRENT_DATE))::NUMERIC,
-    (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'completed' AND created_at >= date_trunc('month', CURRENT_DATE))::NUMERIC;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Optimised admin dashboard stats (uses scheduled_for)
+-- Admin dashboard stats (with weekly order + surplus metrics)
 DROP FUNCTION IF EXISTS get_admin_dashboard_stats(DATE);
 CREATE OR REPLACE FUNCTION get_admin_dashboard_stats(target_date DATE DEFAULT CURRENT_DATE)
 RETURNS TABLE (
@@ -948,8 +794,6 @@ RETURNS TABLE (
   total_parents BIGINT,
   total_students BIGINT,
   total_products BIGINT,
-  low_stock_products BIGINT,
-  out_of_stock_products BIGINT,
   yesterday_orders BIGINT,
   yesterday_revenue NUMERIC,
   week_orders BIGINT,
@@ -957,11 +801,15 @@ RETURNS TABLE (
   month_orders BIGINT,
   month_revenue NUMERIC,
   future_orders BIGINT,
-  active_parents_today BIGINT
+  active_parents_today BIGINT,
+  weekly_orders_this_week BIGINT,
+  weekly_orders_next_week BIGINT,
+  surplus_orders_today BIGINT
 ) AS $$
 DECLARE
   yesterday_date DATE := target_date - INTERVAL '1 day';
-  week_start DATE := date_trunc('week', target_date)::DATE;
+  week_start_d DATE := date_trunc('week', target_date)::DATE;
+  next_week_start DATE := week_start_d + INTERVAL '7 days';
   month_start DATE := date_trunc('month', target_date)::DATE;
 BEGIN
   RETURN QUERY
@@ -977,16 +825,17 @@ BEGIN
     (SELECT COUNT(*) FROM user_profiles WHERE role = 'parent')::BIGINT,
     (SELECT COUNT(*) FROM students WHERE is_active = true)::BIGINT,
     (SELECT COUNT(*) FROM products WHERE available = true)::BIGINT,
-    (SELECT COUNT(*) FROM products WHERE stock_quantity <= 10 AND stock_quantity > 0 AND available = true)::BIGINT,
-    (SELECT COUNT(*) FROM products WHERE stock_quantity = 0 OR available = false)::BIGINT,
     (SELECT COUNT(*) FROM orders WHERE scheduled_for = yesterday_date)::BIGINT,
     (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE scheduled_for = yesterday_date AND status != 'cancelled')::NUMERIC,
-    (SELECT COUNT(*) FROM orders WHERE scheduled_for >= week_start AND scheduled_for <= target_date)::BIGINT,
-    (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE scheduled_for >= week_start AND scheduled_for <= target_date AND status != 'cancelled')::NUMERIC,
+    (SELECT COUNT(*) FROM orders WHERE scheduled_for >= week_start_d AND scheduled_for <= target_date)::BIGINT,
+    (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE scheduled_for >= week_start_d AND scheduled_for <= target_date AND status != 'cancelled')::NUMERIC,
     (SELECT COUNT(*) FROM orders WHERE scheduled_for >= month_start AND scheduled_for <= target_date)::BIGINT,
     (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE scheduled_for >= month_start AND scheduled_for <= target_date AND status != 'cancelled')::NUMERIC,
     (SELECT COUNT(*) FROM orders WHERE scheduled_for > target_date AND status != 'cancelled')::BIGINT,
-    (SELECT COUNT(DISTINCT parent_id) FROM orders WHERE scheduled_for = target_date)::BIGINT;
+    (SELECT COUNT(DISTINCT parent_id) FROM orders WHERE scheduled_for = target_date)::BIGINT,
+    (SELECT COUNT(*) FROM weekly_orders WHERE week_start = week_start_d AND status != 'cancelled')::BIGINT,
+    (SELECT COUNT(*) FROM weekly_orders WHERE week_start = next_week_start AND status != 'cancelled')::BIGINT,
+    (SELECT COUNT(*) FROM orders WHERE scheduled_for = target_date AND order_type IN ('surplus','walk_in') AND status != 'cancelled')::BIGINT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -1013,51 +862,370 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Cart-item date validation (no past dates, no Sundays, Saturdays only if makeup day, no holidays)
+-- ============================================
+-- WEEKLY PRE-ORDER FUNCTIONS
+-- ============================================
+
+-- Cart-item date validation (enforces next-orderable-week window)
 CREATE OR REPLACE FUNCTION validate_cart_item_date()
 RETURNS TRIGGER AS $$
 DECLARE
-  day_of_week INTEGER;
-  is_holiday BOOLEAN;
-  is_makeup_day BOOLEAN;
-  today_ph DATE;
+  v_now_ph       TIMESTAMPTZ;
+  v_today        DATE;
+  v_dow          INT;
+  v_cutoff_time  TEXT;
+  v_cutoff_ts    TIMESTAMPTZ;
+  v_this_friday  DATE;
+  v_next_monday  DATE;
+  v_next_friday  DATE;
 BEGIN
-  today_ph := (NOW() AT TIME ZONE 'Asia/Manila')::DATE;
+  v_now_ph := NOW() AT TIME ZONE 'Asia/Manila';
+  v_today  := v_now_ph::DATE;
+  v_dow    := EXTRACT(ISODOW FROM NEW.scheduled_for);
 
-  IF NEW.scheduled_for < today_ph THEN
-    RAISE EXCEPTION 'Cannot add items for past dates. Selected: %, Today: %', NEW.scheduled_for, today_ph;
+  IF NEW.scheduled_for < v_today THEN
+    RAISE EXCEPTION 'Cannot add items for past dates.' USING ERRCODE = 'P0010';
   END IF;
 
-  day_of_week := EXTRACT(DOW FROM NEW.scheduled_for);
-
-  IF day_of_week = 0 THEN
-    RAISE EXCEPTION 'Cannot add items for Sundays. The canteen is closed.';
+  IF v_dow = 7 THEN
+    RAISE EXCEPTION 'Canteen is closed on Sundays.' USING ERRCODE = 'P0011';
   END IF;
 
-  IF day_of_week = 6 THEN
-    SELECT EXISTS(
-      SELECT 1 FROM makeup_days WHERE date = NEW.scheduled_for
-    ) INTO is_makeup_day;
-    IF NOT is_makeup_day THEN
-      RAISE EXCEPTION 'Cannot add items for Saturdays unless it is a make-up class day.';
+  IF v_dow = 6 THEN
+    IF NOT EXISTS (SELECT 1 FROM makeup_days WHERE date = NEW.scheduled_for) THEN
+      RAISE EXCEPTION 'Canteen is closed on Saturdays unless it is a makeup day.'
+        USING ERRCODE = 'P0012';
     END IF;
   END IF;
 
-  SELECT EXISTS(
+  IF EXISTS (
     SELECT 1 FROM holidays
     WHERE (date = NEW.scheduled_for)
-       OR (is_recurring = true AND
-           EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM NEW.scheduled_for) AND
-           EXTRACT(DAY FROM date)   = EXTRACT(DAY FROM NEW.scheduled_for))
-  ) INTO is_holiday;
+       OR (is_recurring
+           AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM NEW.scheduled_for)
+           AND EXTRACT(DAY   FROM date) = EXTRACT(DAY   FROM NEW.scheduled_for))
+  ) THEN
+    RAISE EXCEPTION 'Canteen is closed on this holiday.' USING ERRCODE = 'P0013';
+  END IF;
 
-  IF is_holiday THEN
-    RAISE EXCEPTION 'Cannot add items for holidays. The canteen is closed on this date.';
+  v_next_monday := v_today + ((8 - EXTRACT(ISODOW FROM v_today)::INT) % 7 + 1);
+
+  SELECT COALESCE(
+    (SELECT value #>> '{}' FROM system_settings WHERE key = 'weekly_cutoff_time'),
+    '17:00'
+  ) INTO v_cutoff_time;
+
+  v_this_friday := v_today + (5 - EXTRACT(ISODOW FROM v_today)::INT);
+
+  IF EXTRACT(ISODOW FROM v_today) BETWEEN 1 AND 5 THEN
+    v_cutoff_ts := (v_this_friday::TEXT || ' ' || v_cutoff_time)::TIMESTAMPTZ
+                   AT TIME ZONE 'Asia/Manila';
+    IF v_now_ph > v_cutoff_ts THEN
+      v_next_monday := v_next_monday + INTERVAL '7 days';
+    END IF;
+  END IF;
+
+  v_next_friday := v_next_monday + INTERVAL '4 days';
+
+  IF NEW.scheduled_for < v_next_monday OR NEW.scheduled_for > v_next_friday THEN
+    RAISE EXCEPTION 'Items can only be added for next week (% to %).', v_next_monday, v_next_friday
+      USING ERRCODE = 'P0014';
   END IF;
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Validate weekly order cutoff (Friday 5 PM Manila TZ)
+CREATE OR REPLACE FUNCTION validate_weekly_order_cutoff()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_cutoff_time TEXT;
+  v_cutoff_ts   TIMESTAMPTZ;
+  v_now_manila  TIMESTAMPTZ;
+BEGIN
+  SELECT COALESCE(
+    (SELECT value #>> '{}' FROM system_settings WHERE key = 'weekly_cutoff_time'),
+    '17:00'
+  ) INTO v_cutoff_time;
+
+  v_cutoff_ts := ((NEW.week_start - INTERVAL '3 days')::TEXT
+                  || ' ' || v_cutoff_time)::TIMESTAMPTZ AT TIME ZONE 'Asia/Manila';
+  v_now_manila := NOW() AT TIME ZONE 'Asia/Manila';
+
+  IF v_now_manila > v_cutoff_ts THEN
+    RAISE EXCEPTION
+      'Weekly order cutoff has passed. Orders for the week of % closed on Friday at %.',
+      NEW.week_start, v_cutoff_time
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Validate surplus/walk-in order cutoff (8 AM same day)
+CREATE OR REPLACE FUNCTION validate_surplus_order_cutoff()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_cutoff    TEXT;
+  v_now_ph    TIMESTAMPTZ;
+  v_cutoff_ts TIMESTAMPTZ;
+  v_today_ph  DATE;
+BEGIN
+  IF NEW.order_type NOT IN ('surplus', 'walk_in') THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COALESCE(
+    (SELECT value #>> '{}' FROM system_settings WHERE key = 'surplus_cutoff_time'),
+    '08:00'
+  ) INTO v_cutoff;
+
+  v_now_ph    := NOW() AT TIME ZONE 'Asia/Manila';
+  v_today_ph  := v_now_ph::DATE;
+  v_cutoff_ts := (v_today_ph::TEXT || ' ' || v_cutoff)::TIMESTAMPTZ
+                 AT TIME ZONE 'Asia/Manila';
+
+  IF v_now_ph > v_cutoff_ts THEN
+    RAISE EXCEPTION 'Surplus ordering is closed. Deadline was % today.',
+      v_cutoff USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NEW.scheduled_for != v_today_ph THEN
+    RAISE EXCEPTION 'Surplus orders can only be placed for today.'
+      USING ERRCODE = 'P0003';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Validate daily cancellation RPC
+CREATE OR REPLACE FUNCTION validate_daily_cancellation(
+  p_order_id  UUID,
+  p_parent_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_order      RECORD;
+  v_cutoff     TEXT;
+  v_cutoff_ts  TIMESTAMPTZ;
+  v_now_ph     TIMESTAMPTZ;
+BEGIN
+  SELECT o.id, o.status, o.scheduled_for, o.total_amount, o.weekly_order_id
+  INTO v_order
+  FROM orders o
+  WHERE o.id = p_order_id
+    AND o.parent_id = p_parent_id
+    AND o.status NOT IN ('cancelled', 'completed');
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found or already cancelled/completed.'
+      USING ERRCODE = 'P0004';
+  END IF;
+
+  SELECT COALESCE(
+    (SELECT value #>> '{}' FROM system_settings WHERE key = 'daily_cancel_cutoff_time'),
+    '08:00'
+  ) INTO v_cutoff;
+
+  v_now_ph    := NOW() AT TIME ZONE 'Asia/Manila';
+  v_cutoff_ts := (v_order.scheduled_for::TEXT || ' ' || v_cutoff)::TIMESTAMPTZ
+                 AT TIME ZONE 'Asia/Manila';
+
+  IF v_now_ph > v_cutoff_ts THEN
+    RAISE EXCEPTION 'Cannot cancel - past the % cancellation deadline for %.',
+      v_cutoff, v_order.scheduled_for USING ERRCODE = 'P0005';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'order_id',       v_order.id,
+    'scheduled_for',  v_order.scheduled_for,
+    'total_amount',   v_order.total_amount,
+    'can_cancel',     TRUE
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Auto-transition weekly order status based on child order completion
+CREATE OR REPLACE FUNCTION transition_weekly_order_status()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_wid        UUID;
+  v_total      INT;
+  v_completed  INT;
+  v_cancelled  INT;
+BEGIN
+  v_wid := COALESCE(NEW.weekly_order_id, OLD.weekly_order_id);
+  IF v_wid IS NULL THEN RETURN NEW; END IF;
+
+  SELECT
+    COUNT(*),
+    COUNT(*) FILTER (WHERE status = 'completed'),
+    COUNT(*) FILTER (WHERE status = 'cancelled')
+  INTO v_total, v_completed, v_cancelled
+  FROM orders
+  WHERE weekly_order_id = v_wid;
+
+  IF (v_completed + v_cancelled) = v_total AND v_total > 0 THEN
+    UPDATE weekly_orders
+    SET
+      status     = CASE WHEN v_cancelled = v_total THEN 'cancelled' ELSE 'completed' END,
+      updated_at = NOW()
+    WHERE id = v_wid
+      AND status NOT IN ('completed', 'cancelled');
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Recalculate weekly order total when a daily order is cancelled
+CREATE OR REPLACE FUNCTION recalculate_weekly_order_total()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'cancelled'
+     AND OLD.status != 'cancelled'
+     AND NEW.weekly_order_id IS NOT NULL
+  THEN
+    UPDATE weekly_orders
+    SET
+      total_amount = (
+        SELECT COALESCE(SUM(total_amount), 0)
+        FROM orders
+        WHERE weekly_order_id = NEW.weekly_order_id
+          AND status != 'cancelled'
+      ),
+      updated_at = NOW()
+    WHERE id = NEW.weekly_order_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Kitchen prep aggregation - weekly order summary by day/meal/product
+CREATE OR REPLACE FUNCTION get_weekly_order_summary(p_week_start DATE)
+RETURNS TABLE (
+  scheduled_for   DATE,
+  meal_period     TEXT,
+  product_id      UUID,
+  product_name    TEXT,
+  total_quantity  BIGINT,
+  order_count     BIGINT,
+  grade_breakdown JSONB
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    o.scheduled_for,
+    oi.meal_period,
+    oi.product_id,
+    p.name                      AS product_name,
+    SUM(oi.quantity)::BIGINT    AS total_quantity,
+    COUNT(DISTINCT o.id)::BIGINT AS order_count,
+    jsonb_object_agg(
+      COALESCE(s.grade_level, 'unknown'),
+      grade_counts.qty
+    )                           AS grade_breakdown
+  FROM orders o
+  JOIN order_items oi ON oi.order_id = o.id
+  JOIN products p    ON p.id = oi.product_id
+  LEFT JOIN students s ON s.id = o.student_id
+  LEFT JOIN LATERAL (
+    SELECT SUM(oi2.quantity)::BIGINT AS qty
+    FROM orders o2
+    JOIN order_items oi2 ON oi2.order_id = o2.id
+    JOIN students s2     ON s2.id = o2.student_id
+    WHERE o2.scheduled_for  = o.scheduled_for
+      AND oi2.product_id    = oi.product_id
+      AND oi2.meal_period   = oi.meal_period
+      AND s2.grade_level    = s.grade_level
+      AND o2.status        != 'cancelled'
+      AND oi2.status        = 'confirmed'
+  ) grade_counts ON TRUE
+  WHERE o.scheduled_for >= p_week_start
+    AND o.scheduled_for <  p_week_start + INTERVAL '5 days'
+    AND o.status        != 'cancelled'
+    AND oi.status        = 'confirmed'
+  GROUP BY o.scheduled_for, oi.meal_period, oi.product_id, p.name
+  ORDER BY o.scheduled_for, oi.meal_period, p.name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Weekly reporting aggregation for admin
+CREATE OR REPLACE FUNCTION get_weekly_report(p_week_start DATE)
+RETURNS TABLE (
+  total_weekly_orders    BIGINT,
+  total_students         BIGINT,
+  total_revenue          NUMERIC,
+  total_cancelled_days   BIGINT,
+  cancelled_revenue      NUMERIC,
+  surplus_orders         BIGINT,
+  surplus_revenue        NUMERIC,
+  daily_breakdown        JSONB,
+  payment_method_breakdown JSONB,
+  top_products           JSONB
+) AS $$
+DECLARE
+  v_end DATE := p_week_start + INTERVAL '5 days';
+BEGIN
+  RETURN QUERY SELECT
+    (SELECT COUNT(*) FROM weekly_orders
+     WHERE week_start = p_week_start AND status != 'cancelled')::BIGINT,
+    (SELECT COUNT(DISTINCT student_id) FROM weekly_orders
+     WHERE week_start = p_week_start AND status != 'cancelled')::BIGINT,
+    (SELECT COALESCE(SUM(total_amount), 0) FROM orders
+     WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+       AND status != 'cancelled' AND order_type = 'pre_order')::NUMERIC,
+    (SELECT COUNT(*) FROM orders
+     WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+       AND status = 'cancelled' AND order_type = 'pre_order')::BIGINT,
+    (SELECT COALESCE(SUM(total_amount), 0) FROM orders
+     WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+       AND status = 'cancelled' AND order_type = 'pre_order')::NUMERIC,
+    (SELECT COUNT(*) FROM orders
+     WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+       AND order_type IN ('surplus','walk_in') AND status != 'cancelled')::BIGINT,
+    (SELECT COALESCE(SUM(total_amount), 0) FROM orders
+     WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+       AND order_type IN ('surplus','walk_in') AND status != 'cancelled')::NUMERIC,
+    (SELECT jsonb_agg(jsonb_build_object(
+        'date', d.day, 'orders', d.cnt, 'revenue', d.rev
+     ) ORDER BY d.day)
+     FROM (
+       SELECT scheduled_for AS day, COUNT(*) AS cnt, SUM(total_amount) AS rev
+       FROM orders
+       WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+         AND status != 'cancelled'
+       GROUP BY scheduled_for
+     ) d),
+    (SELECT jsonb_agg(jsonb_build_object(
+        'method', pm.payment_method, 'count', pm.cnt, 'amount', pm.total
+     ))
+     FROM (
+       SELECT payment_method, COUNT(*) AS cnt, SUM(total_amount) AS total
+       FROM orders
+       WHERE scheduled_for >= p_week_start AND scheduled_for < v_end
+         AND status != 'cancelled'
+       GROUP BY payment_method
+     ) pm),
+    (SELECT jsonb_agg(jsonb_build_object(
+        'product_name', tp.name, 'total_quantity', tp.qty, 'revenue', tp.rev
+     ))
+     FROM (
+       SELECT p.name, SUM(oi.quantity) AS qty,
+              SUM(oi.quantity * oi.price_at_order) AS rev
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       JOIN products p ON p.id = oi.product_id
+       WHERE o.scheduled_for >= p_week_start AND o.scheduled_for < v_end
+         AND o.status != 'cancelled' AND oi.status = 'confirmed'
+       GROUP BY p.name ORDER BY qty DESC LIMIT 10
+     ) tp);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Clean up cart items for past dates
 CREATE OR REPLACE FUNCTION cleanup_past_cart_items()
@@ -1072,64 +1240,6 @@ BEGIN
   RETURN deleted_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Cart max-advance validation (14 days)
-CREATE OR REPLACE FUNCTION validate_cart_item_max_advance()
-RETURNS TRIGGER AS $$
-DECLARE
-  today_ph DATE;
-  max_advance_days INTEGER := 14;
-BEGIN
-  today_ph := (NOW() AT TIME ZONE 'Asia/Manila')::DATE;
-  IF NEW.scheduled_for > today_ph + max_advance_days THEN
-    RAISE EXCEPTION 'Cannot add items more than % days in advance.', max_advance_days;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Atomic stock increment (for order cancellation / refund)
-CREATE OR REPLACE FUNCTION increment_stock(p_product_id UUID, p_quantity INTEGER)
-RETURNS VOID AS $$
-BEGIN
-  UPDATE products
-  SET stock_quantity = stock_quantity + p_quantity
-  WHERE id = p_product_id;
-  
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Product % not found', p_product_id;
-  END IF;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Atomic stock decrement with row lock (for order creation)
-CREATE OR REPLACE FUNCTION decrement_stock(p_product_id UUID, p_quantity INTEGER)
-RETURNS VOID AS $$
-DECLARE
-  current_stock INTEGER;
-BEGIN
-  SELECT stock_quantity INTO current_stock
-  FROM products
-  WHERE id = p_product_id
-  FOR UPDATE;
-  
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Product % not found', p_product_id;
-  END IF;
-  
-  IF current_stock < p_quantity THEN
-    RAISE EXCEPTION 'Insufficient stock for product %. Available: %, Requested: %',
-      p_product_id, current_stock, p_quantity;
-  END IF;
-  
-  UPDATE products
-  SET stock_quantity = stock_quantity - p_quantity
-  WHERE id = p_product_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-GRANT EXECUTE ON FUNCTION increment_stock(UUID, INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION decrement_stock(UUID, INTEGER) TO authenticated;
 
 -- Order status transition validation
 CREATE OR REPLACE FUNCTION validate_order_status_transition()
@@ -1176,11 +1286,6 @@ CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON user_profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_wallets_updated_at ON wallets;
-CREATE TRIGGER update_wallets_updated_at
-  BEFORE UPDATE ON wallets
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 DROP TRIGGER IF EXISTS update_students_updated_at ON students;
 CREATE TRIGGER update_students_updated_at
   BEFORE UPDATE ON students
@@ -1196,6 +1301,11 @@ CREATE TRIGGER update_orders_updated_at
   BEFORE UPDATE ON orders
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_weekly_orders_updated_at ON weekly_orders;
+CREATE TRIGGER update_weekly_orders_updated_at
+  BEFORE UPDATE ON weekly_orders
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_menu_schedules_timestamp ON menu_schedules;
 CREATE TRIGGER update_menu_schedules_timestamp
   BEFORE UPDATE ON menu_schedules
@@ -1206,7 +1316,7 @@ CREATE TRIGGER update_cart_items_updated_at
   BEFORE UPDATE ON cart_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Sync role from auth.users app_metadata → user_profiles on UPDATE only
+-- Sync role from auth.users app_metadata -> user_profiles on UPDATE only
 DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
 CREATE TRIGGER on_auth_user_updated
   AFTER UPDATE ON auth.users
@@ -1234,29 +1344,48 @@ CREATE TRIGGER validate_order_status_trigger
   FOR EACH ROW
   EXECUTE FUNCTION validate_order_status_transition();
 
--- Cart validation triggers
+-- Cart validation trigger (next-orderable-week enforcement)
 DROP TRIGGER IF EXISTS validate_cart_item_date_trigger ON cart_items;
 CREATE TRIGGER validate_cart_item_date_trigger
   BEFORE INSERT OR UPDATE OF scheduled_for ON cart_items
   FOR EACH ROW
   EXECUTE FUNCTION validate_cart_item_date();
 
-DROP TRIGGER IF EXISTS validate_cart_item_max_advance_trigger ON cart_items;
-CREATE TRIGGER validate_cart_item_max_advance_trigger
-  BEFORE INSERT OR UPDATE OF scheduled_for ON cart_items
+-- Weekly pre-order triggers
+DROP TRIGGER IF EXISTS trg_validate_weekly_order_cutoff ON weekly_orders;
+CREATE TRIGGER trg_validate_weekly_order_cutoff
+  BEFORE INSERT ON weekly_orders
   FOR EACH ROW
-  EXECUTE FUNCTION validate_cart_item_max_advance();
+  EXECUTE FUNCTION validate_weekly_order_cutoff();
 
--- ── Financial hardening triggers ──
+DROP TRIGGER IF EXISTS trg_validate_surplus_order_cutoff ON orders;
+CREATE TRIGGER trg_validate_surplus_order_cutoff
+  BEFORE INSERT ON orders
+  FOR EACH ROW
+  EXECUTE FUNCTION validate_surplus_order_cutoff();
 
--- Allocation integrity
+DROP TRIGGER IF EXISTS trg_transition_weekly_order_status ON orders;
+CREATE TRIGGER trg_transition_weekly_order_status
+  AFTER UPDATE OF status ON orders
+  FOR EACH ROW
+  WHEN (NEW.weekly_order_id IS NOT NULL)
+  EXECUTE FUNCTION transition_weekly_order_status();
+
+DROP TRIGGER IF EXISTS trg_recalculate_weekly_order_total ON orders;
+CREATE TRIGGER trg_recalculate_weekly_order_total
+  AFTER UPDATE OF status ON orders
+  FOR EACH ROW
+  WHEN (NEW.status = 'cancelled' AND OLD.status != 'cancelled')
+  EXECUTE FUNCTION recalculate_weekly_order_total();
+
+-- Financial hardening triggers
+
 DROP TRIGGER IF EXISTS trg_check_allocation_integrity ON payment_allocations;
 CREATE CONSTRAINT TRIGGER trg_check_allocation_integrity
   AFTER INSERT OR UPDATE OR DELETE ON payment_allocations
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION check_allocation_integrity();
 
--- Amount immutability
 DROP TRIGGER IF EXISTS trg_prevent_amount_mutation ON payments;
 CREATE TRIGGER trg_prevent_amount_mutation
   BEFORE UPDATE ON payments FOR EACH ROW
@@ -1267,29 +1396,23 @@ CREATE TRIGGER trg_prevent_allocation_amount_mutation
   BEFORE UPDATE ON payment_allocations FOR EACH ROW
   EXECUTE FUNCTION prevent_allocation_amount_mutation();
 
--- Payment status transition guard
 DROP TRIGGER IF EXISTS trg_guard_payment_status ON payments;
 CREATE TRIGGER trg_guard_payment_status
   BEFORE UPDATE OF status ON payments FOR EACH ROW
   EXECUTE FUNCTION guard_payment_status_transition();
-
--- Legacy table lockdown
-DROP TRIGGER IF EXISTS trg_block_legacy_writes ON transactions_legacy;
-CREATE TRIGGER trg_block_legacy_writes
-  BEFORE INSERT OR UPDATE OR DELETE ON transactions_legacy
-  FOR EACH ROW EXECUTE FUNCTION block_legacy_writes();
 
 -- ============================================
 -- ENABLE ROW LEVEL SECURITY ON ALL TABLES
 -- ============================================
 
 ALTER TABLE user_profiles    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE wallets          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parent_students  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE weekly_orders    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE surplus_items    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_allocations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invitations      ENABLE ROW LEVEL SECURITY;
@@ -1303,427 +1426,119 @@ ALTER TABLE audit_logs       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cart_items       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cart_state       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE favorites        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE topup_sessions   ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- RLS POLICIES
--- All role checks use app_metadata (server-only, not client-writable).
 -- ============================================
 
--- ─── user_profiles ───────────────────────────
-
-DROP POLICY IF EXISTS "Users can view own profile" ON user_profiles;
-CREATE POLICY "Users can view own profile"
-  ON user_profiles FOR SELECT
-  USING (auth.uid() = id);
-
-DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
-CREATE POLICY "Users can update own profile"
-  ON user_profiles FOR UPDATE
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
-
-DROP POLICY IF EXISTS "Users can insert own profile on signup" ON user_profiles;
-CREATE POLICY "Users can insert own profile on signup"
-  ON user_profiles FOR INSERT
-  WITH CHECK (auth.uid() = id);
-
-DROP POLICY IF EXISTS "Staff can view all user profiles" ON user_profiles;
-CREATE POLICY "Staff can view all user profiles"
-  ON user_profiles FOR SELECT
-  USING (is_staff_or_admin());
-
-DROP POLICY IF EXISTS "Admin can update any user profile" ON user_profiles;
-CREATE POLICY "Admin can update any user profile"
-  ON user_profiles FOR UPDATE
-  USING (is_admin());
-
--- ─── wallets ─────────────────────────────────
-
-DROP POLICY IF EXISTS "Users can view own wallet" ON wallets;
-CREATE POLICY "Users can view own wallet"
-  ON wallets FOR SELECT
-  USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update own wallet" ON wallets;
-CREATE POLICY "Users can update own wallet"
-  ON wallets FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert own wallet" ON wallets;
-CREATE POLICY "Users can insert own wallet"
-  ON wallets FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Staff can view all wallets" ON wallets;
-CREATE POLICY "Staff can view all wallets"
-  ON wallets FOR SELECT
-  USING (is_staff_or_admin());
-
-DROP POLICY IF EXISTS "Admin can update any wallet" ON wallets;
-CREATE POLICY "Admin can update any wallet"
-  ON wallets FOR UPDATE
-  USING (is_admin());
-
--- ─── students ────────────────────────────────
-
-DROP POLICY IF EXISTS "Admins can manage all students" ON students;
-CREATE POLICY "Admins can manage all students"
-  ON students FOR ALL
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-DROP POLICY IF EXISTS "Staff can view all students" ON students;
-CREATE POLICY "Staff can view all students"
-  ON students FOR SELECT
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') IN ('staff', 'admin'));
-
-DROP POLICY IF EXISTS "Parents can view their linked students" ON students;
-CREATE POLICY "Parents can view their linked students"
-  ON students FOR SELECT
-  USING (id IN (SELECT student_id FROM parent_students WHERE parent_id = auth.uid()));
-
--- ─── parent_students ─────────────────────────
-
-DROP POLICY IF EXISTS "Parents can view their own links" ON parent_students;
-CREATE POLICY "Parents can view their own links"
-  ON parent_students FOR SELECT
-  USING (parent_id = auth.uid());
-
-DROP POLICY IF EXISTS "Parents can link unlinked students" ON parent_students;
-CREATE POLICY "Parents can link unlinked students"
-  ON parent_students FOR INSERT
-  WITH CHECK (
-    parent_id = auth.uid()
-    AND NOT EXISTS (
-      SELECT 1 FROM parent_students ps2
-      WHERE ps2.student_id = parent_students.student_id
-    )
-  );
-
-DROP POLICY IF EXISTS "Admins can manage all links" ON parent_students;
-CREATE POLICY "Admins can manage all links"
-  ON parent_students FOR ALL
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-DROP POLICY IF EXISTS "Staff can view all links" ON parent_students;
-CREATE POLICY "Staff can view all links"
-  ON parent_students FOR SELECT
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') IN ('staff', 'admin'));
-
--- ─── products ────────────────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view available products" ON products;
-CREATE POLICY "Anyone can view available products"
-  ON products FOR SELECT
-  USING (TRUE);
-
-DROP POLICY IF EXISTS "Staff can insert products" ON products;
-CREATE POLICY "Staff can insert products"
-  ON products FOR INSERT
-  WITH CHECK (is_staff_or_admin());
-
-DROP POLICY IF EXISTS "Staff can update products" ON products;
-CREATE POLICY "Staff can update products"
-  ON products FOR UPDATE
-  USING (is_staff_or_admin());
-
-DROP POLICY IF EXISTS "Admin can delete products" ON products;
-CREATE POLICY "Admin can delete products"
-  ON products FOR DELETE
-  USING (is_admin());
-
--- ─── orders ──────────────────────────────────
-
-DROP POLICY IF EXISTS "Parents can view own orders" ON orders;
-DROP POLICY IF EXISTS "Parents can view their orders" ON orders;
-CREATE POLICY "Parents can view their orders"
-  ON orders FOR SELECT
-  USING (parent_id = auth.uid());
-
-DROP POLICY IF EXISTS "Parents can create orders" ON orders;
-CREATE POLICY "Parents can create orders"
-  ON orders FOR INSERT
-  WITH CHECK (
-    parent_id = auth.uid()
-    AND student_id IN (
-      SELECT ps.student_id FROM parent_students ps WHERE ps.parent_id = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "Staff can view all orders" ON orders;
-CREATE POLICY "Staff can view all orders"
-  ON orders FOR SELECT
-  USING (is_staff_or_admin());
-
-DROP POLICY IF EXISTS "Staff can update order status" ON orders;
-CREATE POLICY "Staff can update order status"
-  ON orders FOR UPDATE
-  USING (is_staff_or_admin());
-
--- ─── order_items ─────────────────────────────
-
-DROP POLICY IF EXISTS "Parents can view own order items" ON order_items;
-CREATE POLICY "Parents can view own order items"
-  ON order_items FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM orders
-      WHERE orders.id = order_items.order_id
-        AND orders.parent_id = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "Staff can view all order items" ON order_items;
-CREATE POLICY "Staff can view all order items"
-  ON order_items FOR SELECT
-  USING (is_staff_or_admin());
-
--- ─── payments ────────────────────────────
-
-DROP POLICY IF EXISTS "Parents can view own payments" ON payments;
-CREATE POLICY "Parents can view own payments"
-  ON payments FOR SELECT
-  USING (parent_id = auth.uid());
-
-DROP POLICY IF EXISTS "Staff can view all payments" ON payments;
-CREATE POLICY "Staff can view all payments"
-  ON payments FOR SELECT
-  USING (is_staff_or_admin());
-
-DROP POLICY IF EXISTS "Admin can insert payments" ON payments;
-CREATE POLICY "Admin can insert payments"
-  ON payments FOR INSERT
-  WITH CHECK (is_admin());
-
--- ─── payment_allocations ─────────────────
-
-DROP POLICY IF EXISTS "Parents can view own allocations" ON payment_allocations;
-CREATE POLICY "Parents can view own allocations"
-  ON payment_allocations FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM payments p WHERE p.id = payment_id AND p.parent_id = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "Staff can view all allocations" ON payment_allocations;
-CREATE POLICY "Staff can view all allocations"
-  ON payment_allocations FOR SELECT
-  USING (is_staff_or_admin());
-
--- ─── topup_sessions ─────────────────────────
-
-DROP POLICY IF EXISTS "Parents can view own topup sessions" ON topup_sessions;
-CREATE POLICY "Parents can view own topup sessions"
-  ON topup_sessions FOR SELECT
-  USING (parent_id = auth.uid());
-
--- Edge functions use service_role key which bypasses RLS for insert/update
-
--- ─── invitations ─────────────────────────────
-
-DROP POLICY IF EXISTS "Admins can manage invitations" ON invitations;
-CREATE POLICY "Admins can manage invitations"
-  ON invitations FOR ALL
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-DROP POLICY IF EXISTS "Anyone can read invitation by code" ON invitations;
-DROP POLICY IF EXISTS "Admin can read invitations" ON invitations;
-CREATE POLICY "Admin can read invitations"
-  ON invitations FOR SELECT
-  USING (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
-  );
-
--- ─── menu_schedules ─────────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view menu schedules" ON menu_schedules;
-DROP POLICY IF EXISTS "Admin can insert menu schedules" ON menu_schedules;
-DROP POLICY IF EXISTS "Admin can update menu schedules" ON menu_schedules;
-DROP POLICY IF EXISTS "Admin can delete menu schedules" ON menu_schedules;
-DROP POLICY IF EXISTS "Admin can manage menu schedules" ON menu_schedules;
-
-CREATE POLICY "Anyone can view menu schedules"
-  ON menu_schedules FOR SELECT
-  TO authenticated, anon
-  USING (true);
-
-CREATE POLICY "Admin can manage menu schedules"
-  ON menu_schedules FOR ALL
-  TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
--- ─── holidays ────────────────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view holidays" ON holidays;
-DROP POLICY IF EXISTS "Admin can insert holidays" ON holidays;
-DROP POLICY IF EXISTS "Admin can update holidays" ON holidays;
-DROP POLICY IF EXISTS "Admin can delete holidays" ON holidays;
-
-CREATE POLICY "Anyone can view holidays"
-  ON holidays FOR SELECT
-  TO authenticated, anon
-  USING (true);
-
-CREATE POLICY "Admin can insert holidays"
-  ON holidays FOR INSERT
-  TO authenticated
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-CREATE POLICY "Admin can update holidays"
-  ON holidays FOR UPDATE
-  TO authenticated
-  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-CREATE POLICY "Admin can delete holidays"
-  ON holidays FOR DELETE
-  TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
--- ─── makeup_days ─────────────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view makeup days" ON makeup_days;
-DROP POLICY IF EXISTS "Admins can insert makeup days" ON makeup_days;
-DROP POLICY IF EXISTS "Admins can update makeup days" ON makeup_days;
-DROP POLICY IF EXISTS "Admins can delete makeup days" ON makeup_days;
-
-CREATE POLICY "Anyone can view makeup days"
-  ON makeup_days FOR SELECT
-  USING (true);
-
-CREATE POLICY "Admins can insert makeup days"
-  ON makeup_days FOR INSERT
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-CREATE POLICY "Admins can update makeup days"
-  ON makeup_days FOR UPDATE
-  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
-CREATE POLICY "Admins can delete makeup days"
-  ON makeup_days FOR DELETE
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
--- ─── menu_date_overrides ─────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view menu date overrides" ON menu_date_overrides;
-DROP POLICY IF EXISTS "Admin can manage menu date overrides" ON menu_date_overrides;
-
-CREATE POLICY "Anyone can view menu date overrides"
-  ON menu_date_overrides FOR SELECT
-  TO authenticated, anon
-  USING (true);
-
-CREATE POLICY "Admin can manage menu date overrides"
-  ON menu_date_overrides FOR ALL
-  TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
--- ─── date_closures ───────────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view date closures" ON date_closures;
-DROP POLICY IF EXISTS "Admin can manage date closures" ON date_closures;
-
-CREATE POLICY "Anyone can view date closures"
-  ON date_closures FOR SELECT
-  TO authenticated, anon
-  USING (true);
-
-CREATE POLICY "Admin can manage date closures"
-  ON date_closures FOR ALL
-  TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-
--- ─── system_settings ─────────────────────────
-
-DROP POLICY IF EXISTS "Anyone can view settings" ON system_settings;
-CREATE POLICY "Anyone can view settings"
-  ON system_settings FOR SELECT
-  USING (TRUE);
-
-DROP POLICY IF EXISTS "Admins can update settings" ON system_settings;
-CREATE POLICY "Admins can update settings"
-  ON system_settings FOR UPDATE
-  USING (is_admin())
-  WITH CHECK (is_admin());
-
-DROP POLICY IF EXISTS "Admins can insert settings" ON system_settings;
-CREATE POLICY "Admins can insert settings"
-  ON system_settings FOR INSERT
-  WITH CHECK (is_admin());
-
--- ─── audit_logs ──────────────────────────────
-
-DROP POLICY IF EXISTS "Admins can view audit logs" ON audit_logs;
-CREATE POLICY "Admins can view audit logs"
-  ON audit_logs FOR SELECT
-  USING (is_admin());
-
-DROP POLICY IF EXISTS "System can insert audit logs" ON audit_logs;
-DROP POLICY IF EXISTS "Staff and admin can insert audit logs" ON audit_logs;
-CREATE POLICY "Staff and admin can insert audit logs"
-  ON audit_logs FOR INSERT
-  WITH CHECK (
-    (auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'staff')
-  );
-
--- ─── cart_items ──────────────────────────────
-
-DROP POLICY IF EXISTS "Users can view own cart items" ON cart_items;
-CREATE POLICY "Users can view own cart items"
-  ON cart_items FOR SELECT
-  USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert own cart items" ON cart_items;
-CREATE POLICY "Users can insert own cart items"
-  ON cart_items FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update own cart items" ON cart_items;
-CREATE POLICY "Users can update own cart items"
-  ON cart_items FOR UPDATE
-  USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can delete own cart items" ON cart_items;
-CREATE POLICY "Users can delete own cart items"
-  ON cart_items FOR DELETE
-  USING (auth.uid() = user_id);
-
--- ─── cart_state ──────────────────────────────
-
-DROP POLICY IF EXISTS "Users can view own cart state" ON cart_state;
-CREATE POLICY "Users can view own cart state"
-  ON cart_state FOR SELECT
-  USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert own cart state" ON cart_state;
-CREATE POLICY "Users can insert own cart state"
-  ON cart_state FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update own cart state" ON cart_state;
-CREATE POLICY "Users can update own cart state"
-  ON cart_state FOR UPDATE
-  USING (auth.uid() = user_id);
-
--- ─── favorites ───────────────────────────────
-
-DROP POLICY IF EXISTS "Users can view own favorites" ON favorites;
-CREATE POLICY "Users can view own favorites"
-  ON favorites FOR SELECT
-  USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert own favorites" ON favorites;
-CREATE POLICY "Users can insert own favorites"
-  ON favorites FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can delete own favorites" ON favorites;
-CREATE POLICY "Users can delete own favorites"
-  ON favorites FOR DELETE
-  USING (auth.uid() = user_id);
+-- user_profiles
+CREATE POLICY "Users can view own profile" ON user_profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON user_profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can insert own profile on signup" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Staff can view all user profiles" ON user_profiles FOR SELECT USING (is_staff_or_admin());
+CREATE POLICY "Admin can update any user profile" ON user_profiles FOR UPDATE USING (is_admin());
+
+-- students
+CREATE POLICY "Admins can manage all students" ON students FOR ALL USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Staff can view all students" ON students FOR SELECT USING ((auth.jwt() -> 'app_metadata' ->> 'role') IN ('staff', 'admin'));
+CREATE POLICY "Parents can view their linked students" ON students FOR SELECT USING (id IN (SELECT student_id FROM parent_students WHERE parent_id = auth.uid()));
+
+-- parent_students
+CREATE POLICY "Parents can view their own links" ON parent_students FOR SELECT USING (parent_id = auth.uid());
+CREATE POLICY "Parents can link unlinked students" ON parent_students FOR INSERT WITH CHECK (parent_id = auth.uid() AND NOT EXISTS (SELECT 1 FROM parent_students ps2 WHERE ps2.student_id = parent_students.student_id));
+CREATE POLICY "Admins can manage all links" ON parent_students FOR ALL USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Staff can view all links" ON parent_students FOR SELECT USING ((auth.jwt() -> 'app_metadata' ->> 'role') IN ('staff', 'admin'));
+
+-- products
+CREATE POLICY "Anyone can view available products" ON products FOR SELECT USING (TRUE);
+CREATE POLICY "Staff can insert products" ON products FOR INSERT WITH CHECK (is_staff_or_admin());
+CREATE POLICY "Staff can update products" ON products FOR UPDATE USING (is_staff_or_admin());
+CREATE POLICY "Admin can delete products" ON products FOR DELETE USING (is_admin());
+
+-- weekly_orders
+CREATE POLICY "Parents view own weekly orders" ON weekly_orders FOR SELECT USING (parent_id = auth.uid());
+CREATE POLICY "Parents create own weekly orders" ON weekly_orders FOR INSERT WITH CHECK (parent_id = auth.uid());
+CREATE POLICY "Parents update own weekly orders" ON weekly_orders FOR UPDATE USING (parent_id = auth.uid());
+CREATE POLICY "Staff read all weekly orders" ON weekly_orders FOR SELECT USING (is_staff_or_admin());
+CREATE POLICY "Staff update all weekly orders" ON weekly_orders FOR UPDATE USING (is_staff_or_admin());
+
+-- orders
+CREATE POLICY "Parents can view their orders" ON orders FOR SELECT USING (parent_id = auth.uid());
+CREATE POLICY "Parents can create orders" ON orders FOR INSERT WITH CHECK (parent_id = auth.uid() AND student_id IN (SELECT ps.student_id FROM parent_students ps WHERE ps.parent_id = auth.uid()));
+CREATE POLICY "Staff can view all orders" ON orders FOR SELECT USING (is_staff_or_admin());
+CREATE POLICY "Staff can update order status" ON orders FOR UPDATE USING (is_staff_or_admin());
+
+-- order_items
+CREATE POLICY "Parents can view own order items" ON order_items FOR SELECT USING (EXISTS (SELECT 1 FROM orders WHERE orders.id = order_items.order_id AND orders.parent_id = auth.uid()));
+CREATE POLICY "Staff can view all order items" ON order_items FOR SELECT USING (is_staff_or_admin());
+
+-- surplus_items
+CREATE POLICY "Authenticated view surplus items" ON surplus_items FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Staff create surplus items" ON surplus_items FOR INSERT WITH CHECK (is_staff_or_admin());
+CREATE POLICY "Staff update surplus items" ON surplus_items FOR UPDATE USING (is_staff_or_admin());
+CREATE POLICY "Admin delete surplus items" ON surplus_items FOR DELETE USING (is_admin());
+
+-- payments
+CREATE POLICY "Parents can view own payments" ON payments FOR SELECT USING (parent_id = auth.uid());
+CREATE POLICY "Staff can view all payments" ON payments FOR SELECT USING (is_staff_or_admin());
+CREATE POLICY "Admin can insert payments" ON payments FOR INSERT WITH CHECK (is_admin());
+
+-- payment_allocations
+CREATE POLICY "Parents can view own allocations" ON payment_allocations FOR SELECT USING (EXISTS (SELECT 1 FROM payments p WHERE p.id = payment_id AND p.parent_id = auth.uid()));
+CREATE POLICY "Staff can view all allocations" ON payment_allocations FOR SELECT USING (is_staff_or_admin());
+
+-- invitations
+CREATE POLICY "Admins can manage invitations" ON invitations FOR ALL USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Admin can read invitations" ON invitations FOR SELECT USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- menu_schedules
+CREATE POLICY "Anyone can view menu schedules" ON menu_schedules FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Admin can manage menu schedules" ON menu_schedules FOR ALL TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- holidays
+CREATE POLICY "Anyone can view holidays" ON holidays FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Admin can insert holidays" ON holidays FOR INSERT TO authenticated WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Admin can update holidays" ON holidays FOR UPDATE TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Admin can delete holidays" ON holidays FOR DELETE TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- makeup_days
+CREATE POLICY "Anyone can view makeup days" ON makeup_days FOR SELECT USING (true);
+CREATE POLICY "Admins can insert makeup days" ON makeup_days FOR INSERT WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Admins can update makeup days" ON makeup_days FOR UPDATE USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+CREATE POLICY "Admins can delete makeup days" ON makeup_days FOR DELETE USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- menu_date_overrides
+CREATE POLICY "Anyone can view menu date overrides" ON menu_date_overrides FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Admin can manage menu date overrides" ON menu_date_overrides FOR ALL TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- date_closures
+CREATE POLICY "Anyone can view date closures" ON date_closures FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Admin can manage date closures" ON date_closures FOR ALL TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- system_settings
+CREATE POLICY "Anyone can view settings" ON system_settings FOR SELECT USING (TRUE);
+CREATE POLICY "Admins can update settings" ON system_settings FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admins can insert settings" ON system_settings FOR INSERT WITH CHECK (is_admin());
+
+-- audit_logs
+CREATE POLICY "Admins can view audit logs" ON audit_logs FOR SELECT USING (is_admin());
+CREATE POLICY "Staff and admin can insert audit logs" ON audit_logs FOR INSERT WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'staff'));
+
+-- cart_items
+CREATE POLICY "Users can view own cart items" ON cart_items FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own cart items" ON cart_items FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own cart items" ON cart_items FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own cart items" ON cart_items FOR DELETE USING (auth.uid() = user_id);
+
+-- cart_state
+CREATE POLICY "Users can view own cart state" ON cart_state FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own cart state" ON cart_state FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own cart state" ON cart_state FOR UPDATE USING (auth.uid() = user_id);
+
+-- favorites
+CREATE POLICY "Users can view own favorites" ON favorites FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own favorites" ON favorites FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own favorites" ON favorites FOR DELETE USING (auth.uid() = user_id);
 
 -- ============================================
 -- VIEWS
@@ -1745,15 +1560,17 @@ LEFT JOIN user_profiles up   ON up.id = ps.parent_id;
 -- COMMENTS
 -- ============================================
 
-COMMENT ON COLUMN orders.scheduled_for   IS 'The date when the order should be fulfilled. Defaults to current date for immediate orders.';
-COMMENT ON COLUMN orders.status          IS 'awaiting_payment=cash order waiting for payment, pending=ready for kitchen, preparing=being made, ready=pickup, completed=done, cancelled=cancelled';
-COMMENT ON COLUMN orders.payment_status  IS 'awaiting_payment=cash not yet received, paid=payment confirmed, timeout=auto-cancelled due to no payment, refunded=money returned';
+COMMENT ON COLUMN orders.scheduled_for   IS 'The date when the order should be fulfilled.';
+COMMENT ON COLUMN orders.status          IS 'awaiting_payment=cash order waiting, pending=ready for kitchen, preparing=being made, ready=pickup, completed=done, cancelled=cancelled';
+COMMENT ON COLUMN orders.payment_status  IS 'awaiting_payment=cash not received, paid=confirmed, timeout=auto-cancelled, refunded=money returned';
 COMMENT ON COLUMN orders.payment_due_at  IS 'Deadline for cash payment. After this time, order can be auto-cancelled.';
-COMMENT ON COLUMN cart_items.scheduled_for IS 'The date when the order is intended for. Must be a valid school day (Mon-Fri or makeup Saturday), not a holiday, not in the past, and within 14 days.';
+COMMENT ON COLUMN orders.order_type      IS 'pre_order=weekly pre-order, surplus=surplus item order, walk_in=staff walk-in order.';
+COMMENT ON COLUMN cart_items.scheduled_for IS 'Must be within the next orderable week (Mon-Fri after cutoff).';
 COMMENT ON COLUMN holidays.is_recurring  IS 'If true, the holiday recurs every year on the same date';
 COMMENT ON TABLE  makeup_days            IS 'Stores Saturday make-up class days when canteen should be open';
-COMMENT ON FUNCTION get_admin_dashboard_stats IS 'Optimized function for admin dashboard stats with proper scheduled_for filtering';
+COMMENT ON FUNCTION get_admin_dashboard_stats IS 'Admin dashboard stats with weekly order and surplus metrics.';
 
 -- ============================================
 -- END OF CONSOLIDATED SCHEMA
+-- Post-refactor: 21 tables, ~29 functions, ~21 triggers, ~78 indexes, ~65 RLS policies
 -- ============================================

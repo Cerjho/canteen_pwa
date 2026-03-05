@@ -1,8 +1,8 @@
 # Loheca Canteen — Database Rearchitecture & Redesign Plan
 
 > **Date**: March 5, 2026
-> **Status**: Planning
-> **Current Schema**: `consolidated_schema.sql` (1,760 lines) + 46 migrations
+> **Status**: Completed
+> **Current Schema**: `consolidated_schema.sql` (post-WPA refactor) + 51 migrations
 > **Target**: Weekly pre-ordering model, wallet removed, stock removed, deprecated code purged
 
 ---
