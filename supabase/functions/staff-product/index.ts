@@ -1,21 +1,20 @@
 // Staff Product Edge Function
-// Allows staff to manage product availability and stock (limited operations)
+// Allows staff to manage product availability and surplus items (limited operations)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
-type Action = 'toggle-availability' | 'update-stock' | 'mark-all-available';
+type Action = 'toggle-availability' | 'mark-all-available' | 'mark-surplus' | 'remove-surplus';
 
 interface StaffProductRequest {
   action: Action;
   product_id?: string;
   available?: boolean;
-  stock_quantity?: number;
+  scheduled_date?: string; // YYYY-MM-DD for surplus
+  meal_period?: string;    // 'AM' | 'PM' for surplus
+  quantity?: number;       // surplus quantity
 }
-
-// Validation constants
-const MAX_STOCK = 99999;
 
 serve(async (req) => {
   const origin = req.headers.get('Origin');
@@ -60,10 +59,10 @@ serve(async (req) => {
     }
 
     const body: StaffProductRequest = await req.json();
-    const { action, product_id, available, stock_quantity } = body;
+    const { action, product_id, available, scheduled_date, meal_period, quantity } = body;
 
     // Validate action
-    const validActions: Action[] = ['toggle-availability', 'update-stock', 'mark-all-available'];
+    const validActions: Action[] = ['toggle-availability', 'mark-all-available', 'mark-surplus', 'remove-surplus'];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid action. Must be: ${validActions.join(', ')}` }),
@@ -130,61 +129,111 @@ serve(async (req) => {
         );
       }
 
-      case 'update-stock': {
-        if (!product_id) {
+      case 'mark-surplus': {
+        if (!product_id || !scheduled_date) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id is required' }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id and scheduled_date are required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        if (typeof stock_quantity !== 'number' || stock_quantity < 0 || stock_quantity > MAX_STOCK) {
+        // Validate date format
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date)) {
           return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: `stock_quantity must be between 0 and ${MAX_STOCK}` }),
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'scheduled_date must be YYYY-MM-DD' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const surplusMeal = meal_period || 'AM';
+        if (!['AM', 'PM'].includes(surplusMeal)) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'meal_period must be AM or PM' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const surplusQty = quantity ?? 1;
+        if (surplusQty < 1 || surplusQty > 9999) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'quantity must be between 1 and 9999' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
         // Verify product exists
-        const { data: product, error: fetchError } = await supabaseAdmin
+        const { data: surplusProduct, error: spError } = await supabaseAdmin
           .from('products')
-          .select('id, name, stock_quantity')
+          .select('id, name, price')
           .eq('id', product_id)
           .single();
 
-        if (fetchError || !product) {
+        if (spError || !surplusProduct) {
           return new Response(
             JSON.stringify({ error: 'PRODUCT_NOT_FOUND', message: 'Product not found' }),
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        const { error: updateError } = await supabaseAdmin
-          .from('products')
-          .update({ 
-            stock_quantity, 
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', product_id);
+        // Upsert into surplus_items
+        const { data: surplus, error: surplusError } = await supabaseAdmin
+          .from('surplus_items')
+          .upsert({
+            product_id,
+            scheduled_date,
+            meal_period: surplusMeal,
+            quantity_available: surplusQty,
+            original_price: surplusProduct.price,
+            marked_by: user.id,
+          }, { onConflict: 'product_id,scheduled_date,meal_period' })
+          .select()
+          .single();
 
-        if (updateError) {
-          console.error('Update stock error:', updateError);
+        if (surplusError) {
+          console.error('Mark surplus error:', surplusError);
           return new Response(
-            JSON.stringify({ error: 'UPDATE_FAILED', message: 'Failed to update stock' }),
+            JSON.stringify({ error: 'SURPLUS_FAILED', message: 'Failed to mark surplus item' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        console.log(`[AUDIT] ${userRole} ${user.email} updated stock for ${product.name}: ${product.stock_quantity} -> ${stock_quantity}`);
+        console.log(`[AUDIT] ${userRole} ${user.email} marked surplus: ${surplusProduct.name} x${surplusQty} for ${scheduled_date} ${surplusMeal}`);
 
         return new Response(
-          JSON.stringify({ 
-            success: true, 
-            product_id, 
-            previous_stock: product.stock_quantity,
-            new_stock: stock_quantity,
-            message: 'Stock updated successfully'
-          }),
+          JSON.stringify({ success: true, surplus_item: surplus }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'remove-surplus': {
+        if (!product_id || !scheduled_date) {
+          return new Response(
+            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id and scheduled_date are required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const removeMeal = meal_period || 'AM';
+
+        const { error: deleteError } = await supabaseAdmin
+          .from('surplus_items')
+          .delete()
+          .eq('product_id', product_id)
+          .eq('scheduled_date', scheduled_date)
+          .eq('meal_period', removeMeal);
+
+        if (deleteError) {
+          console.error('Remove surplus error:', deleteError);
+          return new Response(
+            JSON.stringify({ error: 'DELETE_FAILED', message: 'Failed to remove surplus item' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[AUDIT] ${userRole} ${user.email} removed surplus: ${product_id} for ${scheduled_date} ${removeMeal}`);
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Surplus item removed' }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

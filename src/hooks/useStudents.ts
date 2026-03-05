@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { getStudents, getChildren } from '../services/students';
+import { getStudents } from '../services/students';
 import { useAuth } from './useAuth';
-import type { Student, Child } from '../types';
+import type { Student } from '../types';
 
-// Primary hook - uses Student type
 export function useStudents() {
   const { user } = useAuth();
 
@@ -14,24 +13,6 @@ export function useStudents() {
         throw new Error('Please sign in to view students.');
       }
       return getStudents(user.id);
-    },
-    enabled: !!user
-  });
-}
-
-/**
- * @deprecated Use useStudents instead - kept for backward compatibility
- */
-export function useChildren() {
-  const { user } = useAuth();
-
-  return useQuery<Child[]>({
-    queryKey: ['children', user?.id],
-    queryFn: async () => {
-      if (!user) {
-        throw new Error('Please sign in to view students.');
-      }
-      return getChildren(user.id);
     },
     enabled: !!user
   });

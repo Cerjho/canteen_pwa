@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Wallet, Calendar, CalendarDays, Smartphone, Loader2, XCircle, RotateCcw } from 'lucide-react';
+import { CheckCircle, ArrowRight, Clock, User, Timer, CreditCard, Calendar, CalendarDays, Smartphone, Loader2, XCircle, RotateCcw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { isOnlinePaymentMethod, type PaymentMethod } from '../../types';
 import { checkPaymentStatus, retryCheckout } from '../../services/payments';
@@ -70,7 +70,7 @@ export default function OrderConfirmation() {
       while (!cancelled && pollNum < MAX_POLLS) {
         try {
           const result = await checkPaymentStatus(orderIdParam);
-          // Edge function returns: payment_status (order) or status (topup)
+          // Edge function returns: payment_status (order)
           // For orders: 'paid' | 'awaiting_payment' | 'timeout' | 'refunded' | 'failed'
           // order_status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled' | 'awaiting_payment'
           if (result.payment_status === 'paid' || result.order_status === 'preparing' || result.order_status === 'ready') {
@@ -400,15 +400,10 @@ export default function OrderConfirmation() {
                   <Smartphone size={14} />
                   {getPaymentMethodLabel(state.paymentMethod ?? 'gcash')}
                 </>
-              ) : state.paymentMethod === 'cash' ? (
+              ) : (
                 <>
                   <CreditCard size={14} />
                   Pay at Counter
-                </>
-              ) : (
-                <>
-                  <Wallet size={14} />
-                  Wallet Balance
                 </>
               )}
             </span>

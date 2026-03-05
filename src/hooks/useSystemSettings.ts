@@ -1,24 +1,33 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
+import { isCutoffPassed, getCutoffCountdown, isSurplusCutoffPassed } from '../utils/dateUtils';
 
-interface SystemSettings {
+export interface SystemSettings {
   maintenance_mode: boolean;
   canteen_name: string;
   operating_hours: { open: string; close: string };
-  order_cutoff_time: string;
-  allow_future_orders: boolean;
-  max_future_days: number;
-  low_stock_threshold: number;
+  /** Day of week for weekly cutoff (0=Sun, 5=Fri). Default 5 (Friday). */
+  weekly_cutoff_day: number;
+  /** Time of day for weekly cutoff in HH:mm format. Default '17:00'. */
+  weekly_cutoff_time: string;
+  /** Daily surplus ordering closes at this time (HH:mm). Default '08:00'. */
+  surplus_cutoff_time: string;
+  /** Daily cancellation cutoff for individual days (HH:mm). Default '08:00'. */
+  daily_cancel_cutoff_time: string;
+  auto_complete_orders: boolean;
+  notification_email: string;
 }
 
 const defaultSettings: SystemSettings = {
   maintenance_mode: false,
   canteen_name: 'LOHECA Canteen',
   operating_hours: { open: '07:00', close: '15:00' },
-  order_cutoff_time: '10:00',
-  allow_future_orders: true,
-  max_future_days: 5,
-  low_stock_threshold: 10,
+  weekly_cutoff_day: 5,
+  weekly_cutoff_time: '17:00',
+  surplus_cutoff_time: '08:00',
+  daily_cancel_cutoff_time: '08:00',
+  auto_complete_orders: false,
+  notification_email: '',
 };
 
 export function useSystemSettings() {
@@ -46,8 +55,8 @@ export function useSystemSettings() {
 
         const VALID_SETTINGS_KEYS = new Set([
           'maintenance_mode', 'canteen_name', 'operating_hours',
-          'order_cutoff_time', 'allow_future_orders', 'max_future_days',
-          'low_stock_threshold', 'auto_complete_orders', 'notification_email'
+          'weekly_cutoff_day', 'weekly_cutoff_time', 'surplus_cutoff_time',
+          'daily_cancel_cutoff_time', 'auto_complete_orders', 'notification_email'
         ]);
         const parsed = { ...defaultSettings };
         data?.forEach(setting => {
@@ -79,5 +88,26 @@ export function useSystemSettings() {
     error,
     refetch,
     isMaintenanceMode: settings?.maintenance_mode ?? false,
+    /** Check if weekly ordering cutoff has passed for a given target week start date. */
+    isWeeklyCutoffPassed: (targetWeekStart: string) =>
+      isCutoffPassed(
+        targetWeekStart,
+        settings?.weekly_cutoff_day ?? defaultSettings.weekly_cutoff_day,
+        settings?.weekly_cutoff_time ?? defaultSettings.weekly_cutoff_time
+      ),
+    /** Get countdown string to cutoff deadline (e.g. "2d 3h 15m"). */
+    getWeeklyCutoffCountdown: (targetWeekStart: string) =>
+      getCutoffCountdown(
+        targetWeekStart,
+        settings?.weekly_cutoff_day ?? defaultSettings.weekly_cutoff_day,
+        settings?.weekly_cutoff_time ?? defaultSettings.weekly_cutoff_time
+      ),
+    /** Check if today's surplus ordering window has closed. */
+    isSurplusClosed: () => {
+      const [h, m] = (settings?.surplus_cutoff_time ?? defaultSettings.surplus_cutoff_time)
+        .split(':')
+        .map(Number);
+      return isSurplusCutoffPassed(h, m);
+    },
   };
 }

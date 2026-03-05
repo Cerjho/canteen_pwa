@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Search, Package, AlertTriangle, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
@@ -20,19 +20,14 @@ export default function AdminProducts() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
-  const [stockFilter, setStockFilter] = useState<'all' | 'low-stock' | 'out-of-stock'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
-  // Initialize stock filter from URL params
+  // Initialize from URL params
   useEffect(() => {
     const filterParam = searchParams.get('filter');
-    if (filterParam === 'low-stock') {
-      setStockFilter('low-stock');
-      setSearchParams({}, { replace: true });
-    } else if (filterParam === 'out-of-stock') {
-      setStockFilter('out-of-stock');
+    if (filterParam) {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -43,7 +38,7 @@ export default function AdminProducts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, category, image_url, available, stock_quantity, created_at, updated_at')
+        .select('id, name, description, price, category, image_url, available, created_at, updated_at')
         .order('name');
       if (error) throw error;
       return data;
@@ -161,15 +156,7 @@ export default function AdminProducts() {
       (p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
     
-    // Stock filter logic
-    let matchesStock = true;
-    if (stockFilter === 'low-stock') {
-      matchesStock = p.stock_quantity !== null && p.stock_quantity > 0 && p.stock_quantity <= 10;
-    } else if (stockFilter === 'out-of-stock') {
-      matchesStock = p.stock_quantity === 0 || !p.available;
-    }
-    
-    return matchesSearch && matchesCategory && matchesStock;
+    return matchesSearch && matchesCategory;
   });
 
   const handleEdit = (product: Product) => {
@@ -241,36 +228,6 @@ export default function AdminProducts() {
           </div>
         </div>
         
-        {/* Stock Filter */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setStockFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-              stockFilter === 'all' ? 'bg-gray-700 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
-            }`}
-          >
-            All Stock
-          </button>
-          <button
-            onClick={() => setStockFilter('low-stock')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 ${
-              stockFilter === 'low-stock' ? 'bg-amber-500 text-white' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
-            }`}
-          >
-            <AlertTriangle size={14} />
-            Low Stock
-          </button>
-          <button
-            onClick={() => setStockFilter('out-of-stock')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 ${
-              stockFilter === 'out-of-stock' ? 'bg-red-500 text-white' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700'
-            }`}
-          >
-            <Package size={14} />
-            Out of Stock
-          </button>
-        </div>
-
         {/* Products Table */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
@@ -280,7 +237,6 @@ export default function AdminProducts() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Price</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Stock</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Status</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Actions</th>
                 </tr>
@@ -312,16 +268,6 @@ export default function AdminProducts() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-semibold text-gray-900 dark:text-gray-100">₱{product.price.toFixed(2)}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-medium ${product.stock_quantity < 10 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                          {product.stock_quantity}
-                        </span>
-                        {product.stock_quantity < 10 && (
-                          <AlertTriangle size={16} className="text-red-500 dark:text-red-400" />
-                        )}
-                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -401,7 +347,6 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
     price: product?.price || 0,
     category: product?.category || 'mains' as ProductCategory,
     image_url: product?.image_url || '',
-    stock_quantity: product?.stock_quantity ?? 100,
     available: product?.available ?? true
   });
   const [imagePreview, setImagePreview] = useState<string | null>(product?.image_url || null);
@@ -507,29 +452,17 @@ function ProductModal({ product, onClose, onSave, isLoading }: ProductModalProps
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.stock_quantity}
-                    onChange={(e) => setFormData({ ...formData, stock_quantity: parseInt(e.target.value) || 0 })}
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value as ProductCategory })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                    required
-                  />
+                  >
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat} className="capitalize">{cat}</option>
+                    ))}
+                  </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value as ProductCategory })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat} className="capitalize">{cat}</option>
-                  ))}
-                </select>
               </div>
 
               {/* Image Upload Section */}

@@ -1,11 +1,9 @@
-import { CreditCard, Wallet, Banknote, Smartphone, Globe } from 'lucide-react';
+import { CreditCard, Banknote, Smartphone, Globe } from 'lucide-react';
 import type { PaymentMethod } from '../types';
 
 interface PaymentMethodSelectorProps {
   selected: PaymentMethod;
   onSelect: (method: PaymentMethod) => void;
-  balance?: number;
-  orderTotal?: number;
   isOffline?: boolean;
 }
 
@@ -23,13 +21,6 @@ const PAYMENT_METHODS: PaymentMethodOption[] = [
     label: 'Cash', 
     icon: <Banknote size={24} />,
     description: 'Pay at the canteen',
-    group: 'school',
-  },
-  { 
-    value: 'balance', 
-    label: 'Wallet Balance', 
-    icon: <Wallet size={24} />,
-    description: 'Use your prepaid balance',
     group: 'school',
   },
   { 
@@ -59,14 +50,12 @@ function PaymentOption({
   method,
   isSelected,
   isDisabled,
-  balance,
   onSelect,
   disabledReason,
 }: {
   method: PaymentMethodOption;
   isSelected: boolean;
   isDisabled: boolean;
-  balance: number;
   onSelect: () => void;
   disabledReason?: string;
 }) {
@@ -94,10 +83,7 @@ function PaymentOption({
       <div className="flex-1 text-left">
         <p className="font-medium text-gray-900 dark:text-gray-100">{method.label}</p>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {method.value === 'balance' 
-            ? `Available: ₱${balance.toFixed(2)}`
-            : disabledReason || method.description
-          }
+          {disabledReason || method.description}
         </p>
       </div>
       <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 ${
@@ -115,17 +101,11 @@ function PaymentOption({
   );
 }
 
-export function PaymentMethodSelector({ selected, onSelect, balance = 0, orderTotal = 0, isOffline = false }: PaymentMethodSelectorProps) {
+export function PaymentMethodSelector({ selected, onSelect, isOffline = false }: PaymentMethodSelectorProps) {
   const schoolMethods = PAYMENT_METHODS.filter(m => m.group === 'school');
   const onlineMethods = PAYMENT_METHODS.filter(m => m.group === 'online');
 
   const getDisabledState = (method: PaymentMethodOption): { disabled: boolean; reason?: string } => {
-    if (method.value === 'balance' && balance + 0.01 < orderTotal && orderTotal > 0) {
-      return { disabled: true, reason: `Need ₱${(orderTotal - balance).toFixed(2)} more` };
-    }
-    if (method.value === 'balance' && balance <= 0) {
-      return { disabled: true, reason: 'No balance available' };
-    }
     if (method.group === 'online' && isOffline) {
       return { disabled: true, reason: 'Requires internet connection' };
     }
@@ -148,7 +128,6 @@ export function PaymentMethodSelector({ selected, onSelect, balance = 0, orderTo
               method={method}
               isSelected={selected === method.value}
               isDisabled={disabled}
-              balance={balance}
               onSelect={() => onSelect(method.value)}
               disabledReason={reason}
             />
@@ -180,7 +159,6 @@ export function PaymentMethodSelector({ selected, onSelect, balance = 0, orderTo
               method={method}
               isSelected={selected === method.value}
               isDisabled={disabled}
-              balance={balance}
               onSelect={() => onSelect(method.value)}
               disabledReason={reason}
             />

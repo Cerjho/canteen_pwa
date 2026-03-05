@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
-import { formatDateLocal } from '../utils/dateUtils';
+import { formatDateLocal, getWeekDates } from '../utils/dateUtils';
+import type { SurplusItem } from '../types';
 
 export interface Product {
   id: string;
@@ -9,7 +10,6 @@ export interface Product {
   category: string;
   image_url: string;
   available: boolean;
-  stock_quantity: number;
 }
 
 export interface MenuSchedule {
@@ -267,7 +267,7 @@ export async function getProductsForDate(date: Date): Promise<Product[]> {
   const productIds = dateSchedules.map(s => s.product_id);
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, description, price, category, image_url, available, stock_quantity')
+    .select('id, name, description, price, category, image_url, available')
     .eq('available', true)
     .in('id', productIds)
     .order('category', { ascending: true });
@@ -285,7 +285,7 @@ export async function getProducts(): Promise<Product[]> {
 export async function getAllProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, description, price, category, image_url, available, stock_quantity')
+    .select('id, name, description, price, category, image_url, available')
     .order('category', { ascending: true });
 
   if (error) throw error;
@@ -295,7 +295,7 @@ export async function getAllProducts(): Promise<Product[]> {
 export async function getProductById(id: string): Promise<Product | null> {
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, description, price, category, image_url, available, stock_quantity')
+    .select('id, name, description, price, category, image_url, available')
     .eq('id', id)
     .single();
 
@@ -312,4 +312,77 @@ export async function getMenuSchedules(): Promise<MenuSchedule[]> {
 
   if (error) throw error;
   return data || [];
+}
+
+// ══════════════════════════════════════════════════════════════
+// Weekly Menu & Surplus Queries
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get the full weekly menu (Mon–Fri) for a given week.
+ * Returns a map of date → Product[] for each day.
+ */
+export async function getMenuForWeek(
+  weekStart: string,
+): Promise<Map<string, Product[]>> {
+  const dates = getWeekDates(weekStart);
+  const result = new Map<string, Product[]>();
+
+  // Fetch all menu schedules for the week in one query
+  const { data: schedules, error: schedError } = await supabase
+    .from('menu_schedules')
+    .select('product_id, scheduled_date')
+    .in('scheduled_date', dates)
+    .eq('is_active', true);
+
+  if (schedError) throw schedError;
+  if (!schedules || schedules.length === 0) {
+    for (const d of dates) result.set(d, []);
+    return result;
+  }
+
+  // Collect all unique product IDs
+  const allProductIds = [...new Set(schedules.map(s => s.product_id))];
+
+  // Fetch all products in one query
+  const { data: products, error: prodError } = await supabase
+    .from('products')
+    .select('id, name, description, price, category, image_url, available')
+    .in('id', allProductIds)
+    .eq('available', true)
+    .order('category', { ascending: true });
+
+  if (prodError) throw prodError;
+  const productMap = new Map((products || []).map(p => [p.id, p]));
+
+  // Build per-day product lists
+  for (const d of dates) result.set(d, []);
+  for (const s of schedules) {
+    const product = productMap.get(s.product_id);
+    if (product) {
+      result.get(s.scheduled_date)?.push(product);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Get today's surplus items with their associated products.
+ */
+export async function getSurplusItems(): Promise<SurplusItem[]> {
+  const todayStr = formatDateLocal(new Date());
+
+  const { data, error } = await supabase
+    .from('surplus_items')
+    .select(`
+      *,
+      product:products(id, name, description, price, category, image_url, available)
+    `)
+    .eq('scheduled_date', todayStr)
+    .eq('is_active', true)
+    .gt('quantity_available', 0);
+
+  if (error) throw error;
+  return (data || []) as SurplusItem[];
 }

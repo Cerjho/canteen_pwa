@@ -8,7 +8,6 @@ interface ProductCardProps {
   price: number;
   image_url: string;
   available: boolean;
-  stock_quantity?: number;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   onAddToCart: (productId: string) => void;
@@ -25,7 +24,6 @@ export function ProductCard({
   price,
   image_url,
   available,
-  stock_quantity,
   isFavorite = false,
   onToggleFavorite,
   onAddToCart,
@@ -34,7 +32,6 @@ export function ProductCard({
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
   const hasImage = image_url && !imageError;
-  const isSoldOut = !available || (stock_quantity !== undefined && stock_quantity <= 0);
 
   return (
     <div
@@ -83,9 +80,9 @@ export function ProductCard({
           <span className="text-sm sm:text-2xl font-bold text-primary-600 dark:text-primary-400">
             <span className="text-xs sm:text-lg font-normal text-primary-400 dark:text-primary-500">₱</span>{price.toFixed(2)}
           </span>
-          {isSoldOut ? (
+          {!available ? (
             <span className="text-xs font-medium text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full">
-              Sold Out
+              Unavailable
             </span>
           ) : (
             <button

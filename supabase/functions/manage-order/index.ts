@@ -341,26 +341,13 @@ serve(async (req) => {
           );
         }
 
-        // Restore stock using atomic RPC
-        const { data: orderItems } = await supabaseAdmin
-          .from('order_items')
-          .select('product_id, quantity')
-          .eq('order_id', order_id);
+        // Note: No stock restoration needed (stock tracking removed)
+        // Note: No wallet refund needed (wallet system removed)
+        // Weekly order totals auto-recalculate via DB triggers
 
-        if (orderItems) {
-          for (const item of orderItems) {
-            await supabaseAdmin.rpc('increment_stock', { 
-              p_product_id: item.product_id, 
-              p_quantity: item.quantity 
-            }).catch(err => console.error(`Stock restore failed for product ${item.product_id}:`, err));
-          }
-        }
-
-        // Refund to wallet only if order was actually paid
-        // (awaiting_payment cash orders haven't collected money yet)
+        // Create refund payment record if order was paid
         let refundApplied = false;
         if (order.total_amount > 0 && order.payment_status === 'paid') {
-          // Look up original payment for refund lineage
           let originalPaymentId: string | null = null;
           const { data: origAlloc } = await supabaseAdmin
             .from('payment_allocations')
@@ -378,24 +365,34 @@ serve(async (req) => {
             if (origPay) originalPaymentId = origPay.id;
           }
 
-          // Atomic: wallet credit + refund payment record + allocation in one DB transaction
-          const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
-            'credit_balance_with_payment',
-            {
-              p_parent_id: order.parent_id,
-              p_amount: order.total_amount,
-              p_type: 'refund',
-              p_method: order.payment_method,
-              p_reference_id: `CANCEL-${order_id.substring(0, 8)}`,
-              p_order_id: order_id,
-              p_original_payment_id: originalPaymentId,
-            }
-          );
+          // Create refund payment record
+          const { data: refundPayment } = await supabaseAdmin
+            .from('payments')
+            .insert({
+              parent_id: order.parent_id,
+              type: 'refund',
+              amount_total: order.total_amount,
+              method: order.payment_method,
+              status: 'completed',
+              reference_id: `CANCEL-${order_id.substring(0, 8)}`,
+            })
+            .select('id')
+            .single();
 
-          if (!rpcError && rpcId) {
+          if (refundPayment) {
+            await supabaseAdmin.from('payment_allocations').insert({
+              payment_id: refundPayment.id,
+              order_id: order_id,
+              allocated_amount: order.total_amount,
+            });
+
+            if (originalPaymentId) {
+              await supabaseAdmin
+                .from('payments')
+                .update({ original_payment_id: originalPaymentId })
+                .eq('id', refundPayment.id);
+            }
             refundApplied = true;
-          } else if (rpcError) {
-            console.error('Atomic refund error:', rpcError);
           }
         }
 
@@ -479,13 +476,7 @@ serve(async (req) => {
           );
         }
 
-        // 2. Restore stock for the unavailable item
-        await supabaseAdmin.rpc('increment_stock', {
-          p_product_id: mItem.product_id,
-          p_quantity: mItem.quantity,
-        }).catch(err => console.error(`Stock restore failed for product ${mItem.product_id}:`, err));
-
-        // 3. Recalculate order total from remaining confirmed items
+        // 2. Recalculate order total from remaining confirmed items
         const { data: confirmedItems } = await supabaseAdmin
           .from('order_items')
           .select('price_at_order, quantity, status')
@@ -510,48 +501,35 @@ serve(async (req) => {
 
         await supabaseAdmin.from('orders').update(orderUpdate).eq('id', order_id);
 
-        // 5. Partial refund if order was paid with balance
+        // 5. Create partial refund record if order was paid
         const refundAmount = mItem.price_at_order * mItem.quantity;
         let refundApplied = false;
 
         if (refundAmount > 0 && mOrder.payment_status === 'paid') {
-          // Look up original payment for refund lineage
-          let originalPaymentId: string | null = null;
-          const { data: origAlloc } = await supabaseAdmin
-            .from('payment_allocations')
-            .select('payment_id')
-            .eq('order_id', order_id)
-            .limit(1)
+          const { data: refundPayment } = await supabaseAdmin
+            .from('payments')
+            .insert({
+              parent_id: mOrder.parent_id,
+              type: 'refund',
+              amount_total: refundAmount,
+              method: mOrder.payment_method,
+              status: 'completed',
+              reference_id: `ITEM-UNAVAIL-${item_id.substring(0, 8)}`,
+            })
+            .select('id')
             .single();
-          if (origAlloc) {
-            const { data: origPay } = await supabaseAdmin
-              .from('payments')
-              .select('id, type')
-              .eq('id', origAlloc.payment_id)
-              .eq('type', 'payment')
-              .single();
-            if (origPay) originalPaymentId = origPay.id;
-          }
 
-          const { error: rpcError } = await supabaseAdmin.rpc(
-            'credit_balance_with_payment',
-            {
-              p_parent_id: mOrder.parent_id,
-              p_amount: refundAmount,
-              p_type: 'refund',
-              p_method: mOrder.payment_method,
-              p_reference_id: `ITEM-UNAVAIL-${item_id.substring(0, 8)}`,
-              p_order_id: order_id,
-              p_original_payment_id: originalPaymentId,
-            }
-          );
-
-          if (!rpcError) {
+          if (refundPayment) {
+            await supabaseAdmin.from('payment_allocations').insert({
+              payment_id: refundPayment.id,
+              order_id: order_id,
+              allocated_amount: refundAmount,
+            });
             refundApplied = true;
-          } else {
-            console.error('Partial refund error:', rpcError);
           }
         }
+
+        // Weekly order totals auto-recalculate via DB triggers
 
         console.log(`[AUDIT] ${userRole} ${user.email} marked item ${item_id} unavailable on order ${order_id}. Refund: ${refundApplied ? '₱' + refundAmount : 'N/A'}. All unavailable: ${allUnavailable}`);
 

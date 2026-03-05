@@ -1,4 +1,3 @@
-// Generic type for backward compatibility - accepts both Student and Child
 type StudentLike = {
   id: string;
   first_name: string;
@@ -7,34 +6,30 @@ type StudentLike = {
   section?: string;
 };
 
-interface ChildSelectorProps {
-  // New prop name
+interface StudentSelectorProps {
   students?: StudentLike[];
-  // Legacy prop name - for backward compatibility
+  /** @deprecated Use students instead */
   children?: StudentLike[];
-  // New prop name
   selectedStudentId?: string | null;
-  // Legacy prop name - for backward compatibility  
+  /** @deprecated Use selectedStudentId instead */
   selectedChildId?: string | null;
   onSelect: (id: string) => void;
   required?: boolean;
 }
 
-export function ChildSelector({
+export function StudentSelector({
   students,
   children,
   selectedStudentId,
   selectedChildId,
   onSelect,
   required = false
-}: ChildSelectorProps) {
-  // Support both 'students' and 'children' prop for backward compatibility
+}: StudentSelectorProps) {
   const studentList = students || children || [];
   const selectedId = selectedStudentId ?? selectedChildId ?? null;
   
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
-    // Only call onSelect with valid non-empty values
     if (value && value.trim() !== '') {
       onSelect(value);
     }
@@ -63,12 +58,12 @@ export function ChildSelector({
       </select>
       {studentList.length > 0 && !selectedId && (
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5" role="alert">
-          Select a child to start ordering.
+          Select a student to start ordering.
         </p>
       )}
     </div>
   );
 }
 
-// Alias for new code
-export const StudentSelector = ChildSelector;
+/** @deprecated Use StudentSelector instead */
+export const ChildSelector = StudentSelector;

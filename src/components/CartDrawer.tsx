@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Minus, CreditCard, Wallet, Banknote, Smartphone, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check, Globe, PlusCircle } from 'lucide-react';
+import { X, Plus, Minus, CreditCard, Banknote, Smartphone, User, Calendar, ChevronDown, ChevronRight, Copy, Trash2, Check, Globe, PlusCircle } from 'lucide-react';
 import { format, parseISO, addDays, isSaturday, isToday } from 'date-fns';
 import type { CartItem, DateCartGroup } from '../hooks/useCart';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, type MealPeriod, type PaymentMethod, isOnlinePaymentMethod } from '../types';
@@ -21,7 +21,6 @@ interface CartDrawerProps {
   onClearDate?: (dateStr: string) => Promise<void>;
   onCopyDateItems?: (fromDate: string, toDate: string) => Promise<void>;
   onError?: (error: Error) => void;
-  parentBalance?: number;
   existingOrders?: Array<{ student_id: string; scheduled_for: string; order_id: string }>;
 }
 
@@ -36,7 +35,6 @@ export function CartDrawer({
   onClearDate,
   onCopyDateItems,
   onError,
-  parentBalance = 0,
   existingOrders
 }: CartDrawerProps) {
   const [paymentMethod, setPaymentMethod] = useState<CartPaymentMethod>('cash');
@@ -56,7 +54,6 @@ export function CartDrawer({
         .reduce((sum, item) => sum + item.price * item.quantity, 0)
     : total;
 
-  const canUseBalance = parentBalance >= selectedTotal;
   const studentCount = Object.keys(itemsByStudent).length;
   
   // Get unique dates from items
@@ -198,16 +195,6 @@ export function CartDrawer({
       icon: Banknote, 
       disabled: false,
       description: 'Pay at pickup',
-      group: 'school',
-    },
-    { 
-      id: 'balance', 
-      label: 'Balance', 
-      icon: Wallet, 
-      disabled: !canUseBalance,
-      description: canUseBalance 
-        ? `Available: ₱${parentBalance.toFixed(2)}`
-        : `Need ₱${(selectedTotal - parentBalance).toFixed(2)} more`,
       group: 'school',
     },
     { 
@@ -501,7 +488,7 @@ export function CartDrawer({
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Payment Method</label>
                 
-                {/* School payments: Cash + Balance */}
+                {/* School payments: Cash */}
                 <div className="grid grid-cols-2 gap-2">
                   {paymentOptions.filter(o => o.group === 'school').map((option) => (
                     <button

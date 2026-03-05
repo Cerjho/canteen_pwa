@@ -1,5 +1,6 @@
 // Refund Order Edge Function
-// Admin-only function to refund orders and restore inventory
+// Admin-only function to refund orders. No stock restoration (stock tracking removed).
+// Online payments are refunded via PayMongo; cash orders are just cancelled.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -19,7 +20,6 @@ serve(async (req) => {
   if (preflightResponse) return preflightResponse;
 
   try {
-    // Get auth token from request
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -28,27 +28,22 @@ serve(async (req) => {
       );
     }
 
-    // Extract token from Bearer header
     const token = authHeader.replace('Bearer ', '');
 
-    // Initialize Supabase client with service role
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
 
-    // Get user from token using admin client
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
-      console.log('Auth error:', authError?.message);
       return new Response(
         JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Check if user is admin
     const userRole = user.app_metadata?.role;
     if (userRole !== 'admin') {
       return new Response(
@@ -57,7 +52,6 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
     const body: RefundRequest = await req.json();
     const { order_id, reason } = body;
 
@@ -68,17 +62,10 @@ serve(async (req) => {
       );
     }
 
-    // Fetch order with items
+    // Fetch order
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select(`
-        *,
-        items:order_items(
-          product_id,
-          quantity,
-          price_at_order
-        )
-      `)
+      .select('*')
       .eq('id', order_id)
       .single();
 
@@ -89,7 +76,6 @@ serve(async (req) => {
       );
     }
 
-    // Check if order is already cancelled/refunded
     if (order.status === 'cancelled') {
       return new Response(
         JSON.stringify({ error: 'ALREADY_REFUNDED', message: 'Order is already cancelled/refunded' }),
@@ -97,42 +83,13 @@ serve(async (req) => {
       );
     }
 
-    // Restore stock for each item
-    for (const item of order.items) {
-      try {
-        // Try RPC first for atomic increment
-        const { error: rpcError } = await supabaseAdmin.rpc('increment_stock', {
-          p_product_id: item.product_id,
-          p_quantity: item.quantity
-        });
-        
-        // Only fall back to direct update if RPC fails
-        if (rpcError) {
-          const { data: product } = await supabaseAdmin
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single();
-
-          if (product) {
-            await supabaseAdmin
-              .from('products')
-              .update({ stock_quantity: product.stock_quantity + item.quantity })
-              .eq('id', item.product_id);
-          }
-        }
-      } catch (stockErr) {
-        console.error(`Failed to restore stock for product ${item.product_id}:`, stockErr);
-      }
-    }
-
-    // Update order status to cancelled with payment_status (with optimistic lock to prevent double-refund)
+    // Cancel order (optimistic lock to prevent double-refund)
     const { data: updatedOrder, error: updateError } = await supabaseAdmin
       .from('orders')
-      .update({ 
+      .update({
         status: 'cancelled',
         payment_status: 'refunded',
-        notes: order.notes ? `${order.notes}\n\nRefund reason: ${reason}` : `Refund reason: ${reason}`
+        notes: order.notes ? `${order.notes}\n\nRefund reason: ${reason}` : `Refund reason: ${reason}`,
       })
       .eq('id', order_id)
       .neq('status', 'cancelled')
@@ -147,16 +104,39 @@ serve(async (req) => {
     }
 
     // ── PayMongo refund for online payments ──
-    const onlinePaymentMethods = ['gcash', 'paymaya', 'card', 'paymongo'];
+    const onlinePaymentMethods = ['gcash', 'paymaya', 'card'];
     let paymongoRefundId: string | null = null;
     let refundStatus = 'completed';
     let refundEstimate = '';
 
-    if (onlinePaymentMethods.includes(order.payment_method) && order.paymongo_payment_id) {
+    // Look up PayMongo payment ID from the payments table
+    let paymongoPaymentId: string | null = null;
+    const { data: origAlloc } = await supabaseAdmin
+      .from('payment_allocations')
+      .select('payment_id')
+      .eq('order_id', order.id)
+      .limit(1)
+      .single();
+
+    let originalPaymentId: string | null = null;
+    if (origAlloc) {
+      const { data: origPay } = await supabaseAdmin
+        .from('payments')
+        .select('id, type, paymongo_payment_id')
+        .eq('id', origAlloc.payment_id)
+        .eq('type', 'payment')
+        .single();
+      if (origPay) {
+        originalPaymentId = origPay.id;
+        paymongoPaymentId = origPay.paymongo_payment_id;
+      }
+    }
+
+    if (onlinePaymentMethods.includes(order.payment_method) && paymongoPaymentId) {
       try {
-        console.log('Initiating PayMongo refund:', { payment_id: order.paymongo_payment_id, amount: order.total_amount });
+        console.log('Initiating PayMongo refund:', { payment_id: paymongoPaymentId, amount: order.total_amount });
         const refundResult = await createPayMongoRefund(
-          order.paymongo_payment_id,
+          paymongoPaymentId,
           toCentavos(order.total_amount),
           'requested_by_customer',
           `Canteen order cancellation. Reason: ${reason}`,
@@ -164,7 +144,6 @@ serve(async (req) => {
         paymongoRefundId = refundResult.id;
         console.log('PayMongo refund created:', refundResult);
 
-        // Set estimated refund time based on payment method
         if (order.payment_method === 'gcash') {
           refundEstimate = 'Refund will be processed to your GCash within 1 business day.';
         } else if (order.payment_method === 'paymaya') {
@@ -174,88 +153,48 @@ serve(async (req) => {
         }
       } catch (refundErr) {
         console.error('PayMongo refund failed:', refundErr);
-        // Still proceed with DB refund — PayMongo refund can be retried manually
         refundStatus = 'pending';
         refundEstimate = 'Refund via payment provider is being processed. Please contact support if not received within 10 business days.';
       }
-    } else if (onlinePaymentMethods.includes(order.payment_method) && !order.paymongo_payment_id) {
-      // Online payment order but no payment ID means payment was never completed
+    } else if (onlinePaymentMethods.includes(order.payment_method) && !paymongoPaymentId) {
       console.log('No PayMongo payment ID — order was likely unpaid, no refund needed');
     }
 
-    // ── Look up original payment for refund lineage ──
-    let originalPaymentId: string | null = null;
-    const { data: origAlloc } = await supabaseAdmin
-      .from('payment_allocations')
-      .select('payment_id')
-      .eq('order_id', order.id)
-      .limit(1)
-      .single();
-    if (origAlloc) {
-      // Verify the linked payment is type='payment' (not another refund)
-      const { data: origPay } = await supabaseAdmin
-        .from('payments')
-        .select('id, type')
-        .eq('id', origAlloc.payment_id)
-        .eq('type', 'payment')
-        .single();
-      if (origPay) originalPaymentId = origPay.id;
-    }
-
-    // ── Create refund: use atomic RPC for balance refunds ──
+    // ── Create refund payment record ──
     let refundPaymentId: string | null = null;
 
-    if (order.payment_method === 'balance') {
-      // Atomic: wallet credit + payment record + allocation in one DB transaction
-      const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
-        'credit_balance_with_payment',
-        {
-          p_parent_id: order.parent_id,
-          p_amount: order.total_amount,
-          p_type: 'refund',
-          p_method: 'balance',
-          p_reference_id: `REFUND-${order_id.substring(0, 8)}`,
-          p_order_id: order.id,
-          p_original_payment_id: originalPaymentId,
-        }
-      );
+    const { data: refundPayment, error: txError } = await supabaseAdmin
+      .from('payments')
+      .insert({
+        parent_id: order.parent_id,
+        type: 'refund',
+        amount_total: order.total_amount,
+        method: order.payment_method,
+        status: refundStatus,
+        reference_id: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : `REFUND-${order_id.substring(0, 8)}`,
+        external_ref: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : null,
+        paymongo_refund_id: paymongoRefundId,
+        original_payment_id: originalPaymentId,
+      })
+      .select()
+      .single();
 
-      if (rpcError) {
-        console.error('Atomic refund error:', rpcError);
-      } else {
-        refundPaymentId = rpcId;
-      }
-    } else {
-      // Non-balance refund: create payment record + allocation (no wallet credit)
-      const { data: refundPayment, error: txError } = await supabaseAdmin
-        .from('payments')
-        .insert({
-          parent_id: order.parent_id,
-          type: 'refund',
-          amount_total: order.total_amount,
-          method: order.payment_method,
-          status: refundStatus,
-          reference_id: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : `REFUND-${order_id.substring(0, 8)}`,
-          external_ref: paymongoRefundId ? `PAYMONGO-REFUND-${paymongoRefundId}` : null,
-          paymongo_refund_id: paymongoRefundId,
-          original_payment_id: originalPaymentId,
-        })
-        .select()
-        .single();
-
-      if (refundPayment) {
-        refundPaymentId = refundPayment.id;
-        await supabaseAdmin.from('payment_allocations').insert({
-          payment_id: refundPayment.id,
-          order_id: order.id,
-          allocated_amount: order.total_amount,
-        });
-      }
-
-      if (txError) {
-        console.error('Transaction insert error:', txError);
-      }
+    if (refundPayment) {
+      refundPaymentId = refundPayment.id;
+      await supabaseAdmin.from('payment_allocations').insert({
+        payment_id: refundPayment.id,
+        order_id: order.id,
+        allocated_amount: order.total_amount,
+      });
     }
+
+    if (txError) {
+      console.error('Refund payment insert error:', txError);
+    }
+
+    // weekly_orders total_amount and status auto-recalculated by triggers
+
+    console.log(`[AUDIT] Admin ${user.email} refunded order ${order_id}. Amount: ₱${order.total_amount}. PayMongo: ${paymongoRefundId ?? 'N/A'}`);
 
     return new Response(
       JSON.stringify({

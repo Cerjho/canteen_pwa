@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Package, AlertTriangle, Check, X, RefreshCw } from 'lucide-react';
+import { Search, Package, Check, X, RefreshCw } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { PageHeader } from '../../components/PageHeader';
@@ -10,57 +10,6 @@ import type { Product, ProductCategory } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
 
 const CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
-
-// Debounced stock input component to prevent API call on every keystroke
-function StockInput({ productId, initialValue, onUpdate }: {
-  productId: string;
-  initialValue: number;
-  onUpdate: (id: string, stock: number) => void;
-}) {
-  const [localValue, setLocalValue] = useState(String(initialValue));
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Sync local value when server data changes (e.g. after refetch)
-  useEffect(() => {
-    setLocalValue(String(initialValue));
-  }, [initialValue]);
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setLocalValue(raw);
-
-    // Clear any pending debounce
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    // Debounce the API call by 600ms
-    debounceRef.current = setTimeout(() => {
-      const value = parseInt(raw) || 0;
-      onUpdate(productId, value);
-    }, 600);
-  }, [productId, onUpdate]);
-
-  const handleBlur = useCallback(() => {
-    // Ensure value is committed on blur even if debounce hasn't fired
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    const value = parseInt(localValue) || 0;
-    setLocalValue(String(value)); // Normalize display
-    onUpdate(productId, value);
-  }, [productId, localValue, onUpdate]);
-
-  return (
-    <input
-      type="number"
-      min="0"
-      value={localValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-    />
-  );
-}
 
 export default function StaffProducts() {
   const queryClient = useQueryClient();
@@ -75,7 +24,7 @@ export default function StaffProducts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, category, image_url, available, stock_quantity, created_at, updated_at')
+        .select('id, name, description, price, category, image_url, available, created_at, updated_at')
         .order('name');
       if (error) throw error;
       return data;
@@ -111,41 +60,6 @@ export default function StaffProducts() {
     },
     onError: (error: Error) => showToast(friendlyError(error.message, 'update product'), 'error')
   });
-
-  // Update stock mutation (via edge function)
-  const updateStock = useMutation({
-    mutationFn: async ({ id, stock_quantity }: { id: string; stock_quantity: number }) => {
-      const accessToken = await ensureValidAccessToken();
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/staff-product`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          apikey: SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'update-stock',
-          product_id: id,
-          stock_quantity
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Failed to update stock');
-      return result;
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['staff-products'] });
-      showToast(result.message || 'Stock updated', 'success');
-    },
-    onError: (error: Error) => showToast(friendlyError(error.message, 'update stock'), 'error')
-  });
-
-  // Stable callback for debounced stock input
-  const handleStockUpdate = useCallback((id: string, stock_quantity: number) => {
-    updateStock.mutate({ id, stock_quantity });
-  }, [updateStock]);
 
   // Mark all as available (via edge function)
   const markAllAvailable = useMutation({
@@ -185,7 +99,6 @@ export default function StaffProducts() {
 
   // Count unavailable
   const unavailableCount = products?.filter(p => !p.available).length || 0;
-  const lowStockCount = products?.filter(p => (p.stock_quantity ?? 0) < 10 && (p.stock_quantity ?? 0) > 0).length || 0;
 
   if (isLoading) {
     return (
@@ -212,7 +125,7 @@ export default function StaffProducts() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{products?.filter(p => p.available).length || 0}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Available</div>
@@ -220,10 +133,6 @@ export default function StaffProducts() {
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center">
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">{unavailableCount}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Unavailable</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center">
-            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{lowStockCount}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Low Stock</div>
           </div>
         </div>
 
@@ -316,26 +225,8 @@ export default function StaffProducts() {
                     <span className="text-lg font-bold text-primary-600 dark:text-primary-400">₱{product.price.toFixed(2)}</span>
                   </div>
                   
-                  {/* Stock & Availability Controls */}
+                  {/* Availability Controls */}
                   <div className="flex items-center gap-3 mt-3">
-                    {/* Stock Input (debounced) */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Stock:</span>
-                      <StockInput
-                        productId={product.id}
-                        initialValue={product.stock_quantity ?? 0}
-                        onUpdate={handleStockUpdate}
-                      />
-                    </div>
-                    
-                    {/* Low Stock Warning */}
-                    {(product.stock_quantity ?? 0) < 10 && (product.stock_quantity ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={12} />
-                        Low
-                      </span>
-                    )}
-                    
                     {/* Availability Toggle */}
                     <button
                       onClick={() => toggleAvailability.mutate({ id: product.id, available: !product.available })}

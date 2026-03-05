@@ -1,11 +1,11 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { createBatchOrder } from '../services/orders';
-import { createBatchCheckout } from '../services/payments';
+import { createWeeklyOrder } from '../services/orders';
+import { createWeeklyCheckout } from '../services/payments';
 import { useAuth } from './useAuth';
 import { supabase } from '../services/supabaseClient';
 import { friendlyError } from '../utils/friendlyError';
-import { getTodayLocal } from '../utils/dateUtils';
-import type { PaymentMethod, MealPeriod } from '../types';
+import { getTodayLocal, getNextOrderableWeek, getWeekDates } from '../utils/dateUtils';
+import type { PaymentMethod, MealPeriod, CreateWeeklyOrderRequest } from '../types';
 import { isOnlinePaymentMethod } from '../types';
 import { format, parseISO, isToday } from 'date-fns';
 
@@ -105,6 +105,10 @@ export function useCart() {
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+
+  // Weekly order builder state
+  const [selectedWeek, setSelectedWeek] = useState<string>(() => getNextOrderableWeek());
+  const weekDates = useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
   
   // Refs for accessing current state in callbacks
   const itemsRef = useRef(items);
@@ -342,6 +346,23 @@ export function useCart() {
   }, [items]);
 
   const total = summary.totalAmount;
+
+  // Items filtered to the currently selected week only
+  const itemsForSelectedWeek = useMemo(() => {
+    const weekDateSet = new Set(weekDates);
+    return items.filter(item => weekDateSet.has(item.scheduled_for));
+  }, [items, weekDates]);
+
+  // Week-specific totals
+  const weekTotal = useMemo(() => {
+    return itemsForSelectedWeek.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [itemsForSelectedWeek]);
+
+  const getDayTotal = useCallback((dateStr: string): number => {
+    return items
+      .filter(item => item.scheduled_for === dateStr)
+      .reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [items]);
 
   // Get items for a specific date
   const getItemsForDate = useCallback((dateStr: string): CartItem[] => {
@@ -767,7 +788,7 @@ export function useCart() {
   }, [user, items, loadCart, broadcastCartUpdate]);
 
   // =====================================================
-  // CHECKOUT
+  // CHECKOUT — WEEKLY ORDER SUBMISSION
   // =====================================================
 
   const checkout = useCallback(async (
@@ -785,7 +806,9 @@ export function useCart() {
     setError(null);
 
     try {
-      let currentItems = itemsRef.current;
+      // Scope to the selected week
+      const weekDateSet = new Set(weekDates);
+      let currentItems = itemsRef.current.filter(item => weekDateSet.has(item.scheduled_for));
       
       // Filter by selected dates if provided
       if (selectedDates && selectedDates.length > 0) {
@@ -794,166 +817,103 @@ export function useCart() {
 
       if (currentItems.length === 0) throw new Error('Your cart is empty.');
 
-      // Validate no items have past dates (e.g., user opened app before midnight)
+      // Validate no items have past dates
       const pastDateItems = currentItems.filter(item => isDateInPast(item.scheduled_for));
       if (pastDateItems.length > 0) {
         setItems(prev => prev.filter(i => !isDateInPast(i.scheduled_for)));
         throw new Error('Some items were for past dates and have been removed. Please review your cart.');
       }
 
-      const currentPaymentMethod = paymentMethodRef.current;
-      const currentNotes = notesRef.current;
+      const effectiveMethod = method || paymentMethodRef.current;
+      const effectiveNotes = orderNotes ?? notesRef.current;
 
-      // Group items by student AND scheduled_for date (meal_period is per-item)
-      const groups = new Map<string, { student_id: string; scheduled_for: string; items: CartItem[] }>();
-      
+      // Group items by student — each student gets a separate weekly order
+      const studentGroups = new Map<string, typeof currentItems>();
       for (const item of currentItems) {
-        const key = `${item.student_id}_${item.scheduled_for}`;
-        if (!groups.has(key)) {
-          groups.set(key, {
-            student_id: item.student_id,
-            scheduled_for: item.scheduled_for,
-            items: []
-          });
+        if (!studentGroups.has(item.student_id)) {
+          studentGroups.set(item.student_id, []);
         }
-        const group = groups.get(key);
-        if (group) {
-          group.items.push(item);
-        }
+        const group = studentGroups.get(item.student_id);
+        if (group) group.push(item);
       }
 
-      const effectiveMethod = method || currentPaymentMethod;
-      const isOnline = isOnlinePaymentMethod(effectiveMethod);
+      const results: Array<{
+        weekly_order_id?: string;
+        student_id: string;
+        error?: string;
+        checkout_url?: string;
+      }> = [];
+      let totalAmount = 0;
+      let redirectUrl: string | undefined;
 
-      const groupsArray = Array.from(groups.values());
-
-      // ── Online payments: batch all groups into a SINGLE PayMongo session ──
-      if (isOnline) {
-        const batchOrders = groupsArray.map(group => ({
-          student_id: group.student_id,
-          client_order_id: crypto.randomUUID(),
-          items: group.items.map(item => ({
+      for (const [studentId, studentItems] of studentGroups) {
+        // Build days array for this student
+        const dayMap = new Map<string, Array<{ product_id: string; quantity: number; price_at_order: number }>>();
+        for (const item of studentItems) {
+          if (!dayMap.has(item.scheduled_for)) {
+            dayMap.set(item.scheduled_for, []);
+          }
+          const dayItems = dayMap.get(item.scheduled_for);
+          dayItems?.push({
             product_id: item.product_id,
             quantity: item.quantity,
             price_at_order: item.price,
-            meal_period: item.meal_period
-          })),
-          scheduled_for: group.scheduled_for
-        }));
+          });
+        }
 
-        const batchResult = await createBatchCheckout({
+        const days: CreateWeeklyOrderRequest['days'] = Array.from(dayMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, dayItems]) => ({ scheduled_for: date, items: dayItems }));
+
+        const req: CreateWeeklyOrderRequest = {
           parent_id: user.id,
-          orders: batchOrders,
-          payment_method: effectiveMethod as 'gcash' | 'paymaya' | 'card',
-          notes: orderNotes ?? currentNotes,
-        });
-
-        // Clear all cart items before redirect
-        const checkoutKeys = new Set(
-          groupsArray.map(g => `${g.student_id}_${g.scheduled_for}`)
-        );
-        setItems(prev => prev.filter(item => {
-          const key = `${item.student_id}_${item.scheduled_for}`;
-          return !checkoutKeys.has(key);
-        }));
-
-        // Batch delete from DB — delete by composite key to avoid stale client-generated IDs
-        for (const item of currentItems) {
-          await supabase
-            .from('cart_items')
-            .delete()
-            .match({
-              user_id: user.id,
-              student_id: item.student_id,
-              product_id: item.product_id,
-              scheduled_for: item.scheduled_for,
-              meal_period: item.meal_period,
-            });
-        }
-
-        // If all orders were merged into existing ones, no checkout redirect needed
-        if (batchResult.merged && !batchResult.checkout_url) {
-          // All orders were merged — no checkout needed
-          // Clear the appropriate cart items and return success without redirect
-          return {
-            redirecting: false,
-            orders: batchResult.order_ids.map((oid, i) => ({
-              order_id: oid,
-              student_id: groupsArray[i]?.student_id || '',
-              scheduled_for: groupsArray[i]?.scheduled_for || '',
-            })),
-            total: 0,
-            successCount: batchResult.order_ids.length,
-            failCount: 0,
-            merged: true,
-            mergedCount: batchResult.merged_order_ids?.length || 0,
-          };
-        }
-
-        // Redirect to PayMongo checkout page
-        if (batchResult.checkout_url) {
-          navigatingRef.current = true;
-          window.location.href = batchResult.checkout_url;
-        }
-        return {
-          redirecting: true,
-          orders: batchResult.order_ids.map((oid, i) => ({
-            order_id: oid,
-            checkout_url: batchResult.checkout_url,
-            student_id: groupsArray[i]?.student_id || '',
-            scheduled_for: groupsArray[i]?.scheduled_for || '',
-          })),
-          total: currentItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-          successCount: groupsArray.length,
-          failCount: 0,
-          merged: batchResult.merged || false,
-          mergedCount: batchResult.merged_order_ids?.length || 0,
+          student_id: studentId,
+          week_start: selectedWeek,
+          days,
+          payment_method: effectiveMethod,
+          notes: effectiveNotes,
         };
+
+        try {
+          if (isOnlinePaymentMethod(effectiveMethod)) {
+            const result = await createWeeklyCheckout(req);
+            results.push({
+              weekly_order_id: result.weekly_order_id,
+              student_id: studentId,
+              checkout_url: result.checkout_url,
+            });
+            totalAmount += result.total_amount;
+            if (result.checkout_url && !redirectUrl) {
+              redirectUrl = result.checkout_url;
+            }
+          } else {
+            // Cash payment
+            const result = await createWeeklyOrder(req);
+            results.push({
+              weekly_order_id: result.weekly_order_id,
+              student_id: studentId,
+            });
+            totalAmount += result.total_amount;
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Order failed';
+          results.push({ student_id: studentId, error: msg });
+        }
       }
 
-      // ── Cash / Balance: batch all groups into a SINGLE edge function call ──
-      const batchOrders = groupsArray.map(group => ({
-        student_id: group.student_id,
-        client_order_id: crypto.randomUUID(),
-        items: group.items.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price_at_order: item.price,
-          meal_period: item.meal_period
-        })),
-        scheduled_for: group.scheduled_for
-      }));
-
-      const batchResult = await createBatchOrder({
-        parent_id: user.id,
-        orders: batchOrders,
-        payment_method: effectiveMethod as 'cash' | 'balance',
-        notes: orderNotes ?? currentNotes,
-      });
-
-      // Notify parent if items were merged into existing orders
-      if (batchResult.merged) {
-        // The merged info will be used in the order confirmation
-      }
-
-      const results: Array<{ order_id?: string; student_id: string; scheduled_for: string; error?: string }> =
-        batchResult.orders.map((o, i) => ({
-          order_id: o.order_id,
-          student_id: groupsArray[i]?.student_id || '',
-          scheduled_for: groupsArray[i]?.scheduled_for || '',
-        }));
-
-      // Clear all checked-out items from local state
-      const successfulKeys = new Set(
-        groupsArray.map(g => `${g.student_id}_${g.scheduled_for}`)
+      // Clear checked-out items from local state and DB
+      const checkedOutStudents = new Set(
+        results.filter(r => r.weekly_order_id).map(r => r.student_id)
       );
+      const checkedOutItems = currentItems.filter(i => checkedOutStudents.has(i.student_id));
+
       setItems(prev => prev.filter(item => {
-        const key = `${item.student_id}_${item.scheduled_for}`;
-        return !successfulKeys.has(key);
+        if (!weekDateSet.has(item.scheduled_for)) return true; // keep items outside this week
+        return !checkedOutStudents.has(item.student_id);
       }));
 
-      // Batch delete from DB — delete by composite key to avoid stale client-generated IDs
-      for (const item of currentItems) {
+      // Delete checked-out items from DB
+      for (const item of checkedOutItems) {
         await supabase
           .from('cart_items')
           .delete()
@@ -966,7 +926,7 @@ export function useCart() {
           });
       }
 
-      // If all items were checked out, reset notes and payment method
+      // Reset notes/payment if all items cleared
       if (itemsRef.current.length === 0) {
         setNotes('');
         setPaymentMethod('cash');
@@ -974,13 +934,25 @@ export function useCart() {
 
       broadcastCartUpdate();
 
-      return { 
-        orders: results, 
-        total: batchResult.total_amount,
-        successCount: results.length,
-        failCount: 0,
-        merged: batchResult.merged || false,
-        mergedCount: batchResult.merged_order_ids?.length || 0,
+      // Redirect for online payments
+      if (redirectUrl) {
+        navigatingRef.current = true;
+        window.location.href = redirectUrl;
+        return {
+          redirecting: true,
+          orders: results,
+          total: totalAmount,
+          successCount: results.filter(r => r.weekly_order_id).length,
+          failCount: results.filter(r => r.error).length,
+        };
+      }
+
+      return {
+        redirecting: false,
+        orders: results,
+        total: totalAmount,
+        successCount: results.filter(r => r.weekly_order_id).length,
+        failCount: results.filter(r => r.error).length,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? friendlyError(err.message, 'complete checkout') : 'Checkout failed. Please try again.';
@@ -992,7 +964,7 @@ export function useCart() {
         setIsLoading(false);
       }
     }
-  }, [user, broadcastCartUpdate]);
+  }, [user, selectedWeek, weekDates, broadcastCartUpdate]);
 
   // Checkout only items for a specific date
   const checkoutDate = useCallback(async (
@@ -1015,11 +987,19 @@ export function useCart() {
     error,
     clearError: () => setError(null),
     
+    // Weekly order builder
+    selectedWeek,
+    setSelectedWeek,
+    weekDates,
+    itemsForSelectedWeek,
+    weekTotal,
+    getDayTotal,
+
     // Computed values
     total,
     summary,
     itemsByStudent, // Legacy - for backwards compatibility
-    itemsByDateAndStudent, // New - for multi-day cart display
+    itemsByDateAndStudent, // Multi-day cart display
     
     // Getters
     getItemsForDate,

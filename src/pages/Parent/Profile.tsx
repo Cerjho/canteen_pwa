@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   LogOut,
-  Wallet,
   Link2,
   Unlink,
   AlertCircle,
@@ -16,7 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { getStudents, linkStudent, unlinkStudent, updateStudent, Student } from '../../services/students';
 import { PageHeader } from '../../components/PageHeader';
@@ -90,24 +89,13 @@ export default function Profile() {
             first_name: user.user_metadata?.first_name || '',
             last_name: user.user_metadata?.last_name || '',
             phone_number: user.user_metadata?.phone_number || null,
-            balance: 0,
           } as Parent;
         }
-        const { data: wallet } = await supabase
-          .from('wallets')
-          .select('balance')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        return { ...createResult.profile, balance: wallet?.balance || 0 } as Parent;
+        return { ...createResult.profile } as Parent;
       }
 
       if (!user) throw new Error('User not authenticated');
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      return { ...result.profile, balance: wallet?.balance || 0 } as Parent;
+      return { ...result.profile } as Parent;
     },
     enabled: !!user,
   });
@@ -300,23 +288,6 @@ export default function Profile() {
             label="Link a Student"
             description="Enter their school-issued Student ID"
             onClick={() => setShowLinkStudent(true)}
-          />
-        </SettingsGroup>
-
-        {/* ── Wallet ────────────────────────────────────── */}
-        <SettingsGroup title="Wallet">
-          <SettingsRow
-            icon={Wallet}
-            iconBg="bg-green-100 dark:bg-green-900/30"
-            iconColor="text-green-600 dark:text-green-400"
-            label="Account Balance"
-            value={
-              <span className="text-green-600 dark:text-green-400 font-bold">
-                ₱{profile?.balance?.toFixed(2) || '0.00'}
-              </span>
-            }
-            chevron
-            onClick={() => navigate('/balance')}
           />
         </SettingsGroup>
 

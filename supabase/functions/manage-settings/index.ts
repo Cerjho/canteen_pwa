@@ -5,7 +5,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
-type SettingsAction = 'get' | 'update' | 'get-all' | 'check-maintenance' | 'archive-orders' | 'reset-stock';
+type SettingsAction = 'get' | 'update' | 'get-all' | 'check-maintenance' | 'archive-orders';
 
 interface SettingsRequest {
   action: SettingsAction;
@@ -24,13 +24,11 @@ const SETTING_VALIDATORS: Record<string, (value: unknown) => boolean> = {
     const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
     return timeRegex.test(hours.open || '') && timeRegex.test(hours.close || '');
   },
-  order_cutoff_time: (v) => {
-    if (typeof v !== 'string') return false;
-    return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
-  },
+  weekly_cutoff_day: (v) => typeof v === 'string' && ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].includes(v.toLowerCase()),
+  weekly_cutoff_time: (v) => typeof v === 'string' && /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v),
+  surplus_cutoff_time: (v) => typeof v === 'string' && /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v),
+  daily_cancel_cutoff_time: (v) => typeof v === 'string' && /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v),
   allow_future_orders: (v) => typeof v === 'boolean',
-  max_future_days: (v) => typeof v === 'number' && v >= 1 && v <= 30,
-  low_stock_threshold: (v) => typeof v === 'number' && v >= 0 && v <= 1000,
   auto_complete_orders: (v) => typeof v === 'boolean',
   notification_email: (v) => v === null || (typeof v === 'string' && (v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))),
   maintenance_mode: (v) => typeof v === 'boolean',
@@ -71,7 +69,7 @@ serve(async (req) => {
     console.log('manage-settings: Action:', action);
 
     // Validate action upfront
-    const validActions: SettingsAction[] = ['get', 'update', 'get-all', 'check-maintenance', 'archive-orders', 'reset-stock'];
+    const validActions: SettingsAction[] = ['get', 'update', 'get-all', 'check-maintenance', 'archive-orders'];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({ error: true, message: `Invalid action. Must be: ${validActions.join(', ')}` }),
@@ -326,49 +324,6 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, archived: orderIds.length }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      case 'reset-stock': {
-        // Reset all products to their default stock (or a configured default)
-        console.log('manage-settings: Resetting stock for all products');
-
-        // Get default stock from settings or use 50
-        const { data: stockSetting } = await supabaseAdmin
-          .from('system_settings')
-          .select('value')
-          .eq('key', 'default_stock_quantity')
-          .single();
-
-        const defaultStock = (stockSetting?.value as number) || 50;
-
-        const { data: products, error: updateError } = await supabaseAdmin
-          .from('products')
-          .update({ stock_quantity: defaultStock })
-          .select('id');
-
-        if (updateError) {
-          console.error('Reset stock error:', updateError);
-          return new Response(
-            JSON.stringify({ error: true, message: 'Failed to reset stock' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Audit log
-        try {
-          await supabaseAdmin.from('audit_logs').insert({
-            user_id: user.id,
-            action: 'UPDATE',
-            entity_type: 'products',
-            entity_id: null,
-            new_data: { action: 'reset_stock', default_stock: defaultStock, products_updated: products?.length || 0 },
-          });
-        } catch { /* ignore */ }
-
-        return new Response(
-          JSON.stringify({ success: true, updated: products?.length || 0, default_stock: defaultStock }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

@@ -1,12 +1,7 @@
 // Process Batch Order Edge Function
-// Handles multiple cash/balance orders in a SINGLE request.
-// This eliminates the N×D sequential edge function calls from the frontend.
-//
-// Key optimisations vs calling process-order N times:
-//   1. Auth, settings, holidays, products fetched ONCE
-//   2. Stock decremented per unique product (aggregated demand)
-//   3. Orders, order_items, payments + allocations inserted in batches
-//   4. Balance checked & deducted ONCE (total across all orders)
+// Handles multiple cash orders in a SINGLE request.
+// NOTE: For weekly pre-orders, use process-weekly-order instead.
+// This function is kept for backwards compatibility.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -52,7 +47,7 @@ interface OrderGroup {
 interface BatchOrderRequest {
   parent_id: string;
   orders: OrderGroup[];
-  payment_method: 'cash' | 'balance';
+  payment_method: 'cash';
   notes?: string;
 }
 
@@ -110,11 +105,11 @@ serve(async (req) => {
       return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', 'Too many orders in a single batch (max 20)');
     }
 
-    const validMethods = ['cash', 'balance'];
+    const validMethods = ['cash'];
     if (!validMethods.includes(payment_method)) {
       return errorResponse(
         corsHeaders, 400, 'INVALID_PAYMENT_METHOD',
-        `Invalid payment method '${payment_method}'. For online payments, use create-batch-checkout.`,
+        `Invalid payment method '${payment_method}'. For online payments, use create-batch-checkout. For weekly pre-orders, use process-weekly-order.`,
       );
     }
 
@@ -148,7 +143,7 @@ serve(async (req) => {
     const [settingsResult, holidaysResult, productsResult, studentLinksResult, existingOrdersResult] = await Promise.all([
       supabaseAdmin.from('system_settings').select('key, value'),
       supabaseAdmin.from('holidays').select('id, name, date, is_recurring'),
-      supabaseAdmin.from('products').select('id, name, price, stock_quantity, available').in('id', allProductIds),
+      supabaseAdmin.from('products').select('id, name, price, available').in('id', allProductIds),
       supabaseAdmin.from('parent_students').select('student_id').eq('parent_id', parent_id).in('student_id', uniqueStudentIds),
       supabaseAdmin.from('orders').select('id, client_order_id, status').in('client_order_id', allClientOrderIds),
     ]);
@@ -313,35 +308,8 @@ serve(async (req) => {
             .update({ total_amount: recalcTotal })
             .eq('id', existingOrder.id);
 
-          // Deduct delta from wallet if balance payment (with proper payment/allocation records)
-          if (payment_method === 'balance') {
-            const delta = order.items.reduce(
-              (s, i) => s + i.price_at_order * i.quantity, 0
-            );
-            if (delta > 0) {
-              // Fetch current balance for CAS
-              const { data: mergeWallet } = await supabaseAdmin
-                .from('wallets').select('balance').eq('user_id', parent_id).single();
-
-              if (!mergeWallet) {
-                console.error('No wallet found for merge balance deduction');
-                return errorResponse(corsHeaders, 400, 'NO_WALLET', 'No wallet found for balance deduction.');
-              }
-
-              const { error: balErr } = await supabaseAdmin.rpc('deduct_balance_with_payment', {
-                p_parent_id: parent_id,
-                p_expected_balance: mergeWallet.balance,
-                p_amount: delta,
-                p_order_ids: [existingOrder.id],
-                p_order_amounts: [delta],
-              });
-              if (balErr) {
-                console.error('Error deducting balance for merge:', balErr);
-                return errorResponse(corsHeaders, 400, 'INSUFFICIENT_BALANCE', 'Failed to deduct balance for merged items.');
-              }
-              mergeDeductedTotal += delta;
-            }
-          }
+          // Deduct delta — balance payment removed (wallet system removed)
+          // If merge needed payment adjustment, it's tracked via payment records
 
           mergedOrderIds.push(existingOrder.id);
         } else {
@@ -363,7 +331,7 @@ serve(async (req) => {
 
     const productMap = new Map(productsResult.data.map(p => [p.id, p]));
 
-    // Aggregate demand per product across ALL orders (including merged — they still need stock)
+    // Aggregate demand per product across ALL orders
     const totalDemand = new Map<string, number>();
     let grandTotal = 0;
     let newOrdersGrandTotal = 0;
@@ -391,78 +359,14 @@ serve(async (req) => {
       }
     }
 
-    // Check aggregated stock
-    for (const [productId, demand] of totalDemand) {
-      const product = productMap.get(productId)!;
-      if (product.stock_quantity < demand) {
-        return errorResponse(corsHeaders, 400, 'INSUFFICIENT_STOCK',
-          `'${product.name}' has insufficient stock (available: ${product.stock_quantity}, needed: ${demand})`);
-      }
-    }
-
-    // ── Balance validation (ONCE for total) ──
-    let currentBalance = 0;
-    if (payment_method === 'balance') {
-      const { data: wallet, error: walletError } = await supabaseAdmin
-        .from('wallets').select('balance').eq('user_id', parent_id).single();
-
-      if (walletError || !wallet) {
-        return errorResponse(corsHeaders, 400, 'NO_WALLET', 'No wallet found. Please top up your balance first.');
-      }
-
-      currentBalance = wallet.balance;
-      if (currentBalance < newOrdersGrandTotal) {
-        return errorResponse(corsHeaders, 400, 'INSUFFICIENT_BALANCE',
-          `Insufficient balance. Required: ₱${newOrdersGrandTotal.toFixed(2)}, Available: ₱${currentBalance.toFixed(2)}`,
-          { required: newOrdersGrandTotal, available: currentBalance });
-      }
-    }
-
     // ================================================================
-    // STEP 3 — Reserve stock (one RPC per unique product, not per item)
-    // ================================================================
-
-    const reservedProducts: Array<{ product_id: string; quantity: number }> = [];
-    for (const [productId, demand] of totalDemand) {
-      const { error: stockError } = await supabaseAdmin.rpc('decrement_stock', {
-        p_product_id: productId,
-        p_quantity: demand,
-      });
-
-      if (stockError) {
-        console.error('Stock reservation failed:', productId, stockError);
-        for (const reserved of reservedProducts) {
-          await supabaseAdmin.rpc('increment_stock', {
-            p_product_id: reserved.product_id,
-            p_quantity: reserved.quantity,
-          }).catch(err => console.error('Rollback failed for', reserved.product_id, err));
-        }
-        const product = productMap.get(productId);
-        return errorResponse(corsHeaders, 409, 'STOCK_UPDATE_FAILED',
-          `Failed to reserve stock for '${product?.name}'. Please retry.`);
-      }
-      reservedProducts.push({ product_id: productId, quantity: demand });
-    }
-
-    const rollbackStock = async () => {
-      for (const reserved of reservedProducts) {
-        await supabaseAdmin.rpc('increment_stock', {
-          p_product_id: reserved.product_id,
-          p_quantity: reserved.quantity,
-        }).catch(err => console.error('Stock rollback failed for', reserved.product_id, err));
-      }
-    };
-
-    // ================================================================
-    // STEP 4 — Create orders, order_items, payments + allocations in BATCHES
+    // STEP 3 — Create orders, order_items, payments + allocations in BATCHES
     // ================================================================
 
     const isCash = payment_method === 'cash';
-    const paymentStatus = isCash ? 'awaiting_payment' : 'paid';
-    const orderStatus = isCash ? 'awaiting_payment' : 'pending';
-    const paymentDueAt = isCash
-      ? new Date(Date.now() + CASH_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString()
-      : null;
+    const paymentStatus = 'awaiting_payment';
+    const orderStatus = 'awaiting_payment';
+    const paymentDueAt = new Date(Date.now() + CASH_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString();
 
     // Build new orders (skip merged ones)
     let createdOrders: Array<{ id: string; client_order_id: string; total_amount: number }> = [];
@@ -486,7 +390,6 @@ serve(async (req) => {
           payment_method,
           notes: notes || null,
           scheduled_for: order.scheduled_for || todayStr,
-          meal_period: null, // deprecated: meal_period moved to order_items (backward compat)
         };
       });
 
@@ -498,7 +401,6 @@ serve(async (req) => {
 
       if (ordersError || !insertedOrders || insertedOrders.length === 0) {
         console.error('Batch order insert error:', ordersError);
-        await rollbackStock();
         return errorResponse(corsHeaders, 500, 'ORDER_CREATION_FAILED', 'Failed to create orders');
       }
 
@@ -525,69 +427,40 @@ serve(async (req) => {
 
       if (itemsError) {
         console.error('Batch order items insert error:', itemsError);
-        // Rollback: delete all created orders (cascade deletes items) and restore stock
+        // Rollback: delete all created orders (cascade deletes items)
         await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
-        await rollbackStock();
         return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
       }
 
-      // ── Payment handling ──
-      if (payment_method === 'balance') {
-        // Atomic RPC: deduct wallet + create payment + allocations in one DB transaction
-        const orderIds = insertedOrders.map(o => o.id);
-        const orderAmounts = insertedOrders.map(o => o.total_amount);
+      // ── Payment handling (cash only) ──
+      const { data: payment, error: paymentError } = await supabaseAdmin
+        .from('payments')
+        .insert({
+          parent_id,
+          type: 'payment',
+          amount_total: newOrdersGrandTotal,
+          method: payment_method,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
 
-        const { data: rpcPaymentId, error: rpcError } = await supabaseAdmin.rpc(
-          'deduct_balance_with_payment',
-          {
-            p_parent_id: parent_id,
-            p_expected_balance: currentBalance,
-            p_amount: newOrdersGrandTotal,
-            p_order_ids: orderIds,
-            p_order_amounts: orderAmounts,
-          }
-        );
-
-        if (rpcError) {
-          console.error('Atomic balance deduction error:', rpcError);
-          // Rollback: delete orders (cascade), restore stock
-          await supabaseAdmin.from('order_items').delete().in('order_id', createdOrderIds);
-          await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
-          await rollbackStock();
-          return errorResponse(corsHeaders, 409, 'BALANCE_DEDUCTION_FAILED',
-            'Failed to deduct balance. Balance may have changed. Please retry.');
-        }
+      if (paymentError || !payment) {
+        console.error('Payment insert error (non-fatal):', paymentError);
+        // Non-fatal — orders are already created, payment can be reconciled
       } else {
-        // Cash: create pending payment + allocations (no wallet deduction)
-        const { data: payment, error: paymentError } = await supabaseAdmin
-          .from('payments')
-          .insert({
-            parent_id,
-            type: 'payment',
-            amount_total: newOrdersGrandTotal,
-            method: payment_method,
-            status: 'pending',
-          })
-          .select('id')
-          .single();
+        // Link payment to each order via allocations
+        const allAllocations = insertedOrders.map(o => ({
+          payment_id: payment.id,
+          order_id: o.id,
+          allocated_amount: o.total_amount,
+        }));
 
-        if (paymentError || !payment) {
-          console.error('Payment insert error (non-fatal):', paymentError);
-          // Non-fatal — orders are already created, payment can be reconciled
-        } else {
-          // Link payment to each order via allocations
-          const allAllocations = insertedOrders.map(o => ({
-            payment_id: payment.id,
-            order_id: o.id,
-            allocated_amount: o.total_amount,
-          }));
-
-          const { error: allocError } = await supabaseAdmin
-            .from('payment_allocations')
-            .insert(allAllocations);
-          if (allocError) {
-            console.error('Payment allocations insert error (non-fatal):', allocError);
-          }
+        const { error: allocError } = await supabaseAdmin
+          .from('payment_allocations')
+          .insert(allAllocations);
+        if (allocError) {
+          console.error('Payment allocations insert error (non-fatal):', allocError);
         }
       }
     }

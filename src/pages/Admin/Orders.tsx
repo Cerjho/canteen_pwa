@@ -28,7 +28,7 @@ interface OrderWithDetails {
   created_at: string;
   completed_at?: string;
   scheduled_for?: string;
-  child: { first_name: string; last_name: string; grade_level: string; section?: string } | null;
+  student: { first_name: string; last_name: string; grade_level: string; section?: string } | null;
   parent: { first_name: string; last_name: string; phone_number?: string; email: string } | null;
   items: Array<{
     id: string;
@@ -85,7 +85,7 @@ export default function AdminOrders() {
         .from('orders')
         .select(`
           *,
-          child:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
+          student:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
           parent:user_profiles(first_name, last_name, phone_number, email),
           items:order_items(
             id,
@@ -197,7 +197,7 @@ export default function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin-parents'] });
       setRefundOrder(null);
-      showToast('Order refunded successfully. Balance has been restored.', 'success');
+      showToast('Order refunded successfully.', 'success');
     },
     onError: (error: Error) => {
       showToast(friendlyError(error.message, 'process refund'), 'error');
@@ -208,8 +208,8 @@ export default function AdminOrders() {
   const filteredOrders = orders?.filter(order => {
     const searchLower = searchQuery.toLowerCase();
     return (
-      (order.child?.first_name || '').toLowerCase().includes(searchLower) ||
-      (order.child?.last_name || '').toLowerCase().includes(searchLower) ||
+      (order.student?.first_name || '').toLowerCase().includes(searchLower) ||
+      (order.student?.last_name || '').toLowerCase().includes(searchLower) ||
       (order.parent?.first_name || '').toLowerCase().includes(searchLower) ||
       (order.parent?.last_name || '').toLowerCase().includes(searchLower) ||
       order.id.toLowerCase().includes(searchLower)
@@ -232,11 +232,11 @@ export default function AdminOrders() {
     if (!filteredOrders) return;
     
     const csv = [
-      ['Order ID', 'Date', 'Child', 'Parent', 'Status', 'Total', 'Payment Method'].join(','),
+      ['Order ID', 'Date', 'Student', 'Parent', 'Status', 'Total', 'Payment Method'].join(','),
       ...filteredOrders.map(o => [
         o.id,
         format(new Date(o.created_at), 'yyyy-MM-dd HH:mm'),
-        `${o.child?.first_name || 'Unknown'} ${o.child?.last_name || 'Student'}`,
+        `${o.student?.first_name || 'Unknown'} ${o.student?.last_name || 'Student'}`,
         `${o.parent?.first_name || 'Unknown'} ${o.parent?.last_name || ''}`,
         o.status,
         o.total_amount,
@@ -337,7 +337,7 @@ export default function AdminOrders() {
               <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Order</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Child</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Student</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Parent</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Items</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Total</th>
@@ -361,10 +361,10 @@ export default function AdminOrders() {
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900 dark:text-gray-100">
-                        {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                        {order.student?.first_name || 'Unknown'} {order.student?.last_name || 'Student'}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {order.child?.grade_level || '-'} {order.child?.section && `- ${order.child.section}`}
+                        {order.student?.grade_level || '-'} {order.student?.section && `- ${order.student.section}`}
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -468,7 +468,7 @@ export default function AdminOrders() {
                 <span className="font-semibold">{refundOrder.parent?.first_name || 'Unknown'} {refundOrder.parent?.last_name || 'User'}</span>?
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                The order will be cancelled and the amount will be added back to the parent's balance.
+                The order will be cancelled and the payment will be refunded.
               </p>
             </div>
           }
@@ -511,15 +511,15 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onRefund }: OrderDet
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Child</span>
+                <span className="text-gray-500 dark:text-gray-400">Student</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                  {order.student?.first_name || 'Unknown'} {order.student?.last_name || 'Student'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Grade</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {order.child?.grade_level || '-'} {order.child?.section && `- ${order.child.section}`}
+                  {order.student?.grade_level || '-'} {order.student?.section && `- ${order.student.section}`}
                 </span>
               </div>
               <div className="flex justify-between">

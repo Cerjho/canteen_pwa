@@ -33,12 +33,12 @@ export interface PayMongoLineItem {
 }
 
 export interface CheckoutSessionMetadata {
-  type: 'order' | 'topup';
+  type: 'order';
   order_id?: string;
+  weekly_order_id?: string;
   payment_group_id?: string;
   parent_id: string;
   client_order_id?: string;
-  topup_session_id?: string;
 }
 
 export interface CreateCheckoutSessionParams {
@@ -318,20 +318,14 @@ export function mapPaymentMethodTypes(method: string): string[] {
 /**
  * Build checkout success/cancel URLs
  */
-export function buildCheckoutUrls(type: 'order' | 'topup', id: string): {
+export function buildCheckoutUrls(type: 'order', id: string): {
   successUrl: string;
   cancelUrl: string;
 } {
   const appUrl = getAppUrl();
-  if (type === 'order') {
-    return {
-      successUrl: `${appUrl}/order-confirmation?payment=success&order_id=${id}`,
-      cancelUrl: `${appUrl}/order-confirmation?payment=cancelled&order_id=${id}`,
-    };
-  }
   return {
-    successUrl: `${appUrl}/balance?topup=success&session=${id}`,
-    cancelUrl: `${appUrl}/balance?topup=cancelled`,
+    successUrl: `${appUrl}/order-confirmation?payment=success&order_id=${id}`,
+    cancelUrl: `${appUrl}/order-confirmation?payment=cancelled&order_id=${id}`,
   };
 }
 

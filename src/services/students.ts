@@ -1,9 +1,9 @@
 import { supabase } from './supabaseClient';
 import { friendlyError } from '../utils/friendlyError';
-import type { Student, Child } from '../types';
+import type { Student } from '../types';
 
 // Re-export types for backward compatibility
-export type { Student, Child };
+export type { Student };
 
 // Get students linked to a parent via parent_students join table
 export async function getStudents(parentId: string): Promise<Student[]> {
@@ -34,24 +34,6 @@ export async function getStudents(parentId: string): Promise<Student[]> {
     if (!student || typeof student !== 'object') return null;
     return student as unknown as Student;
   }).filter((s): s is Student => s != null && s.is_active !== false);
-}
-
-// @deprecated Use getStudents instead
-export async function getChildren(parentId: string): Promise<Child[]> {
-  const students = await getStudents(parentId);
-  // Convert to Child format for backward compatibility
-  return students.map(student => ({
-    id: student.id,
-    student_id: student.student_id,
-    parent_id: parentId, // Add parent_id for backward compat
-    first_name: student.first_name,
-    last_name: student.last_name,
-    grade_level: student.grade_level,
-    section: student.section,
-    dietary_restrictions: student.dietary_restrictions,
-    created_at: student.created_at,
-    updated_at: student.updated_at
-  }));
 }
 
 // Search for student by student ID (for display only, actual linking goes through Edge Function)
@@ -135,39 +117,13 @@ export async function updateStudentDietary(studentId: string, dietaryRestriction
   return data.student;
 }
 
-// @deprecated Use updateStudentDietary instead
-export async function updateChildDietary(childId: string, dietaryRestrictions: string): Promise<Child> {
-  const student = await updateStudentDietary(childId, dietaryRestrictions);
-  return {
-    id: student.id,
-    student_id: student.student_id,
-    first_name: student.first_name,
-    last_name: student.last_name,
-    grade_level: student.grade_level,
-    section: student.section,
-    dietary_restrictions: student.dietary_restrictions,
-    created_at: student.created_at,
-    updated_at: student.updated_at
-  };
-}
-
-// @deprecated - no longer used by parents
-export async function addChild(_child: Omit<Child, 'id' | 'student_id'>): Promise<Child> {
-  throw new Error('Adding students is no longer supported. Please use the link feature with a student ID.');
-}
-
-// @deprecated - no longer used by parents  
-export async function deleteChild(_id: string): Promise<void> {
-  throw new Error('Removing students is no longer supported. Please contact the school admin.');
-}
-
-// @deprecated Use updateStudentDietary instead
-export async function updateChild(id: string, updates: Partial<Child>): Promise<Child> {
+/**
+ * Generic update — currently only supports dietary_restrictions.
+ * Kept as a convenience wrapper for Profile mutation.
+ */
+export async function updateStudent(studentId: string, updates: Partial<Student>): Promise<Student> {
   if (updates.dietary_restrictions !== undefined) {
-    return updateChildDietary(id, updates.dietary_restrictions || '');
+    return updateStudentDietary(studentId, updates.dietary_restrictions ?? '');
   }
-  throw new Error('Only dietary restrictions can be updated. Contact school admin for other changes.');
+  throw new Error('No supported fields to update');
 }
-
-// Alias for updateChild - for code that uses Student naming
-export const updateStudent = updateChild;

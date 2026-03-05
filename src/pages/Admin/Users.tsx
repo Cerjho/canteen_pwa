@@ -6,7 +6,6 @@ import {
   Users, 
   Mail, 
   Phone,
-  Wallet,
   UserPlus,
   Shield,
   ShieldCheck,
@@ -17,7 +16,6 @@ import {
   User,
   Baby,
   ShoppingBag,
-  Plus,
   Ticket,
   Copy,
   Clock
@@ -35,7 +33,6 @@ interface Parent {
   phone_number?: string;
   first_name: string;
   last_name: string;
-  balance: number;
   created_at: string;
   children_count?: number;
   orders_count?: number;
@@ -89,8 +86,6 @@ export default function AdminUsers() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'parents' | 'staff' | 'invitations'>('parents');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
-  const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [createUserType, setCreateUserType] = useState<'parent' | 'staff'>('parent');
 
@@ -123,13 +118,6 @@ export default function AdminUsers() {
       
       if (error) throw error;
       
-      // Get wallets for balance
-      const { data: wallets } = await supabase
-        .from('wallets')
-        .select('user_id, balance');
-      
-      const walletMap = new Map((wallets || []).map(w => [w.user_id, w.balance]));
-      
       // Batch fetch children counts and order counts (avoids N+1 queries)
       const parentIds = (profiles || []).map(p => p.id);
 
@@ -155,7 +143,6 @@ export default function AdminUsers() {
 
       const enrichedParents = (profiles || []).map((profile) => ({
         ...profile,
-        balance: walletMap.get(profile.id) || 0,
         children_count: childrenCountMap.get(profile.id) || 0,
         orders_count: ordersCountMap.get(profile.id) || 0
       }));
@@ -192,41 +179,6 @@ export default function AdminUsers() {
         return [];
       }
     }
-  });
-
-  // Top up balance mutation via edge function
-  const topUpMutation = useMutation({
-    mutationFn: async ({ parentId, amount }: { parentId: string; amount: number }) => {
-      const accessToken = await ensureValidAccessToken();
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/admin-topup`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: parentId,
-          amount
-        })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to top up balance');
-      }
-      
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-parents'] });
-      setShowTopUpModal(false);
-      setSelectedParent(null);
-      showToast(`Balance updated: ₱${data.previous_balance.toFixed(2)} → ₱${data.new_balance.toFixed(2)}`, 'success');
-    },
-    onError: (error: Error) => showToast(friendlyError(error.message, 'update balance'), 'error')
   });
 
   // Create user mutation via edge function
@@ -473,25 +425,15 @@ export default function AdminUsers() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedParent(parent);
-                        setShowTopUpModal(true);
-                      }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 text-sm font-medium"
-                    >
-                      <Plus size={16} />
-                      Top Up
-                    </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                         <Baby size={16} className="text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Children</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Students</p>
                         <p className="font-semibold text-gray-900 dark:text-gray-100">{parent.children_count}</p>
                       </div>
                     </div>
@@ -502,15 +444,6 @@ export default function AdminUsers() {
                       <div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Orders</p>
                         <p className="font-semibold text-gray-900 dark:text-gray-100">{parent.orders_count}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-50 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                        <Wallet size={16} className="text-green-600 dark:text-green-400" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Balance</p>
-                        <p className="font-semibold text-green-600 dark:text-green-400">₱{parent.balance.toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
@@ -666,19 +599,6 @@ export default function AdminUsers() {
         )}
       </div>
 
-      {/* Top Up Modal */}
-      {showTopUpModal && selectedParent && (
-        <TopUpModal
-          parent={selectedParent}
-          onClose={() => {
-            setShowTopUpModal(false);
-            setSelectedParent(null);
-          }}
-          onSubmit={(amount) => topUpMutation.mutate({ parentId: selectedParent.id, amount })}
-          isLoading={topUpMutation.isPending}
-        />
-      )}
-
       {/* Create User Modal */}
       {showCreateUserModal && (
         <CreateUserModal
@@ -689,114 +609,6 @@ export default function AdminUsers() {
         />
       )}
     </div>
-  );
-}
-
-// Top Up Modal Component
-interface TopUpModalProps {
-  parent: Parent;
-  onClose: () => void;
-  onSubmit: (amount: number) => void;
-  isLoading: boolean;
-}
-
-function TopUpModal({ parent, onClose, onSubmit, isLoading }: TopUpModalProps) {
-  const [amount, setAmount] = useState('');
-  const presetAmounts = [100, 200, 500, 1000];
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const numAmount = parseFloat(amount);
-    if (numAmount > 0) {
-      onSubmit(numAmount);
-    }
-  };
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
-          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Top Up Balance</h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              <X size={20} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-4 space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Parent</p>
-              <p className="font-medium text-gray-900 dark:text-gray-100">{parent.first_name} {parent.last_name}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Current Balance: <span className="text-green-600 dark:text-green-400 font-medium">₱{parent.balance.toFixed(2)}</span>
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Amount to Add (₱)
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                min="1"
-                step="0.01"
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                placeholder="Enter amount"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {presetAmounts.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setAmount(preset.toString())}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-900 dark:text-gray-100"
-                >
-                  ₱{preset}
-                </button>
-              ))}
-            </div>
-
-            {amount && parseFloat(amount) > 0 && (
-              <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3">
-                <p className="text-sm text-green-700 dark:text-green-400">
-                  New Balance: <span className="font-bold">₱{(parent.balance + parseFloat(amount)).toFixed(2)}</span>
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading || !amount || parseFloat(amount) <= 0}
-                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  'Add Balance'
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </>
   );
 }
 

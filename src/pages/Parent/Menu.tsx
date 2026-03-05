@@ -65,25 +65,6 @@ export default function Menu() {
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { data: students, isLoading: studentsLoading } = useStudents();
 
-  // Fetch parent wallet balance
-  const { data: walletData } = useQuery({
-    queryKey: ['parent-wallet', user?.id],
-    queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
-      const { data, error } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id
-  });
-
-  const parentBalance = walletData?.balance || 0;
-
   // Query active orders for the cart (merge detection)
   const { data: activeOrders } = useQuery({
     queryKey: ['active-orders-for-cart'],
@@ -172,7 +153,7 @@ export default function Menu() {
   // Memoize handlers to prevent unnecessary re-renders
   const handleAddToCart = useCallback((productId: string) => {
     if (!selectedStudentId) {
-      showToastRef.current('Please select a child first', 'error');
+      showToastRef.current('Please select a student first', 'error');
       return;
     }
     
@@ -267,26 +248,23 @@ export default function Menu() {
       // If checkout redirected to external payment page, don't navigate
       if (result?.redirecting) return;
       
-      // Invalidate wallet balance if paid with balance
-      if (paymentMethod === 'balance') {
-        queryClient.invalidateQueries({ queryKey: ['parent-wallet'] });
-        queryClient.invalidateQueries({ queryKey: ['parent-balance'] });
-      }
+      // Invalidate weekly orders cache
+      queryClient.invalidateQueries({ queryKey: ['weekly-orders'] });
       
       // Navigate to confirmation page
       navigate('/order-confirmation', {
         state: {
-          orderId: result?.orders?.[0]?.order_id || crypto.randomUUID(),
+          orderId: result?.orders?.[0]?.weekly_order_id || crypto.randomUUID(),
           orderCount: result?.orders?.length || 1,
           totalAmount: checkoutTotal,
-          childName: studentNames || 'Your children',
+          childName: studentNames || 'Your students',
           itemCount,
           isOffline: false,
           paymentMethod,
           scheduledDates: scheduledDates,
           isFutureOrder: hasFutureOrders,
-          merged: result?.merged || false,
-          mergedCount: result?.mergedCount || 0,
+          merged: false,
+          mergedCount: 0,
         }
       });
     } catch (error) {
@@ -572,7 +550,7 @@ export default function Menu() {
 
         <StudentSelector
           students={students || []}
-          selectedChildId={selectedStudentId}
+          selectedStudentId={selectedStudentId}
           onSelect={setSelectedStudentId}
         />
 
@@ -751,7 +729,6 @@ export default function Menu() {
         onCheckout={handleCheckout}
         onClearDate={clearDate}
         onCopyDateItems={copyDateItems}
-        parentBalance={parentBalance}
         existingOrders={activeOrders?.map(o => ({ student_id: o.student_id, scheduled_for: o.scheduled_for, order_id: o.id }))}
         closedDates={weekdaysInfo?.filter(w => !w.isOpen).map(w => w.dateStr)}
       />

@@ -1,6 +1,6 @@
 /**
- * Payment service for online payments (GCash, PayMaya, Card) via PayMongo
- * and self-service wallet top-ups.
+ * Payment service for online payments (GCash, PayMaya, Card) via PayMongo.
+ * Handles weekly pre-order checkout, surplus checkout, and payment status polling.
  */
 
 import { supabase } from './supabaseClient';
@@ -9,9 +9,10 @@ import { friendlyError } from '../utils/friendlyError';
 import type {
   CreateCheckoutResponse,
   BatchCheckoutResponse,
-  CreateTopupCheckoutResponse,
+  WeeklyCheckoutResponse,
   PaymentStatusResponse,
   PaymentMethod,
+  CreateWeeklyOrderRequest,
 } from '../types';
 
 /**
@@ -95,11 +96,6 @@ export interface CreateBatchCheckoutRequest {
   notes?: string;
 }
 
-export interface CreateTopupRequest {
-  amount: number;
-  payment_method?: 'gcash' | 'paymaya' | 'card';
-}
-
 /**
  * Create a PayMongo checkout session for an online payment order.
  * Returns the checkout_url to redirect the user to.
@@ -128,7 +124,7 @@ export async function createCheckout(
 
 /**
  * Create a SINGLE PayMongo checkout session covering multiple orders.
- * Saves on transaction fees by batching all order groups into one payment.
+ * @deprecated For weekly pre-orders, use createWeeklyCheckout instead.
  */
 export async function createBatchCheckout(
   batchData: CreateBatchCheckoutRequest
@@ -153,17 +149,17 @@ export async function createBatchCheckout(
 }
 
 /**
- * Create a PayMongo checkout session for a wallet top-up.
- * Returns the checkout_url to redirect the user to.
+ * Create a PayMongo checkout session for a weekly pre-order.
+ * Calls the create-weekly-checkout edge function which creates the
+ * weekly_orders record + daily orders + a single PayMongo session.
  */
-export async function createTopupCheckout(
-  topupData: CreateTopupRequest
-): Promise<CreateTopupCheckoutResponse> {
-  // Ensure we have a valid session (auto-refreshes if needed)
+export async function createWeeklyCheckout(
+  req: CreateWeeklyOrderRequest,
+): Promise<WeeklyCheckoutResponse> {
   await ensureValidSession();
 
-  const { data, error } = await supabase.functions.invoke('create-topup-checkout', {
-    body: topupData,
+  const { data, error } = await supabase.functions.invoke('create-weekly-checkout', {
+    body: req,
   });
 
   if (error) {
@@ -175,7 +171,7 @@ export async function createTopupCheckout(
     throw new Error(data.message || data.error);
   }
 
-  return data as CreateTopupCheckoutResponse;
+  return data as WeeklyCheckoutResponse;
 }
 
 /**
@@ -197,32 +193,12 @@ export async function checkPaymentStatus(
 }
 
 /**
- * Check the status of a top-up session (poll after PayMongo redirect).
- */
-export async function checkTopupStatus(
-  topupSessionId: string
-): Promise<PaymentStatusResponse> {
-  const { data, error } = await supabase.functions.invoke('check-payment-status', {
-    body: { topup_session_id: topupSessionId },
-  });
-
-  if (error) {
-    const errorMessage = await extractEdgeFunctionError(error, data);
-    throw new Error(friendlyError(errorMessage, 'check top-up status'));
-  }
-
-  return data as PaymentStatusResponse;
-}
-
-/**
- * Get the display label for a payment method
+ * Get the display label for a payment method.
  */
 export function getPaymentMethodLabel(method: PaymentMethod | string): string {
   switch (method) {
     case 'cash':
       return 'Cash';
-    case 'balance':
-      return 'Wallet Balance';
     case 'gcash':
       return 'GCash';
     case 'paymaya':
@@ -271,8 +247,6 @@ export function getCheckoutButtonText(method: PaymentMethod): string {
       return 'Pay with PayMaya';
     case 'card':
       return 'Pay with Card';
-    case 'balance':
-      return 'Pay with Balance';
     case 'cash':
     default:
       return 'Place Order';

@@ -13,7 +13,6 @@ import {
   PlusCircle,
   ShoppingCart,
   Banknote,
-  Wallet,
   Smartphone,
   CreditCard,
 } from 'lucide-react';
@@ -39,7 +38,6 @@ import { OrderNotes } from './OrderNotes';
 
 const PAYMENT_METHOD_META: Record<PaymentMethod, { label: string; icon: React.ReactNode }> = {
   cash: { label: 'Cash', icon: <Banknote size={18} /> },
-  balance: { label: 'Wallet Balance', icon: <Wallet size={18} /> },
   gcash: { label: 'GCash', icon: <Smartphone size={18} /> },
   paymaya: { label: 'PayMaya', icon: <Smartphone size={18} /> },
   card: { label: 'Credit/Debit Card', icon: <CreditCard size={18} /> },
@@ -69,7 +67,6 @@ interface CartBottomSheetProps {
   onClearDate?: (dateStr: string) => Promise<void>;
   onCopyDateItems?: (fromDate: string, toDate: string) => Promise<void>;
   onError?: (error: Error) => void;
-  parentBalance?: number;
   existingOrders?: Array<{
     student_id: string;
     scheduled_for: string;
@@ -92,7 +89,6 @@ export function CartBottomSheet({
   onClearDate,
   onCopyDateItems,
   onError,
-  parentBalance = 0,
   existingOrders,
   closedDates,
 }: CartBottomSheetProps) {
@@ -121,7 +117,6 @@ export function CartBottomSheet({
     [items, selectedDates, total],
   );
 
-  const canUseBalance = parentBalance >= selectedTotal;
   const studentCount = Object.keys(itemsByStudent).length;
   const uniqueDates = useMemo(
     () => [...new Set(items.map((i) => i.scheduled_for))].sort(),
@@ -708,8 +703,6 @@ export function CartBottomSheet({
                           setPaymentMethod(method);
                           setPaymentExpanded(false);
                         }}
-                        balance={parentBalance}
-                        orderTotal={selectedTotal}
                         isOffline={!navigator.onLine}
                       />
                     </div>
@@ -725,11 +718,6 @@ export function CartBottomSheet({
                     All {orderGroupCount} orders combined into one payment
                   </p>
                 )}
-                {paymentMethod === 'balance' && !canUseBalance && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
-                    Need ₱{(selectedTotal - parentBalance).toFixed(2)} more balance
-                  </p>
-                )}
                 {checkoutError && (
                   <p className="text-xs text-red-600 dark:text-red-400 text-center">
                     {checkoutError}
@@ -740,7 +728,7 @@ export function CartBottomSheet({
                 <button
                   type="button"
                   onClick={handleCheckout}
-                  disabled={items.length === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance)}
+                  disabled={items.length === 0 || isCheckingOut}
                   className="w-full bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   {isCheckingOut && (

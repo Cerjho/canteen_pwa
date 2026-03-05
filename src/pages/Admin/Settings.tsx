@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Clock, 
   Calendar, 
-  Package,
   Save,
   RefreshCw,
   AlertTriangle,
@@ -27,10 +26,10 @@ interface SystemSetting {
 interface SettingsState {
   canteen_name: string;
   operating_hours: { open: string; close: string };
-  order_cutoff_time: string;
-  allow_future_orders: boolean;
-  max_future_days: number;
-  low_stock_threshold: number;
+  weekly_cutoff_day: number;
+  weekly_cutoff_time: string;
+  surplus_cutoff_time: string;
+  daily_cancel_cutoff_time: string;
   auto_complete_orders: boolean;
   notification_email: string | null;
   maintenance_mode: boolean;
@@ -39,10 +38,10 @@ interface SettingsState {
 const defaultSettings: SettingsState = {
   canteen_name: 'LOHECA Canteen',
   operating_hours: { open: '07:00', close: '15:00' },
-  order_cutoff_time: '10:00',
-  allow_future_orders: true,
-  max_future_days: 5,
-  low_stock_threshold: 10,
+  weekly_cutoff_day: 5,
+  weekly_cutoff_time: '17:00',
+  surplus_cutoff_time: '08:00',
+  daily_cancel_cutoff_time: '08:00',
   auto_complete_orders: false,
   notification_email: null,
   maintenance_mode: false
@@ -141,24 +140,6 @@ export default function AdminSettings() {
       showToast(`Archived ${data.archived || 0} old orders`, 'success');
     },
     onError: (err: Error) => showToast(friendlyError(err.message, 'archive orders'), 'error')
-  });
-
-  // Reset stock mutation
-  const resetStockMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('manage-settings', {
-        body: { action: 'reset-stock' }
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.message);
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-      showToast(`Reset stock for ${data.updated || 0} products`, 'success');
-    },
-    onError: (err: Error) => showToast(friendlyError(err.message, 'reset stock'), 'error')
   });
 
   const handleChange = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
@@ -267,7 +248,7 @@ export default function AdminSettings() {
               <h2 className="font-semibold text-gray-900 dark:text-gray-100">Operating Hours</h2>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Opening Time
@@ -296,64 +277,77 @@ export default function AdminSettings() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Order Cutoff Time
-                  </label>
-                  <input
-                    type="time"
-                    value={settings.order_cutoff_time}
-                    onChange={(e) => handleChange('order_cutoff_time', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Last time to place orders for the day</p>
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Order Settings */}
+          {/* Weekly Ordering Cutoffs */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
               <Calendar size={20} className="text-gray-400 dark:text-gray-500" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Order Settings</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Weekly Ordering Cutoffs</h2>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">Allow Future Orders</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Let parents order for upcoming days</p>
-                </div>
-                <button
-                  onClick={() => handleChange('allow_future_orders', !settings.allow_future_orders)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
-                    settings.allow_future_orders ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-gray-200 rounded-full transition-transform ${
-                      settings.allow_future_orders ? 'translate-x-5' : ''
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {settings.allow_future_orders && (
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Maximum Days Ahead
+                    Weekly Cutoff Day
+                  </label>
+                  <select
+                    value={settings.weekly_cutoff_day}
+                    onChange={(e) => handleChange('weekly_cutoff_day', parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    <option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option>
+                    <option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option>
+                    <option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                    <option value={0}>Sunday</option>
+                  </select>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Day of the week when pre-ordering closes</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Weekly Cutoff Time
                   </label>
                   <input
-                    type="number"
-                    min="1"
-                    max="30"
-                    value={settings.max_future_days}
-                    onChange={(e) => handleChange('max_future_days', parseInt(e.target.value) || 5)}
-                    className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    type="time"
+                    value={settings.weekly_cutoff_time}
+                    onChange={(e) => handleChange('weekly_cutoff_time', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">How many days in advance can parents order</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Time on the cutoff day when ordering closes (e.g. 17:00)</p>
                 </div>
-              )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Surplus Cutoff Time
+                  </label>
+                  <input
+                    type="time"
+                    value={settings.surplus_cutoff_time}
+                    onChange={(e) => handleChange('surplus_cutoff_time', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Morning deadline for surplus item orders (e.g. 08:00)</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Daily Cancel Cutoff Time
+                  </label>
+                  <input
+                    type="time"
+                    value={settings.daily_cancel_cutoff_time}
+                    onChange={(e) => handleChange('daily_cancel_cutoff_time', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Deadline for parents to cancel individual days (e.g. 08:00)</p>
+                </div>
+              </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
                 <div>
@@ -372,30 +366,6 @@ export default function AdminSettings() {
                     }`}
                   />
                 </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Inventory Settings */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
-              <Package size={20} className="text-gray-400 dark:text-gray-500" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Inventory</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Low Stock Threshold
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={settings.low_stock_threshold}
-                  onChange={(e) => handleChange('low_stock_threshold', parseInt(e.target.value) || 10)}
-                  className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Show warning when product stock falls below this number</p>
               </div>
             </div>
           </div>
@@ -445,23 +415,6 @@ export default function AdminSettings() {
                   className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
                   {archiveMutation.isPending ? 'Archiving...' : 'Archive Now'}
-                </button>
-              </div>
-              <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">Reset Daily Stock</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Restore all products to their default stock levels</p>
-                </div>
-                <button 
-                  onClick={() => {
-                    if (confirm('Reset stock for all products to their default levels?')) {
-                      resetStockMutation.mutate();
-                    }
-                  }}
-                  disabled={resetStockMutation.isPending}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
-                >
-                  {resetStockMutation.isPending ? 'Resetting...' : 'Reset Stock'}
                 </button>
               </div>
             </div>

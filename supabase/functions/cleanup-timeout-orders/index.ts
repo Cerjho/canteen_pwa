@@ -1,6 +1,7 @@
 // Cleanup Timeout Orders Edge Function
-// Cancels orders (cash AND online) that haven't been paid within the timeout period
-// Can be called by: scheduled job, admin trigger, or automatic on order fetch
+// Cancels orders and weekly_orders that haven't been paid within the timeout period.
+// No stock restoration or wallet refund (those systems are removed).
+// Can be called by: scheduled job, admin trigger, or automatic on order fetch.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -25,11 +26,9 @@ serve(async (req) => {
     const cronSecret = req.headers.get('X-Cron-Secret');
     const expectedCronSecret = Deno.env.get('CRON_SECRET');
     
-    // Allow cron jobs with valid secret
     const isCronJob = cronSecret && expectedCronSecret && cronSecret === expectedCronSecret;
     
     if (!isCronJob) {
-      // Require user authentication for manual triggers
       if (!authHeader) {
         return new Response(
           JSON.stringify({ error: 'UNAUTHORIZED', message: 'Authentication required' }),
@@ -58,8 +57,7 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
 
-    // Find ALL expired orders (cash AND online payment methods)
-    // Previously only cleaned up cash orders, causing stock leaks for abandoned online checkouts
+    // ── 1. Cancel expired daily orders ──
     const { data: expiredOrders, error: fetchError } = await supabaseAdmin
       .from('orders')
       .select('id, parent_id, total_amount, payment_due_at, payment_method, payment_status')
@@ -74,151 +72,105 @@ serve(async (req) => {
       );
     }
 
-    if (!expiredOrders || expiredOrders.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, message: 'No expired orders found', cancelled_count: 0 }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const cancelledOrders: string[] = [];
     const errors: string[] = [];
 
-    for (const order of expiredOrders) {
-      try {
-        // Update order status to cancelled with timeout
-        const { error: updateError } = await supabaseAdmin
-          .from('orders')
-          .update({ 
-            status: 'cancelled',
-            payment_status: 'timeout',
-            updated_at: now,
-            notes: 'Auto-cancelled: Payment timeout'
-          })
-          .eq('id', order.id)
-          .eq('payment_status', 'awaiting_payment'); // Optimistic lock
+    if (expiredOrders && expiredOrders.length > 0) {
+      for (const order of expiredOrders) {
+        try {
+          const { error: updateError } = await supabaseAdmin
+            .from('orders')
+            .update({
+              status: 'cancelled',
+              payment_status: 'timeout',
+              updated_at: now,
+              notes: 'Auto-cancelled: Payment timeout',
+            })
+            .eq('id', order.id)
+            .eq('payment_status', 'awaiting_payment');
 
-        if (updateError) {
-          errors.push(`Order ${order.id}: ${updateError.message}`);
-          continue;
-        }
-
-        // Restore stock for cancelled order using atomic RPC
-        const { data: orderItems } = await supabaseAdmin
-          .from('order_items')
-          .select('product_id, quantity')
-          .eq('order_id', order.id);
-
-        if (orderItems) {
-          for (const item of orderItems) {
-            await supabaseAdmin.rpc('increment_stock', {
-              p_product_id: item.product_id,
-              p_quantity: item.quantity,
-            }).catch(err => console.error(`[CLEANUP] Stock restore failed for product ${item.product_id}:`, err));
+          if (updateError) {
+            errors.push(`Order ${order.id}: ${updateError.message}`);
+            continue;
           }
-        }
 
-        // Refund wallet if order was paid with balance
-        // (Balance is deducted immediately at order creation, must be returned on timeout)
-        if (order.payment_method === 'balance' && order.total_amount > 0) {
-          const refundAmount = Number(order.total_amount);
-
-          // Look up original payment for refund lineage
-          let originalPaymentId: string | null = null;
-          const { data: origAlloc } = await supabaseAdmin
+          // Update payment to failed via allocation lookup
+          const { data: orderAlloc } = await supabaseAdmin
             .from('payment_allocations')
             .select('payment_id')
             .eq('order_id', order.id)
             .limit(1)
             .single();
-          if (origAlloc) {
-            const { data: origPay } = await supabaseAdmin
+
+          if (orderAlloc) {
+            await supabaseAdmin
               .from('payments')
-              .select('id, type')
-              .eq('id', origAlloc.payment_id)
-              .eq('type', 'payment')
-              .single();
-            if (origPay) originalPaymentId = origPay.id;
+              .update({ status: 'failed' })
+              .eq('id', orderAlloc.payment_id)
+              .eq('status', 'pending');
           }
 
-          // Atomic: wallet credit + refund payment + allocation in one DB transaction
-          const { data: rpcId, error: rpcError } = await supabaseAdmin.rpc(
-            'credit_balance_with_payment',
-            {
-              p_parent_id: order.parent_id,
-              p_amount: refundAmount,
-              p_type: 'refund',
-              p_method: 'balance',
-              p_reference_id: `TIMEOUT-${order.id.substring(0, 8)}`,
-              p_order_id: order.id,
-              p_original_payment_id: originalPaymentId,
-            }
-          );
-
-          if (!rpcError) {
-            console.log(`[CLEANUP] Refunded ₱${refundAmount} to wallet for balance-paid order ${order.id}`);
-          } else {
-            console.error(`[CLEANUP] CRITICAL: Failed to refund wallet for order ${order.id}:`, rpcError);
-            errors.push(`Order ${order.id}: Wallet refund failed`);
-          }
+          cancelledOrders.push(order.id);
+          console.log(`[CLEANUP] Cancelled order ${order.id} (${order.payment_method || 'unknown'}) due to payment timeout`);
+        } catch (err) {
+          errors.push(`Order ${order.id}: ${err}`);
         }
-
-        // Update payment status to 'failed' via allocation lookup
-        const { data: orderAlloc } = await supabaseAdmin
-          .from('payment_allocations')
-          .select('payment_id')
-          .eq('order_id', order.id)
-          .limit(1)
-          .single();
-
-        if (orderAlloc) {
-          await supabaseAdmin
-            .from('payments')
-            .update({ status: 'failed' })
-            .eq('id', orderAlloc.payment_id)
-            .eq('status', 'pending');
-        }
-
-        cancelledOrders.push(order.id);
-        console.log(`[CLEANUP] Cancelled order ${order.id} (${order.payment_method || 'unknown'}) due to payment timeout`);
-
-      } catch (err) {
-        errors.push(`Order ${order.id}: ${err}`);
       }
     }
 
-    // ── Also clean up expired topup sessions ──
-    let expiredTopups = 0;
+    // ── 2. Cancel expired weekly_orders ──
+    let cancelledWeeklyOrders = 0;
     try {
-      const { data: expiredSessions } = await supabaseAdmin
-        .from('topup_sessions')
+      const { data: expiredWeekly } = await supabaseAdmin
+        .from('weekly_orders')
         .select('id')
-        .eq('status', 'pending')
-        .lt('expires_at', now);
+        .eq('payment_status', 'awaiting_payment')
+        .lt('payment_due_at', now);
 
-      if (expiredSessions && expiredSessions.length > 0) {
-        for (const session of expiredSessions) {
+      if (expiredWeekly && expiredWeekly.length > 0) {
+        for (const wo of expiredWeekly) {
+          // Cancel the weekly order
           await supabaseAdmin
-            .from('topup_sessions')
-            .update({ status: 'expired' })
-            .eq('id', session.id)
-            .eq('status', 'pending');
+            .from('weekly_orders')
+            .update({
+              status: 'cancelled',
+              payment_status: 'timeout',
+              updated_at: now,
+            })
+            .eq('id', wo.id)
+            .eq('payment_status', 'awaiting_payment');
+
+          // Cancel all child daily orders
+          await supabaseAdmin
+            .from('orders')
+            .update({
+              status: 'cancelled',
+              payment_status: 'timeout',
+              updated_at: now,
+              notes: 'Auto-cancelled: Weekly order payment timeout',
+            })
+            .eq('weekly_order_id', wo.id)
+            .eq('payment_status', 'awaiting_payment');
+
+          cancelledWeeklyOrders++;
         }
-        expiredTopups = expiredSessions.length;
-        console.log(`[CLEANUP] Expired ${expiredTopups} topup sessions`);
+        console.log(`[CLEANUP] Cancelled ${cancelledWeeklyOrders} expired weekly orders`);
       }
     } catch (err) {
-      console.error('Failed to clean up topup sessions:', err);
+      console.error('Failed to clean up weekly orders:', err);
+      errors.push(`Weekly orders cleanup: ${err}`);
     }
+
+    // weekly_orders status auto-transitions via trigger when all daily orders reach terminal state
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Cancelled ${cancelledOrders.length} expired orders, expired ${expiredTopups} topup sessions`,
+        message: `Cancelled ${cancelledOrders.length} expired orders, ${cancelledWeeklyOrders} expired weekly orders`,
         cancelled_count: cancelledOrders.length,
         cancelled_orders: cancelledOrders,
-        expired_topups: expiredTopups,
-        errors: errors.length > 0 ? errors : undefined
+        cancelled_weekly_orders: cancelledWeeklyOrders,
+        errors: errors.length > 0 ? errors : undefined,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

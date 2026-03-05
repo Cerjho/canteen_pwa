@@ -1,6 +1,7 @@
 // Create Batch Checkout Edge Function
 // Creates multiple orders and a SINGLE PayMongo Checkout Session for all of them.
-// This saves on transaction fees (one fee instead of N fees per order group).
+// NOTE: For weekly pre-orders, use create-weekly-checkout instead.
+// This function is kept for backwards compatibility.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -103,7 +104,7 @@ serve(async (req) => {
 
     const validOnlineMethods = ['gcash', 'paymaya', 'card'];
     if (!validOnlineMethods.includes(payment_method)) {
-      return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', `Invalid online payment method: ${payment_method}. Use process-order for cash/balance.`);
+      return errorResponse(corsHeaders, 400, 'VALIDATION_ERROR', `Invalid online payment method: ${payment_method}. Use process-batch-order for cash.`);
     }
 
     // Validate each order group has required fields
@@ -337,7 +338,7 @@ serve(async (req) => {
     const allProductIds = [...new Set(orders.flatMap(o => o.items.map(i => i.product_id)))];
     const { data: products, error: productsError } = await supabaseAdmin
       .from('products')
-      .select('id, name, price, stock_quantity, available')
+      .select('id, name, price, available')
       .in('id', allProductIds);
 
     if (productsError || !products) {
@@ -388,15 +389,6 @@ serve(async (req) => {
       grandTotal += orderTotal;
     }
 
-    // Check per-product stock against aggregate demand
-    for (const [productId, demand] of totalDemand) {
-      const product = productMap.get(productId)!;
-      if (product.stock_quantity < demand) {
-        return errorResponse(corsHeaders, 400, 'INSUFFICIENT_STOCK',
-          `'${product.name}' has insufficient stock (available: ${product.stock_quantity}, needed: ${demand})`);
-      }
-    }
-
     // If ALL orders were merged, no PayMongo checkout needed — return success immediately
     if (newOrders.length === 0) {
       console.log('All orders merged into existing orders:', { merged_order_ids: mergedOrderIds });
@@ -440,40 +432,6 @@ serve(async (req) => {
       lineItems.push({ ...item, currency: 'PHP' });
     }
 
-    // ── Reserve stock atomically using RPC ──
-    const reservedProducts: Array<{ product_id: string; quantity: number }> = [];
-    for (const [productId, demand] of totalDemand) {
-      const { error: stockError } = await supabaseAdmin.rpc('decrement_stock', {
-        p_product_id: productId,
-        p_quantity: demand,
-      });
-
-      if (stockError) {
-        console.error('Stock reservation failed:', productId, stockError);
-        // Rollback previously reserved stock
-        for (const reserved of reservedProducts) {
-          await supabaseAdmin.rpc('increment_stock', {
-            p_product_id: reserved.product_id,
-            p_quantity: reserved.quantity,
-          }).catch(err => console.error('Rollback failed for', reserved.product_id, err));
-        }
-        const product = productMap.get(productId);
-        return errorResponse(corsHeaders, 409, 'STOCK_UPDATE_FAILED',
-          `Failed to reserve stock for '${product?.name}'. Please retry.`);
-      }
-      reservedProducts.push({ product_id: productId, quantity: demand });
-    }
-
-    // Helper to rollback all reserved stock
-    const rollbackStock = async () => {
-      for (const reserved of reservedProducts) {
-        await supabaseAdmin.rpc('increment_stock', {
-          p_product_id: reserved.product_id,
-          p_quantity: reserved.quantity,
-        }).catch(err => console.error('Stock rollback failed for', reserved.product_id, err));
-      }
-    };
-
     // ── Create all orders in DB (batch insert) ──
     const paymentGroupId = crypto.randomUUID();
     const paymentDueAt = new Date(Date.now() + ONLINE_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString();
@@ -503,7 +461,6 @@ serve(async (req) => {
         payment_method,
         notes: notes || null,
         scheduled_for: order.scheduled_for || todayStr,
-        meal_period: null, // deprecated: meal_period moved to order_items (kept for backward compat)
         payment_group_id: paymentGroupId,
       };
     });
@@ -516,7 +473,6 @@ serve(async (req) => {
 
     if (ordersError || !createdOrders || createdOrders.length === 0) {
       console.error('Batch order insert error:', ordersError);
-      await rollbackStock();
       return errorResponse(corsHeaders, 500, 'ORDER_CREATION_FAILED', 'Failed to create orders');
     }
 
@@ -539,9 +495,8 @@ serve(async (req) => {
     const { error: itemsError } = await supabaseAdmin.from('order_items').insert(allOrderItems);
     if (itemsError) {
       console.error('Batch order items insert error:', itemsError);
-      // Rollback: delete all created orders (cascade) and restore stock
+      // Rollback: delete all created orders (cascade deletes items)
       await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
-      await rollbackStock();
       return errorResponse(corsHeaders, 500, 'ORDER_ITEMS_FAILED', 'Failed to create order items');
     }
 
@@ -621,8 +576,7 @@ serve(async (req) => {
         await supabaseAdmin.from('payments').delete().eq('id', payment.id);
       }
       await supabaseAdmin.from('orders').delete().in('id', createdOrderIds);
-      await rollbackStock();
-      return errorResponse(corsHeaders, 502, 'PAYMENT_ERROR', 'Online payments are temporarily unavailable. Please use Cash or Wallet Balance.');
+      return errorResponse(corsHeaders, 502, 'PAYMENT_ERROR', 'Online payments are temporarily unavailable. Please try cash payment.');
     }
 
     console.log('Batch checkout created:', {

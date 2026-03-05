@@ -147,7 +147,7 @@ export default function OrderHistory() {
 
   /**
    * Group orders by student + scheduled_for so that meal-period sub-orders
-   * for the same child on the same day appear as one card,
+   * for the same student on the same day appear as one card,
    * matching the Dashboard's grouped display.
    */
   const groupedOrders = useMemo(() => {
@@ -164,11 +164,11 @@ export default function OrderHistory() {
     }>();
 
     for (const order of orders) {
-      const child = order.child || order.student;
-      const key = `${child?.id || order.id}_${order.scheduled_for}`;
+      const student = order.student;
+      const key = `${student?.id || order.id}_${order.scheduled_for}`;
       if (!groups.has(key)) {
         groups.set(key, {
-          studentName: `${child?.first_name || 'Unknown'} ${child?.last_name || 'Student'}`,
+          studentName: `${student?.first_name || 'Unknown'} ${student?.last_name || 'Student'}`,
           scheduledFor: order.scheduled_for || '',
           createdAt: order.created_at,
           orders: [],

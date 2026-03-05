@@ -1,6 +1,8 @@
 // Create Checkout Edge Function
-// Creates a PayMongo Checkout Session for GCash, PayMaya, or Card orders
-// The order is created with 'awaiting_payment' status and stock is reserved.
+// Creates a PayMongo Checkout Session for GCash, PayMaya, or Card orders.
+// The order is created with 'awaiting_payment' status.
+// NOTE: For weekly pre-orders, use create-weekly-checkout instead.
+// This function handles surplus and individual checkout orders.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -109,7 +111,7 @@ serve(async (req) => {
     const validOnlineMethods = ['gcash', 'paymaya', 'card'];
     if (!validOnlineMethods.includes(payment_method)) {
       return new Response(
-        JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid online payment method: ${payment_method}. Use process-order for cash/balance.` }),
+        JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid online payment method: ${payment_method}. Use process-weekly-order for cash.` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -285,7 +287,7 @@ serve(async (req) => {
       // ── Merge path: validate products, reserve stock, insert items ──
       const mergeProductIds = items.map(i => i.product_id);
       const { data: mergeProducts, error: mergeProductsError } = await supabaseAdmin
-        .from('products').select('id, name, price, stock_quantity, available').in('id', mergeProductIds);
+        .from('products').select('id, name, price, available').in('id', mergeProductIds);
 
       if (mergeProductsError || !mergeProducts) {
         return new Response(
@@ -310,33 +312,10 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
           );
         }
-        if (product.stock_quantity < item.quantity) {
-          return new Response(
-            JSON.stringify({ error: 'INSUFFICIENT_STOCK', message: `'${product.name}' has insufficient stock (available: ${product.stock_quantity})` }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
-        }
         if (Math.abs(item.price_at_order - product.price) > 0.01) {
           return new Response(
             JSON.stringify({ error: 'PRICE_MISMATCH', message: `Price changed for '${product.name}'. Please refresh.` }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
-        }
-      }
-
-      // Reserve stock for merged items
-      for (const item of items) {
-        const product = mergeProductMap.get(item.product_id)!;
-        const { error: stockError } = await supabaseAdmin
-          .from('products')
-          .update({ stock_quantity: product.stock_quantity - item.quantity })
-          .eq('id', item.product_id)
-          .gte('stock_quantity', item.quantity);
-
-        if (stockError) {
-          return new Response(
-            JSON.stringify({ error: 'STOCK_UPDATE_FAILED', message: 'Failed to reserve stock, please retry' }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
           );
         }
       }
@@ -353,11 +332,6 @@ serve(async (req) => {
       const { error: mergeItemsError } = await supabaseAdmin.from('order_items').insert(mergeOrderItems);
       if (mergeItemsError) {
         console.error('Merge items insert error:', mergeItemsError);
-        // Restore stock on failure
-        for (const item of items) {
-          const product = mergeProductMap.get(item.product_id)!;
-          await supabaseAdmin.from('products').update({ stock_quantity: product.stock_quantity }).eq('id', item.product_id);
-        }
         return new Response(
           JSON.stringify({ error: 'MERGE_FAILED', message: 'Failed to merge items into existing order' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -393,10 +367,10 @@ serve(async (req) => {
       );
     }
 
-    // ── Validate products and stock ──
+    // ── Validate products ──
     const productIds = items.map(i => i.product_id);
     const { data: products, error: productsError } = await supabaseAdmin
-      .from('products').select('id, name, price, stock_quantity, available').in('id', productIds);
+      .from('products').select('id, name, price, available').in('id', productIds);
 
     if (productsError || !products) {
       return new Response(
@@ -420,12 +394,6 @@ serve(async (req) => {
       if (!product.available) {
         return new Response(
           JSON.stringify({ error: 'PRODUCT_UNAVAILABLE', message: `'${product.name}' is not available` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
-      if (product.stock_quantity < item.quantity) {
-        return new Response(
-          JSON.stringify({ error: 'INSUFFICIENT_STOCK', message: `'${product.name}' has insufficient stock (available: ${product.stock_quantity})` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
@@ -453,23 +421,6 @@ serve(async (req) => {
       );
     }
 
-    // ── Reserve stock ──
-    for (const item of items) {
-      const product = productMap.get(item.product_id)!;
-      const { error: stockError } = await supabaseAdmin
-        .from('products')
-        .update({ stock_quantity: product.stock_quantity - item.quantity })
-        .eq('id', item.product_id)
-        .gte('stock_quantity', item.quantity);
-
-      if (stockError) {
-        return new Response(
-          JSON.stringify({ error: 'STOCK_UPDATE_FAILED', message: 'Failed to reserve stock, please retry' }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
-    }
-
     // ── Create order in DB ──
     const paymentDueAt = new Date(Date.now() + ONLINE_PAYMENT_TIMEOUT_MINUTES * 60 * 1000).toISOString();
 
@@ -486,18 +437,12 @@ serve(async (req) => {
         payment_method,
         notes: notes || null,
         scheduled_for: scheduled_for || getTodayPhilippines(),
-        meal_period: null, // deprecated: meal_period moved to order_items (Phase 3)
       })
       .select()
       .single();
 
     if (orderError || !order) {
       console.error('Order insert error:', orderError);
-      // Restore stock on failure
-      for (const item of items) {
-        const product = productMap.get(item.product_id)!;
-        await supabaseAdmin.from('products').update({ stock_quantity: product.stock_quantity }).eq('id', item.product_id);
-      }
       return new Response(
         JSON.stringify({ error: 'ORDER_CREATION_FAILED', message: 'Failed to create order' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -566,11 +511,7 @@ serve(async (req) => {
 
     } catch (paymongoErr) {
       console.error('PayMongo checkout creation failed:', paymongoErr);
-      // Rollback: restore stock, delete order
-      for (const item of items) {
-        const product = productMap.get(item.product_id)!;
-        await supabaseAdmin.from('products').update({ stock_quantity: product.stock_quantity }).eq('id', item.product_id);
-      }
+      // Rollback: delete order
       await supabaseAdmin.from('order_items').delete().eq('order_id', order.id);
       if (payment) {
         await supabaseAdmin.from('payment_allocations').delete().eq('payment_id', payment.id);
@@ -579,7 +520,7 @@ serve(async (req) => {
       await supabaseAdmin.from('orders').delete().eq('id', order.id);
 
       return new Response(
-        JSON.stringify({ error: 'PAYMENT_ERROR', message: 'Online payments are temporarily unavailable. Please use Cash or Wallet Balance.' }),
+        JSON.stringify({ error: 'PAYMENT_ERROR', message: 'Online payments are temporarily unavailable. Please use cash.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

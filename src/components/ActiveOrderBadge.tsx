@@ -3,38 +3,26 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 
-// Helper to get today's date in Philippine timezone (UTC+8), matching Dashboard.tsx
-function getTodayPH(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-}
-
 export function useActiveOrderCount() {
   const { user } = useAuth();
-  
-  const todayStr = getTodayPH();
 
   const { data: count = 0 } = useQuery({
-    queryKey: ['active-order-count', user?.id, todayStr],
+    queryKey: ['active-order-count', user?.id],
     queryFn: async () => {
-      // Safety check - should not happen due to enabled flag but TypeScript needs it
       if (!user?.id) return 0;
-      
-      const { data, error } = await supabase
-        .from('orders')
-        .select('student_id, scheduled_for')
-        .eq('parent_id', user.id)
-        .eq('scheduled_for', todayStr)
-        .in('status', ['awaiting_payment', 'pending', 'preparing', 'ready']);
-      
-      if (error) throw error;
-      if (!data) return 0;
 
-      // Count distinct (student_id, scheduled_for) pairs to match Dashboard's grouped display
-      const groups = new Set(data.map(o => `${o.student_id}_${o.scheduled_for}`));
-      return groups.size;
+      // Count active weekly orders (submitted, paid, partially_cancelled)
+      const { data, error } = await supabase
+        .from('weekly_orders')
+        .select('id')
+        .eq('parent_id', user.id)
+        .in('status', ['submitted', 'paid', 'partially_cancelled']);
+
+      if (error) throw error;
+      return data?.length ?? 0;
     },
-    enabled: !!user?.id, // Only run when user is authenticated
-    refetchInterval: 30000 // Refresh every 30 seconds
+    enabled: !!user?.id,
+    refetchInterval: 30000,
   });
 
   return count;

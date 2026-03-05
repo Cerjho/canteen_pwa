@@ -58,8 +58,7 @@ interface DashboardStats {
   totalParents: number;
   totalStudents: number;
   totalProducts: number;
-  lowStockProducts: number;
-  outOfStockProducts: number;
+  unavailableProducts: number;
   avgOrderValue: number;
   avgFulfillmentTime: number;
   revenueYesterday: number;
@@ -118,7 +117,7 @@ interface SystemHealth {
 
 interface Alert {
   id: string;
-  type: 'low_stock' | 'pending_order' | 'cancelled_order' | 'system';
+  type: 'pending_order' | 'cancelled_order' | 'system';
   title: string;
   message: string;
   severity: 'warning' | 'error' | 'info';
@@ -253,7 +252,7 @@ export default function AdminDashboard() {
           .eq('is_active', true),
         supabase
           .from('products')
-          .select('id, stock_quantity, available')
+          .select('id, available')
       ]);
 
       // Check all query errors
@@ -277,15 +276,7 @@ export default function AdminDashboard() {
       const products = productsResult.data || [];
 
       const totalProducts = products.length;
-      const lowStockProducts = products.filter(p => 
-        p.stock_quantity !== null && 
-        p.stock_quantity <= 10 && 
-        p.stock_quantity > 0 && 
-        p.available === true
-      ).length;
-      const outOfStockProducts = products.filter(p => 
-        p.stock_quantity === 0 || p.available === false
-      ).length;
+      const unavailableProducts = products.filter(p => !p.available).length;
 
       // ===========================================
       // DATE SEMANTICS (CRITICAL):
@@ -409,8 +400,7 @@ export default function AdminDashboard() {
         totalParents,
         totalStudents,
         totalProducts,
-        lowStockProducts,
-        outOfStockProducts,
+        unavailableProducts,
         
         // Metrics
         avgOrderValue,
@@ -630,30 +620,6 @@ export default function AdminDashboard() {
     queryKey: ['admin-alerts'],
     queryFn: async () => {
       const alertsList: Alert[] = [];
-
-      // Check for low stock products
-      const { data: lowStock, error: lowStockError } = await supabase
-        .from('products')
-        .select('name, stock_quantity')
-        .lte('stock_quantity', 10)
-        .gt('stock_quantity', 0)
-        .eq('available', true);
-
-      if (lowStockError) {
-        console.error('Low stock query error:', lowStockError);
-      } else {
-        (lowStock || []).forEach(product => {
-          alertsList.push({
-            id: `low-stock-${product.name}`,
-            type: 'low_stock',
-            title: 'Low Stock Alert',
-            message: `${product.name} has only ${product.stock_quantity} items left`,
-            severity: (product.stock_quantity ?? 0) <= 5 ? 'error' : 'warning',
-            actionLabel: 'Manage Products',
-            actionRoute: '/admin/products'
-          });
-        });
-      }
 
       // Only alert on TODAY's orders that have been pending for more than 10 minutes
       // Don't alert on future scheduled orders
@@ -1125,7 +1091,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <StatCard title="Avg Order Value" value={`₱${(stats?.avgOrderValue || 0).toFixed(0)}`} icon={Target} color="purple" />
           <StatCard title="Avg Fulfillment" value={`${Math.round(stats?.avgFulfillmentTime || 0)} min`} icon={Timer} color="indigo" subtitle={fulfillmentRate > 80 ? 'Good' : 'Needs improvement'} />
-          <StatCard title="Low Stock Items" value={stats?.lowStockProducts || 0} icon={Package} color={(stats?.lowStockProducts || 0) > 0 ? 'red' : 'gray'} onClick={() => navigate('/admin/products?filter=low-stock')} clickable />
+          <StatCard title="Unavailable Items" value={stats?.unavailableProducts || 0} icon={Package} color={(stats?.unavailableProducts || 0) > 0 ? 'red' : 'gray'} onClick={() => navigate('/admin/products')} clickable />
           <StatCard title="Cancelled Today" value={stats?.cancelledOrdersToday || 0} icon={XCircle} color={(stats?.cancelledOrdersToday || 0) > 0 ? 'red' : 'gray'} />
           <StatCard title="Awaiting Payment" value={stats?.awaitingPaymentOrders || 0} icon={CreditCard} color={(stats?.awaitingPaymentOrders || 0) > 0 ? 'purple' : 'gray'} onClick={() => navigate('/admin/orders?status=awaiting_payment')} clickable />
           <StatCard title="Future Orders" value={stats?.futureOrders || 0} icon={Calendar} color={(stats?.futureOrders || 0) > 0 ? 'blue' : 'gray'} subtitle="Scheduled ahead" onClick={() => navigate('/admin/orders?filter=future')} clickable />

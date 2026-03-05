@@ -145,7 +145,7 @@ export default function AdminWeeklyMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, category, image_url, available, stock_quantity, created_at, updated_at')
+        .select('id, name, description, price, category, image_url, available, created_at, updated_at')
         .order('category')
         .order('name');
       if (error) throw error;

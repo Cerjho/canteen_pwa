@@ -6,14 +6,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
 type ProductCategory = 'mains' | 'snacks' | 'drinks';
-type Action = 'create' | 'update' | 'delete' | 'toggle-availability' | 'update-stock';
+type Action = 'create' | 'update' | 'delete' | 'toggle-availability';
 
 interface ProductData {
   name: string;
   description?: string;
   price: number;
   category: ProductCategory;
-  stock_quantity: number;
   image_url?: string;
   available?: boolean;
 }
@@ -22,13 +21,11 @@ interface ManageProductRequest {
   action: Action;
   product_id?: string;
   data?: Partial<ProductData>;
-  quantity?: number; // For stock updates
 }
 
 // Validation constants
 const MAX_PRICE = 10000;
 const MIN_PRICE = 0.01;
-const MAX_STOCK = 99999;
 const MAX_NAME_LENGTH = 100;
 const VALID_CATEGORIES: ProductCategory[] = ['mains', 'snacks', 'drinks'];
 
@@ -76,10 +73,10 @@ serve(async (req) => {
     }
 
     const body: ManageProductRequest = await req.json();
-    const { action, product_id, data, quantity } = body;
+    const { action, product_id, data } = body;
 
     // Validate action
-    const validActions: Action[] = ['create', 'update', 'delete', 'toggle-availability', 'update-stock'];
+    const validActions: Action[] = ['create', 'update', 'delete', 'toggle-availability'];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: `Invalid action. Must be: ${validActions.join(', ')}` }),
@@ -88,7 +85,7 @@ serve(async (req) => {
     }
 
     // Actions requiring product_id
-    if (['update', 'delete', 'toggle-availability', 'update-stock'].includes(action) && !product_id) {
+    if (['update', 'delete', 'toggle-availability'].includes(action) && !product_id) {
       return new Response(
         JSON.stringify({ error: 'VALIDATION_ERROR', message: 'product_id is required for this action' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -127,14 +124,6 @@ serve(async (req) => {
           );
         }
 
-        const stockQty = data.stock_quantity ?? 0;
-        if (stockQty < 0 || stockQty > MAX_STOCK) {
-          return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: `Stock must be between 0 and ${MAX_STOCK}` }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
         // Sanitize image URL
         const imageUrl = data.image_url ? sanitizeUrl(data.image_url) : null;
 
@@ -145,7 +134,6 @@ serve(async (req) => {
             description: data.description?.trim() || null,
             price: data.price,
             category: data.category,
-            stock_quantity: stockQty,
             image_url: imageUrl,
             available: data.available ?? true
           })
@@ -221,16 +209,6 @@ serve(async (req) => {
             );
           }
           updateData.category = data.category;
-        }
-
-        if (data.stock_quantity !== undefined) {
-          if (data.stock_quantity < 0 || data.stock_quantity > MAX_STOCK) {
-            return new Response(
-              JSON.stringify({ error: 'VALIDATION_ERROR', message: `Stock must be between 0 and ${MAX_STOCK}` }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-          updateData.stock_quantity = data.stock_quantity;
         }
 
         if (data.description !== undefined) {
@@ -374,43 +352,6 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, product_id, available: newAvailability }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      case 'update-stock': {
-        if (quantity === undefined || quantity === null) {
-          return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: 'quantity is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (quantity < 0 || quantity > MAX_STOCK) {
-          return new Response(
-            JSON.stringify({ error: 'VALIDATION_ERROR', message: `Stock must be between 0 and ${MAX_STOCK}` }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        const { data: updatedProduct, error: updateError } = await supabaseAdmin
-          .from('products')
-          .update({ stock_quantity: quantity, updated_at: new Date().toISOString() })
-          .eq('id', product_id)
-          .select()
-          .single();
-
-        if (updateError) {
-          return new Response(
-            JSON.stringify({ error: 'UPDATE_FAILED', message: 'Failed to update stock' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        console.log(`[AUDIT] Admin ${user.email} updated stock for product ${product_id} to ${quantity}`);
-
-        return new Response(
-          JSON.stringify({ success: true, product: updatedProduct }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

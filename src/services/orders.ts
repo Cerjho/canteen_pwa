@@ -1,23 +1,16 @@
 import { supabase } from './supabaseClient';
 import { ensureValidSession } from './authSession';
 import { queueOrder, isOnline } from './localQueue';
+import type {
+  CreateWeeklyOrderRequest,
+  CreateSurplusOrderRequest,
+  WeeklyOrderResponse,
+  SurplusOrderResponse,
+  OrderWithDetails,
+  WeeklyOrderWithDetails,
+} from '../types';
 
-export interface CreateOrderRequest {
-  parent_id: string;
-  student_id: string;
-  client_order_id: string;
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price_at_order: number;
-    meal_period?: string;
-  }>;
-  payment_method: string;
-  notes?: string;
-  scheduled_for?: string;
-  /** @deprecated Use items[].meal_period instead */
-  meal_period?: string;
-}
+// ── Legacy batch types (kept for backward compatibility) ──
 
 export interface BatchOrderGroup {
   student_id: string;
@@ -34,7 +27,7 @@ export interface BatchOrderGroup {
 export interface CreateBatchOrderRequest {
   parent_id: string;
   orders: BatchOrderGroup[];
-  payment_method: 'cash' | 'balance';
+  payment_method: 'cash';
   notes?: string;
 }
 
@@ -64,169 +57,224 @@ export interface OrderError {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+const ORDER_PAGE_SIZE = 20;
 
 async function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function createOrder(orderData: CreateOrderRequest): Promise<{ order_id?: string; queued?: boolean }> {
-  // Validate input
-  if (!orderData.parent_id || !orderData.student_id) {
-    throw new Error('Please select a student before placing an order.');
-  }
-  if (!orderData.items || orderData.items.length === 0) {
-    throw new Error('Your cart is empty. Please add items before checking out.');
-  }
-  const validPaymentMethods = ['cash', 'balance', 'gcash', 'paymaya', 'card'];
-  if (orderData.payment_method && !validPaymentMethods.includes(orderData.payment_method)) {
-    throw new Error('Please select a valid payment method.');
+/**
+ * Extract a meaningful error message from a Supabase Edge Function error.
+ */
+async function extractEdgeFunctionError(error: Error & { context?: unknown }, data: unknown): Promise<string> {
+  const d = data as { message?: string; error?: string } | null;
+  if (d?.message) return d.message;
+  if (d?.error) return d.error;
+
+  if (error.message === 'Edge Function returned a non-2xx status code' && error.context) {
+    try {
+      const ctx = error.context as { json?: () => Promise<unknown> };
+      if (typeof ctx.json === 'function') {
+        const body = await ctx.json() as { message?: string; error?: string };
+        if (body?.message) return body.message;
+        if (body?.error) return body.error;
+      }
+    } catch { /* ignore */ }
   }
 
-  // Online payment methods should use the create-checkout endpoint, not process-order
-  const onlinePaymentMethods = ['gcash', 'paymaya', 'card'];
-  if (orderData.payment_method && onlinePaymentMethods.includes(orderData.payment_method)) {
-    throw new Error('Please use the online payment option for GCash, PayMaya, or Card.');
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'No internet connection. Please check your network and try again.';
   }
-  for (const item of orderData.items) {
-    if (!item.product_id || item.quantity <= 0 || item.price_at_order < 0) {
-      throw new Error('Some items in your cart are invalid. Please review and try again.');
-    }
-  }
+  return 'Unable to connect to server. Please try again in a moment.';
+}
 
-  // Check if online
-  if (!isOnline()) {
-    // Queue for offline sync
-    await queueOrder(orderData);
-    return { queued: true };
-  }
-
-  // Ensure we have a valid session (auto-refreshes if needed)
+/**
+ * Call an edge function with retry logic for transient errors.
+ */
+async function invokeWithRetry<T>(
+  fnName: string,
+  body: Record<string, unknown> | object,
+): Promise<T> {
   await ensureValidSession();
-
-  // Process order via Edge Function with retry logic
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      // supabase.functions.invoke automatically includes the Authorization header
-      const { data, error } = await supabase.functions.invoke('process-order', {
-        body: orderData
-      });
+      const { data, error } = await supabase.functions.invoke(fnName, { body });
 
       if (error) {
-        // Extract the actual error message from the FunctionsHttpError
-        // The error may contain a response body with the real message
-        let errorMessage = error.message;
-        
-        // For FunctionsHttpError, try to get the response body
-        // The Supabase client wraps errors, so we need to dig into them
-        if (error.message === 'Edge Function returned a non-2xx status code') {
-          // The data object may contain the actual error response
-          if (data?.message) {
-            errorMessage = data.message;
-          } else if (data?.error) {
-            errorMessage = data.error;
-          } else {
-            // Try to parse the error context if available
-            try {
-              // FunctionsHttpError has a 'context' property with response details
-              const errAny = error as { context?: { json?: () => Promise<unknown> } };
-              if (errAny.context?.json) {
-                const body = await errAny.context.json();
-                if (body && typeof body === 'object') {
-                  const bodyObj = body as { message?: string; error?: string };
-                  errorMessage = bodyObj.message || bodyObj.error || errorMessage;
-                }
-              }
-            } catch {
-              // If we can't parse, fall back to checking network issues
-              if (!navigator.onLine) {
-                errorMessage = 'No internet connection. Please check your network and try again.';
-              } else {
-                errorMessage = 'Unable to connect to server. Please try again in a moment.';
-              }
-            }
-          }
-        }
-        
-        // Check if the error has additional context (response body)
-        if ('context' in error && error.context && errorMessage === error.message) {
-          try {
-            const context = error.context as { message?: string; error?: string };
-            errorMessage = context.message || context.error || error.message;
-          } catch {
-            // Ignore parsing errors
-          }
-        }
-        
-        // Check if data contains error info (for non-2xx responses, data may still have body)
-        if (data?.message && errorMessage === error.message) {
-          errorMessage = data.message;
-        } else if (data?.error && errorMessage === error.message) {
-          errorMessage = data.error;
-        }
-        
-        // Check if error is retryable
-        const isRetryable = errorMessage?.includes('network') || 
-                           errorMessage?.includes('timeout') ||
-                           errorMessage?.includes('503') ||
-                           errorMessage?.includes('502');
-        
+        const msg = await extractEdgeFunctionError(error, data);
+        const isRetryable = /network|timeout|503|502/i.test(msg);
         if (isRetryable && attempt < MAX_RETRIES - 1) {
-          lastError = new Error(errorMessage);
-          await delay(RETRY_DELAY_MS * (attempt + 1)); // Linear backoff
+          lastError = new Error(msg);
+          await delay(RETRY_DELAY_MS * (attempt + 1));
           continue;
         }
-        throw new Error(errorMessage);
+        throw new Error(msg);
       }
 
-      // Check for application-level errors in response
       if (data?.error) {
         throw new Error(data.message || data.error);
       }
 
-      return data;
+      return data as T;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      
-      // If it's the last attempt, throw the error
-      if (attempt === MAX_RETRIES - 1) {
-        throw lastError;
-      }
-      
-      // Only retry errors that are likely transient (network/server issues)
+      if (attempt === MAX_RETRIES - 1) throw lastError;
+
       const errMsg = lastError.message?.toLowerCase() || '';
-      const isRetryable = errMsg.includes('network') ||
-                         errMsg.includes('timeout') ||
-                         errMsg.includes('503') ||
-                         errMsg.includes('502') ||
-                         errMsg.includes('fetch') ||
-                         errMsg.includes('unable to connect');
-      if (!isRetryable) {
-        throw lastError;
-      }
-      
+      const isRetryable = /network|timeout|503|502|fetch|unable to connect/i.test(errMsg);
+      if (!isRetryable) throw lastError;
       await delay(RETRY_DELAY_MS * (attempt + 1));
     }
   }
 
-  throw lastError || new Error('Failed to create order after multiple retries');
+  throw lastError || new Error(`Failed to call ${fnName} after multiple retries`);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Weekly Pre-Order Functions
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Create a weekly pre-order (cash payment).
+ * Calls the process-weekly-order edge function.
+ */
+export async function createWeeklyOrder(
+  req: CreateWeeklyOrderRequest,
+): Promise<WeeklyOrderResponse> {
+  if (!req.parent_id) throw new Error('Please sign in to continue.');
+  if (!req.student_id) throw new Error('Please select a student.');
+  if (!req.week_start) throw new Error('Week start date is required.');
+  if (!req.days || req.days.length === 0) throw new Error('Please add items to at least one day.');
+
+  // Offline queueing for cash orders
+  if (req.payment_method === 'cash' && !isOnline()) {
+    for (const day of req.days) {
+      await queueOrder({
+        parent_id: req.parent_id,
+        student_id: req.student_id,
+        client_order_id: crypto.randomUUID(),
+        items: day.items,
+        payment_method: 'cash',
+        notes: req.notes,
+        scheduled_for: day.scheduled_for,
+      });
+    }
+    return {
+      success: true,
+      weekly_order_id: '',
+      order_ids: [],
+      total_amount: 0,
+      payment_status: 'queued',
+      message: 'Orders saved offline. Will sync when connected.',
+    };
+  }
+
+  return invokeWithRetry<WeeklyOrderResponse>('process-weekly-order', req);
 }
 
 /**
- * Create multiple orders in a single request (cash/balance payments).
- * Replaces the sequential per-order createOrder loop, reducing N HTTP calls to 1.
+ * Create a surplus order (cash payment).
+ * Calls the process-surplus-order edge function.
+ */
+export async function createSurplusOrder(
+  req: CreateSurplusOrderRequest,
+): Promise<SurplusOrderResponse> {
+  if (!req.parent_id) throw new Error('Please sign in to continue.');
+  if (!req.student_id) throw new Error('Please select a student.');
+  if (!req.items || req.items.length === 0) throw new Error('Please add items before ordering.');
+
+  return invokeWithRetry<SurplusOrderResponse>('process-surplus-order', req);
+}
+
+/**
+ * Cancel an individual day from a weekly order.
+ * Only allowed before 8:00 AM on the day being cancelled.
+ */
+export async function cancelDayFromWeeklyOrder(
+  orderId: string,
+  reason?: string,
+): Promise<void> {
+  if (!orderId) throw new Error('Order ID is required.');
+
+  await invokeWithRetry<unknown>('parent-cancel-order', {
+    order_id: orderId,
+    reason: reason || 'Parent cancelled (student absent)',
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// Weekly Order Queries
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get paginated weekly orders for a parent.
+ */
+export async function getWeeklyOrders(parentId: string, page = 0): Promise<WeeklyOrderWithDetails[]> {
+  const from = page * ORDER_PAGE_SIZE;
+  const to = from + ORDER_PAGE_SIZE - 1;
+
+  const { data, error } = await supabase
+    .from('weekly_orders')
+    .select(`
+      *,
+      student:students!weekly_orders_student_id_fkey(id, first_name, last_name),
+      daily_orders:orders!orders_weekly_order_id_fkey(
+        *,
+        items:order_items(
+          *,
+          product:products(name, image_url)
+        )
+      )
+    `)
+    .eq('parent_id', parentId)
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (error) throw error;
+  return (data || []) as WeeklyOrderWithDetails[];
+}
+
+/**
+ * Get a single weekly order with full details.
+ */
+export async function getWeeklyOrderDetail(weeklyOrderId: string): Promise<WeeklyOrderWithDetails | null> {
+  const { data, error } = await supabase
+    .from('weekly_orders')
+    .select(`
+      *,
+      student:students!weekly_orders_student_id_fkey(id, first_name, last_name),
+      daily_orders:orders!orders_weekly_order_id_fkey(
+        *,
+        items:order_items(
+          *,
+          product:products(name, image_url)
+        )
+      )
+    `)
+    .eq('id', weeklyOrderId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  return data as WeeklyOrderWithDetails;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Legacy Batch Order (kept for backward compatibility)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Create multiple orders in a single request (cash only).
+ * @deprecated For weekly pre-orders, use createWeeklyOrder instead.
  */
 export async function createBatchOrder(batchData: CreateBatchOrderRequest): Promise<BatchOrderResponse> {
-  // Validate input
-  if (!batchData.parent_id) {
-    throw new Error('Please sign in to continue.');
-  }
-  if (!batchData.orders || batchData.orders.length === 0) {
-    throw new Error('Your cart is empty. Please add items before checking out.');
-  }
+  if (!batchData.parent_id) throw new Error('Please sign in to continue.');
+  if (!batchData.orders || batchData.orders.length === 0) throw new Error('Your cart is empty.');
 
-  // Offline queueing — fallback to queuing each order individually
   if (!isOnline()) {
     for (const order of batchData.orders) {
       await queueOrder({
@@ -248,78 +296,16 @@ export async function createBatchOrder(batchData: CreateBatchOrderRequest): Prom
     };
   }
 
-  await ensureValidSession();
-
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const { data, error } = await supabase.functions.invoke('process-batch-order', {
-        body: batchData,
-      });
-
-      if (error) {
-        let errorMessage = error.message;
-
-        if (error.message === 'Edge Function returned a non-2xx status code') {
-          if (data?.message) {
-            errorMessage = data.message;
-          } else if (data?.error) {
-            errorMessage = data.error;
-          }
-        }
-
-        if (data?.message && errorMessage === error.message) {
-          errorMessage = data.message;
-        } else if (data?.error && errorMessage === error.message) {
-          errorMessage = data.error;
-        }
-
-        const isRetryable = errorMessage?.includes('network') ||
-          errorMessage?.includes('timeout') ||
-          errorMessage?.includes('503') ||
-          errorMessage?.includes('502');
-
-        if (isRetryable && attempt < MAX_RETRIES - 1) {
-          lastError = new Error(errorMessage);
-          await delay(RETRY_DELAY_MS * (attempt + 1));
-          continue;
-        }
-        throw new Error(errorMessage);
-      }
-
-      if (data?.error) {
-        throw new Error(data.message || data.error);
-      }
-
-      return data as BatchOrderResponse;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-
-      if (attempt === MAX_RETRIES - 1) {
-        throw lastError;
-      }
-
-      const errMsg = lastError.message?.toLowerCase() || '';
-      const isRetryable = errMsg.includes('network') ||
-        errMsg.includes('timeout') ||
-        errMsg.includes('503') ||
-        errMsg.includes('502') ||
-        errMsg.includes('fetch') ||
-        errMsg.includes('unable to connect');
-      if (!isRetryable) {
-        throw lastError;
-      }
-
-      await delay(RETRY_DELAY_MS * (attempt + 1));
-    }
-  }
-
-  throw lastError || new Error('Failed to create batch orders after multiple retries');
+  return invokeWithRetry<BatchOrderResponse>('process-batch-order', batchData);
 }
 
-const ORDER_PAGE_SIZE = 20;
+// ══════════════════════════════════════════════════════════════
+// Order History
+// ══════════════════════════════════════════════════════════════
 
+/**
+ * Get paginated order history for a parent (daily orders).
+ */
 export async function getOrderHistory(parentId: string, page = 0) {
   const from = page * ORDER_PAGE_SIZE;
   const to = from + ORDER_PAGE_SIZE - 1;
@@ -328,7 +314,7 @@ export async function getOrderHistory(parentId: string, page = 0) {
     .from('orders')
     .select(`
       *,
-      child:students!orders_student_id_fkey(id, first_name, last_name),
+      student:students!orders_student_id_fkey(id, first_name, last_name),
       items:order_items(
         *,
         product:products(name, image_url)
@@ -339,7 +325,7 @@ export async function getOrderHistory(parentId: string, page = 0) {
     .range(from, to);
 
   if (error) throw error;
-  return data;
+  return data as OrderWithDetails[];
 }
 
 export { ORDER_PAGE_SIZE };

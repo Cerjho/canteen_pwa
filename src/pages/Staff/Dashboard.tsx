@@ -59,7 +59,7 @@ interface StaffOrder {
   staff_notes?: string;
   payment_method: string;
   completed_at?: string;
-  child: {
+  student: {
     first_name: string;
     last_name: string;
     grade_level: string;
@@ -139,7 +139,7 @@ function groupOrdersByGrade(orders: StaffOrder[]): GradeGroup[] {
   const groups = new Map<string, StaffOrder[]>();
   
   orders.forEach(order => {
-    const gradeLevel = order.child?.grade_level || 'Unknown';
+    const gradeLevel = order.student?.grade_level || 'Unknown';
     const existing = groups.get(gradeLevel);
     if (existing) {
       existing.push(order);
@@ -217,7 +217,7 @@ export default function StaffDashboard() {
         .from('orders')
         .select(`
           *,
-          child:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
+          student:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
           parent:user_profiles(first_name, last_name, phone_number),
           items:order_items(
             *,
@@ -254,7 +254,7 @@ export default function StaffDashboard() {
         .from('orders')
         .select(`
           *,
-          child:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
+          student:students!orders_student_id_fkey(first_name, last_name, grade_level, section),
           parent:user_profiles(first_name, last_name, phone_number),
           items:order_items(
             *,
@@ -284,8 +284,8 @@ export default function StaffDashboard() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(order => 
-        `${order.child?.first_name || ''} ${order.child?.last_name || ''}`.toLowerCase().includes(query) ||
-        `${order.child?.grade_level || ''} ${order.child?.section || ''}`.toLowerCase().includes(query) ||
+        `${order.student?.first_name || ''} ${order.student?.last_name || ''}`.toLowerCase().includes(query) ||
+        `${order.student?.grade_level || ''} ${order.student?.section || ''}`.toLowerCase().includes(query) ||
         order.items.some(item => item.product.name.toLowerCase().includes(query))
       );
     }
@@ -405,7 +405,7 @@ export default function StaffDashboard() {
     orders
       .filter(o => o.status === 'pending' || o.status === 'preparing')
       .forEach(order => {
-        const gradeLevel = order.child?.grade_level || 'Unknown';
+        const gradeLevel = order.student?.grade_level || 'Unknown';
 
         if (!gradeMap.has(gradeLevel)) gradeMap.set(gradeLevel, new Map());
         const mealMap = gradeMap.get(gradeLevel) ?? new Map();
@@ -688,7 +688,7 @@ export default function StaffDashboard() {
           
           // Just expired (within last second)
           if (diffMs <= 0 && diffMs > -1000) {
-            showToast(`⏰ Payment for ${order.child?.first_name}'s order has expired`, 'error');
+            showToast(`⏰ Payment for ${order.student?.first_name}'s order has expired`, 'error');
             refetch(); // Refresh to get updated status
           }
         }
@@ -968,8 +968,8 @@ export default function StaffDashboard() {
             <div class="order-num">#${order.id.slice(-4).toUpperCase()}</div>
           </div>
           
-          <div class="student">${escapeHtml(order.child?.first_name || 'Unknown')} ${escapeHtml(order.child?.last_name || 'Student')}</div>
-          <div class="class">${escapeHtml(order.child?.grade_level || '-')} - ${escapeHtml(order.child?.section || '-')}</div>
+          <div class="student">${escapeHtml(order.student?.first_name || 'Unknown')} ${escapeHtml(order.student?.last_name || 'Student')}</div>
+          <div class="class">${escapeHtml(order.student?.grade_level || '-')} - ${escapeHtml(order.student?.section || '-')}</div>
           <div class="time">Ordered: ${format(new Date(order.created_at), 'h:mm a')} | ${format(new Date(order.created_at), 'MMM d')}</div>
           
           <div class="divider"></div>
@@ -1273,10 +1273,10 @@ export default function StaffDashboard() {
                     #{order.id.slice(-4).toUpperCase()}
                   </div>
                   <div className="text-xl font-bold text-center mb-1">
-                    {order.child?.first_name || 'Unknown'}
+                    {order.student?.first_name || 'Unknown'}
                   </div>
                   <div className="text-sm text-center text-gray-400">
-                    {order.child?.grade_level} - {order.child?.section}
+                    {order.student?.grade_level} - {order.student?.section}
                   </div>
                   <div className="mt-3 text-sm text-center font-medium">
                     {order.items.map(i => `${i.quantity}× ${i.product.name}`).join(', ')}
@@ -1800,7 +1800,7 @@ export default function StaffDashboard() {
                                       // Announce order ready
                                       if ('speechSynthesis' in window) {
                                         const msg = new SpeechSynthesisUtterance(
-                                          `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
+                                          `Order ${order.id.slice(-4)} for ${order.student?.first_name || 'student'} is ready`
                                         );
                                         window.speechSynthesis.speak(msg);
                                       }
@@ -1833,10 +1833,10 @@ export default function StaffDashboard() {
                                 </div>
                                 <div>
                                   <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                                    {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                                    {order.student?.first_name || 'Unknown'} {order.student?.last_name || 'Student'}
                                   </h3>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Section: {order.child?.section || '-'}
+                                    Section: {order.student?.section || '-'}
                                   </p>
                                 </div>
                               </div>
@@ -1931,7 +1931,6 @@ export default function StaffDashboard() {
                                   {' • '}
                                   <span className={`font-medium ${
                                     order.payment_method === 'cash' ? 'text-orange-600 dark:text-orange-400' :
-                                    order.payment_method === 'balance' ? 'text-green-600 dark:text-green-400' :
                                     'text-blue-600 dark:text-blue-400'
                                   }`}>{getPaymentMethodLabel(order.payment_method).toUpperCase()}</span>
                                 </>
@@ -2184,7 +2183,7 @@ export default function StaffDashboard() {
                           onClick={() => {
                             if ('speechSynthesis' in window) {
                               const msg = new SpeechSynthesisUtterance(
-                                `Order ${order.id.slice(-4)} for ${order.child?.first_name || 'student'} is ready`
+                                `Order ${order.id.slice(-4)} for ${order.student?.first_name || 'student'} is ready`
                               );
                               window.speechSynthesis.speak(msg);
                             }
@@ -2217,10 +2216,10 @@ export default function StaffDashboard() {
                       </div>
                       <div>
                         <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                          {order.child?.first_name || 'Unknown'} {order.child?.last_name || 'Student'}
+                          {order.student?.first_name || 'Unknown'} {order.student?.last_name || 'Student'}
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {order.child?.grade_level || '-'} - {order.child?.section || '-'}
+                          {order.student?.grade_level || '-'} - {order.student?.section || '-'}
                         </p>
                       </div>
                     </div>
@@ -2315,7 +2314,6 @@ export default function StaffDashboard() {
                         {' • '}
                         <span className={`font-medium ${
                           order.payment_method === 'cash' ? 'text-orange-600 dark:text-orange-400' :
-                          order.payment_method === 'balance' ? 'text-green-600 dark:text-green-400' :
                           'text-blue-600 dark:text-blue-400'
                         }`}>{getPaymentMethodLabel(order.payment_method).toUpperCase()}</span>
                       </>

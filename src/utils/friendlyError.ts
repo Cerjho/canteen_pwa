@@ -48,8 +48,10 @@ const ERROR_MAP: Array<{ pattern: RegExp; friendly: string }> = [
   { pattern: /mime type|unsupported.*type/i, friendly: 'This file type is not supported. Please use JPEG, PNG, or WebP.' },
 
   // ── Business logic (from edge functions) ──
-  { pattern: /insufficient.*balance/i, friendly: 'Insufficient balance. Please top up your wallet or choose another payment method.' },
-  { pattern: /out of stock|insufficient stock/i, friendly: 'Some items are out of stock. Please update your order.' },
+  { pattern: /weekly.*cutoff|cutoff.*passed|orders.*closed.*next.*week/i, friendly: 'Weekly cutoff has passed — orders for next week are closed.' },
+  { pattern: /surplus.*cutoff|surplus.*closed|past.*8.*AM/i, friendly: 'Surplus ordering is closed (past 8:00 AM).' },
+  { pattern: /cancel.*cutoff|cancel.*deadline|cannot.*cancel.*8/i, friendly: 'Cannot cancel — past 8:00 AM cancellation deadline.' },
+  { pattern: /menu.*not.*published|no.*menu/i, friendly: 'Menu not yet published for this week.' },
   { pattern: /order.*cutoff|ordering.*closed|past.*cutoff/i, friendly: 'Ordering is closed for this time period. Please try again later.' },
   { pattern: /already.*cancelled|already.*completed|already.*refunded/i, friendly: 'This order has already been processed and cannot be changed.' },
   { pattern: /DUPLICATE_SLOT|duplicate.*slot/i, friendly: 'An order already exists for this student and meal. Please modify the existing order instead.' },

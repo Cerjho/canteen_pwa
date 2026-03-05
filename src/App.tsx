@@ -10,7 +10,6 @@ import { clearAuthStorage } from './services/authSession';
 const ParentMenu = lazy(() => import('./pages/Parent/Menu'));
 const ParentDashboard = lazy(() => import('./pages/Parent/Dashboard'));
 const ParentProfile = lazy(() => import('./pages/Parent/Profile'));
-const ParentBalance = lazy(() => import('./pages/Parent/Balance'));
 const ParentOrderHistory = lazy(() => import('./pages/Parent/OrderHistory'));
 const ParentOrderConfirmation = lazy(() => import('./pages/Parent/OrderConfirmation'));
 // Staff pages
@@ -170,11 +169,6 @@ function App() {
         <Route path="/orders" element={
           <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
             <ParentOrderHistory />
-          </RoleRoute>
-        } />
-        <Route path="/balance" element={
-          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
-            <ParentBalance />
           </RoleRoute>
         } />
         <Route path="/order-confirmation" element={

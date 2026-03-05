@@ -8,8 +8,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   CreditCard,
-  Banknote,
-  Wallet
+  Banknote
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
@@ -87,7 +86,7 @@ interface PaymentBreakdown {
 
 interface TransactionRecord {
   id: string;
-  type: 'payment' | 'refund' | 'topup';
+  type: 'payment' | 'refund';
   amount_total: number;
   method: string;
   status: string;
@@ -331,7 +330,6 @@ export default function AdminReports() {
     switch (method) {
       case 'cash': return <Banknote size={20} className="text-green-600 dark:text-green-400" />;
       case 'gcash': return <CreditCard size={20} className="text-blue-600 dark:text-blue-400" />;
-      case 'balance': return <Wallet size={20} className="text-purple-600 dark:text-purple-400" />;
       default: return <DollarSign size={20} className="text-gray-600 dark:text-gray-400" />;
     }
   };

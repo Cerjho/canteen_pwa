@@ -61,7 +61,7 @@ interface Order {
   scheduled_for: string;
   meal_period?: MealPeriod;
   notes?: string;
-  child: {
+  student: {
     id: string;
     first_name: string;
     last_name: string;
@@ -130,7 +130,7 @@ export default function ParentDashboard() {
         .from('orders')
         .select(`
           *,
-          child:students!orders_student_id_fkey(id, first_name, last_name),
+          student:students!orders_student_id_fkey(id, first_name, last_name),
           items:order_items(
             *,
             product:products(name, image_url)
@@ -149,7 +149,7 @@ export default function ParentDashboard() {
         .from('orders')
         .select(`
           *,
-          child:students!orders_student_id_fkey(id, first_name, last_name),
+          student:students!orders_student_id_fkey(id, first_name, last_name),
           items:order_items(
             *,
             product:products(name, image_url)
@@ -183,7 +183,7 @@ export default function ParentDashboard() {
         .from('orders')
         .select(`
           *,
-          child:students!orders_student_id_fkey(id, first_name, last_name),
+          student:students!orders_student_id_fkey(id, first_name, last_name),
           items:order_items(
             *,
             product:products(name, image_url)
@@ -222,7 +222,7 @@ export default function ParentDashboard() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['active-orders'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] }); // Refresh balance if refund applied
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
       showToast(result.message || 'Order cancelled successfully', 'success');
       setShowCancelDialog(null);
     },
@@ -233,17 +233,17 @@ export default function ParentDashboard() {
 
   // Reorder functionality - fetches current prices and checks availability
   const handleReorder = async (order: Order) => {
-    if (!order.child) {
+    if (!order.student) {
       showToast('Cannot reorder — student info is missing', 'error');
       return;
     }
-    const studentName = `${order.child.first_name} ${order.child.last_name}`;
+    const studentName = `${order.student.first_name} ${order.student.last_name}`;
     
     // Fetch current prices and availability for the products
     const productIds = order.items.map(i => i.product_id);
     const { data: currentProducts } = await supabase
       .from('products')
-      .select('id, price, available, stock_quantity')
+      .select('id, price, available')
       .in('id', productIds);
     
     const productMap = new Map((currentProducts || []).map(p => [p.id, p]));
@@ -252,8 +252,8 @@ export default function ParentDashboard() {
 
     order.items.forEach(item => {
       const product = productMap.get(item.product_id);
-      // Skip unavailable or out-of-stock products
-      if (!product || !product.available || (product.stock_quantity !== null && product.stock_quantity <= 0)) {
+      // Skip unavailable products
+      if (!product || !product.available) {
         skippedCount++;
         return;
       }
@@ -267,7 +267,7 @@ export default function ParentDashboard() {
         price: currentPrice,
         image_url: item.product.image_url,
         quantity: item.quantity,
-        student_id: order.child.id,
+        student_id: order.student.id,
         student_name: studentName,
         scheduled_for: order.scheduled_for,
         meal_period: order.meal_period || 'lunch'
@@ -398,11 +398,11 @@ export default function ParentDashboard() {
     }>();
 
     for (const order of orders) {
-      const key = `${order.child?.id || order.id}_${order.scheduled_for}`;
+      const key = `${order.student?.id || order.id}_${order.scheduled_for}`;
       if (!groups.has(key)) {
         groups.set(key, {
-          studentId: order.child?.id || '',
-          studentName: `${order.child?.first_name || 'Unknown'} ${order.child?.last_name || 'Student'}`,
+          studentId: order.student?.id || '',
+          studentName: `${order.student?.first_name || 'Unknown'} ${order.student?.last_name || 'Student'}`,
           scheduledFor: order.scheduled_for,
           createdAt: order.created_at,
           orders: [],
@@ -739,7 +739,7 @@ export default function ParentDashboard() {
         onCancel={() => setShowCancelDialog(null)}
         onConfirm={() => showCancelDialog && handleCancelOrder(showCancelDialog)}
         title="Cancel Order?"
-        message="Are you sure you want to cancel this order? Your payment will be refunded to your account balance."
+        message="Are you sure you want to cancel this order? A refund will be processed to your original payment method."
         confirmLabel={cancellingOrder ? 'Cancelling...' : 'Yes, Cancel Order'}
         type="danger"
       />

@@ -150,17 +150,6 @@ async function handlePaymentPaid(
     if (order) {
       metadata = { type: 'order', order_id: order.id, parent_id: order.parent_id };
       console.log('[webhook] Matched order via DB:', order.id);
-    } else {
-      const { data: topup } = await supabaseAdmin
-        .from('topup_sessions')
-        .select('id, parent_id')
-        .eq('paymongo_checkout_id', checkoutId)
-        .single();
-
-      if (topup) {
-        metadata = { type: 'topup', topup_session_id: topup.id, parent_id: topup.parent_id };
-        console.log('[webhook] Matched topup via DB:', topup.id);
-      }
     }
   }
 
@@ -180,9 +169,6 @@ async function handlePaymentPaid(
   if (metadata.type === 'order') {
     console.log('[webhook] Routing to handleOrderPaymentPaid, metadata:', JSON.stringify(metadata));
     await handleOrderPaymentPaid(supabaseAdmin, safeCheckout, metadata);
-  } else if (metadata.type === 'topup') {
-    console.log('[webhook] Routing to handleTopupPaymentPaid, metadata:', JSON.stringify(metadata));
-    await handleTopupPaymentPaid(supabaseAdmin, safeCheckout, metadata);
   } else {
     console.error('[webhook] Unknown metadata type:', metadata.type);
   }
@@ -195,9 +181,10 @@ async function handleOrderPaymentPaid(
 ) {
   const orderId = metadata.order_id;
   const paymentGroupId = metadata.payment_group_id;
+  const weeklyOrderId = metadata.weekly_order_id;
 
-  if (!orderId && !paymentGroupId) {
-    console.error('Missing order_id and payment_group_id in webhook metadata');
+  if (!orderId && !paymentGroupId && !weeklyOrderId) {
+    console.error('Missing order_id, payment_group_id, and weekly_order_id in webhook metadata');
     return;
   }
 
@@ -212,6 +199,8 @@ async function handleOrderPaymentPaid(
       .from('orders')
       .select('id, status, payment_status, parent_id, total_amount, payment_method')
       .eq('payment_group_id', paymentGroupId);
+
+    // Note: weekly_order_id handling is done after batch handling below
 
     if (groupError || !groupOrders || groupOrders.length === 0) {
       console.error('No orders found for payment_group_id:', paymentGroupId, groupError);
@@ -232,6 +221,59 @@ async function handleOrderPaymentPaid(
       console.log(`Batch payment confirmed: ${confirmedCount}/${groupOrders.length} orders for group ${paymentGroupId}`);
       return;
     }
+  }
+
+  // ── Weekly order payment ──
+  if (weeklyOrderId) {
+    console.log('Processing weekly order payment:', { weeklyOrderId, paymentId, paymentMethod });
+
+    // Update weekly_orders payment status
+    await supabaseAdmin
+      .from('weekly_orders')
+      .update({
+        payment_status: 'paid',
+        payment_method: paymentMethod,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', weeklyOrderId)
+      .eq('payment_status', 'awaiting_payment');
+
+    // Confirm all child daily orders
+    const { data: childOrders } = await supabaseAdmin
+      .from('orders')
+      .select('id, status, payment_status, parent_id, total_amount, payment_method')
+      .eq('weekly_order_id', weeklyOrderId)
+      .eq('payment_status', 'awaiting_payment');
+
+    if (childOrders) {
+      for (const order of childOrders) {
+        await confirmOrderPayment(supabaseAdmin, order, paymentId, paymentMethod, checkout.id);
+      }
+      console.log(`Weekly order payment confirmed: ${childOrders.length} daily orders for ${weeklyOrderId}`);
+    }
+
+    // Update weekly payment record
+    const { data: woPayAlloc } = await supabaseAdmin
+      .from('payments')
+      .select('id')
+      .eq('weekly_order_id', weeklyOrderId)
+      .eq('status', 'pending')
+      .limit(1)
+      .single();
+
+    if (woPayAlloc) {
+      await supabaseAdmin
+        .from('payments')
+        .update({
+          status: 'completed',
+          method: paymentMethod,
+          external_ref: paymentId ? `PAYMONGO-${paymentId}` : null,
+          paymongo_payment_id: paymentId,
+          paymongo_checkout_id: checkout.id,
+        })
+        .eq('id', woPayAlloc.id);
+    }
+    return;
   }
 
   // ── Single order payment (backwards compatible) ──
@@ -269,13 +311,12 @@ async function confirmOrderPayment(
   paymentMethod: string,
   checkoutId: string,
 ) {
-  // Update order to paid
+  // Update order to paid (paymongo_payment_id column removed; stored on payments table)
   const { error: updateError } = await supabaseAdmin
     .from('orders')
     .update({
       status: 'pending',
       payment_status: 'paid',
-      paymongo_payment_id: paymentId,
       payment_method: paymentMethod,
       updated_at: new Date().toISOString(),
     })
@@ -335,154 +376,6 @@ async function confirmOrderPayment(
   }
 }
 
-async function handleTopupPaymentPaid(
-  supabaseAdmin: ReturnType<typeof createClient>,
-  checkout: any,
-  metadata: any,
-) {
-  const topupSessionId = metadata.topup_session_id;
-  if (!topupSessionId) {
-    console.error('[webhook] Missing topup_session_id in webhook metadata:', JSON.stringify(metadata));
-    return;
-  }
-
-  // Safe access — checkout may be a full object or an empty stub { attributes: {} }
-  const paymentId = checkout?.attributes?.payments?.[0]?.id || null;
-  const paymentMethod = resolvePaymentMethod(checkout?.attributes?.payments || []);
-
-  console.log('[webhook] handleTopupPaymentPaid:', {
-    topupSessionId, paymentId, paymentMethod,
-    paymentsCount: checkout?.attributes?.payments?.length || 0,
-    checkoutId: checkout?.id || 'unknown',
-  });
-
-  // Idempotency: check if already paid
-  const { data: topupSession, error: topupError } = await supabaseAdmin
-    .from('topup_sessions')
-    .select('id, parent_id, amount, status, paymongo_checkout_id')
-    .eq('id', topupSessionId)
-    .single();
-
-  if (topupError || !topupSession) {
-    console.error('[webhook] Topup session not found:', topupSessionId, topupError?.message);
-    return;
-  }
-
-  console.log('[webhook] Topup session found:', {
-    id: topupSession.id, status: topupSession.status,
-    amount: topupSession.amount, parent_id: topupSession.parent_id,
-  });
-
-  if (topupSession.status === 'paid') {
-    console.log('[webhook] Topup already paid (idempotent):', topupSessionId);
-    return;
-  }
-
-  // If no paymentId from event data, try to get it from PayMongo API
-  let finalPaymentId = paymentId;
-  let finalPaymentMethod = paymentMethod;
-  if (!finalPaymentId && topupSession.paymongo_checkout_id) {
-    try {
-      const apiCheckout = await getCheckoutSession(topupSession.paymongo_checkout_id);
-      const apiPayments = apiCheckout?.attributes?.payments;
-      if (apiPayments?.length) {
-        finalPaymentId = apiPayments[0].id;
-        finalPaymentMethod = resolvePaymentMethod(apiPayments);
-        console.log('[webhook] Got payment details from API:', finalPaymentId, finalPaymentMethod);
-      }
-    } catch (e) {
-      console.warn('[webhook] Could not fetch payment details from API:', e);
-    }
-  }
-
-  // Update topup session
-  const { error: updateError, count: updateCount } = await supabaseAdmin
-    .from('topup_sessions')
-    .update({
-      status: 'paid',
-      payment_method: finalPaymentMethod,
-      paymongo_payment_id: finalPaymentId,
-      completed_at: new Date().toISOString(),
-    })
-    .eq('id', topupSessionId)
-    .eq('status', 'pending'); // Optimistic lock
-
-  console.log('[webhook] Topup session update result — error:', updateError?.message || 'none', 'count:', updateCount);
-
-  if (updateError) {
-    console.error('[webhook] Failed to update topup session:', updateError);
-    return;
-  }
-
-  // Verify the update actually took effect
-  const { data: verifyTopup } = await supabaseAdmin
-    .from('topup_sessions')
-    .select('status')
-    .eq('id', topupSessionId)
-    .single();
-  console.log('[webhook] Topup status after update:', verifyTopup?.status);
-
-  if (verifyTopup?.status !== 'paid') {
-    console.error('[webhook] CRITICAL: Update returned no error but status is still:', verifyTopup?.status);
-    return;
-  }
-
-  // Credit wallet balance using atomic RPC (SELECT FOR UPDATE — no CAS retries needed)
-  const topupAmount = Number(topupSession.amount);
-  let walletCredited = false;
-
-  try {
-    const { data: paymentId2, error: creditError } = await supabaseAdmin.rpc(
-      'credit_balance_with_payment',
-      {
-        p_parent_id: topupSession.parent_id,
-        p_amount: topupAmount,
-        p_type: 'topup',
-        p_method: finalPaymentMethod,
-        p_reference_id: `TOPUP-${checkout.id?.substring(0, 12)}`,
-        p_paymongo_payment_id: finalPaymentId,
-        p_paymongo_checkout_id: checkout.id,
-      }
-    );
-
-    if (creditError) {
-      throw creditError;
-    }
-
-    walletCredited = true;
-    console.log('[webhook] Wallet credited via RPC, payment_id:', paymentId2);
-  } catch (creditErr) {
-    console.error('CRITICAL: Failed to credit wallet via RPC for topup:', topupSessionId, 'amount:', topupAmount, 'parent:', topupSession.parent_id, creditErr);
-    // Mark topup session for manual review — use 'failed' status (allowed by CHECK constraint)
-    // The payment was received but wallet credit failed — needs admin intervention
-    await supabaseAdmin
-      .from('topup_sessions')
-      .update({ status: 'failed' })
-      .eq('id', topupSessionId);
-
-    // Also log to payments for audit trail
-    await supabaseAdmin.from('payments').insert({
-      parent_id: topupSession.parent_id,
-      type: 'topup',
-      amount_total: topupAmount,
-      method: paymentMethod,
-      status: 'failed',
-      reference_id: paymentId ? `PAYMONGO-${paymentId}-NEEDS-REVIEW` : `TOPUP-${topupSessionId}-NEEDS-REVIEW`,
-      paymongo_payment_id: paymentId,
-      paymongo_checkout_id: checkout.id,
-    });
-    return; // Don't create 'completed' transaction if wallet credit failed
-  }
-
-  // Only continue if wallet was credited (payment record already created by RPC)
-  if (walletCredited) {
-    // Payment record was already created atomically by credit_balance_with_payment RPC
-    console.log('Topup completed (payment created by RPC):', { topupSessionId, amount: topupSession.amount, paymentMethod });
-  }
-
-  console.log('Topup completed:', { topupSessionId, amount: topupSession.amount, paymentMethod });
-}
-
 async function handlePaymentFailed(
   supabaseAdmin: ReturnType<typeof createClient>,
   event: Record<string, unknown>,
@@ -525,14 +418,6 @@ async function handlePaymentFailed(
       console.log('Payment failed for order:', orderId);
       await cancelFailedOrder(supabaseAdmin, orderId);
     }
-  } else if (metadata.type === 'topup' && metadata.topup_session_id) {
-    console.log('Payment failed for topup:', metadata.topup_session_id);
-
-    await supabaseAdmin
-      .from('topup_sessions')
-      .update({ status: 'failed' })
-      .eq('id', metadata.topup_session_id)
-      .eq('status', 'pending');
   }
 }
 
@@ -560,20 +445,7 @@ async function cancelFailedOrder(
     return;
   }
 
-  // Restore stock using atomic RPC
-  const { data: orderItems } = await supabaseAdmin
-    .from('order_items')
-    .select('product_id, quantity')
-    .eq('order_id', orderId);
-
-  if (orderItems) {
-    for (const item of orderItems) {
-      await supabaseAdmin.rpc('increment_stock', {
-        p_product_id: item.product_id,
-        p_quantity: item.quantity,
-      }).catch(err => console.error('Stock restore failed for', item.product_id, err));
-    }
-  }
+  // No stock restoration needed (stock tracking removed)
 
   // Update payment to failed via allocation lookup
   const { data: alloc } = await supabaseAdmin
