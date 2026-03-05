@@ -127,7 +127,7 @@ export default function Menu() {
   // Get weekdays with status for the selected week
   const { data: weekdaysInfo } = useQuery({
     queryKey: ['weekdays-with-status', currentWeekStart],
-    queryFn: () => getWeekdaysWithStatus(currentWeekStart!),
+    queryFn: () => getWeekdaysWithStatus(currentWeekStart ?? undefined),
     enabled: !!currentWeekStart
   });
   
