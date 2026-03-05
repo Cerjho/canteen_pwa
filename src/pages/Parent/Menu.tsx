@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus } from 'lucide-react';
+import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, isTomorrow } from 'date-fns';
+import { format, isTomorrow, startOfWeek } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus, formatDateLocal } from '../../services/products';
 import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
@@ -13,6 +13,8 @@ import { PageHeader } from '../../components/PageHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { ProductCardSkeleton, Skeleton } from '../../components/Skeleton';
 import { WeeklyCartSummary } from '../../components/WeeklyCartSummary';
+import { CutoffCountdown } from '../../components/CutoffCountdown';
+import { SurplusItemCard } from '../../components/SurplusItemCard';
 import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -20,6 +22,8 @@ import { supabase } from '../../services/supabaseClient';
 import type { ProductCategory, MealPeriod, PaymentMethod } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
 import { autoMealPeriod, MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
+import { useSystemSettings } from '../../hooks/useSystemSettings';
+import { useSurplusItems } from '../../hooks/useProducts';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -64,6 +68,10 @@ export default function Menu() {
   } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { data: students, isLoading: studentsLoading } = useStudents();
+  const { settings, isSurplusClosed } = useSystemSettings();
+
+  // Surplus items (available when today is selected and canteen has extras)
+  const { data: surplusItems } = useSurplusItems();
 
   // Query active orders for the cart (merge detection)
   const { data: activeOrders } = useQuery({
@@ -109,6 +117,17 @@ export default function Menu() {
     [selectedDate, weekdaysInfo]
   );
   const effectiveDate = useMemo(() => new Date(effectiveDateStr + 'T00:00:00'), [effectiveDateStr]);
+
+  // Compute the Monday of the week being viewed
+  const weekStart = useMemo(() => {
+    if (!weekdaysInfo || weekdaysInfo.length === 0) return null;
+    const monday = startOfWeek(weekdaysInfo[0].date, { weekStartsOn: 1 });
+    return formatDateLocal(monday);
+  }, [weekdaysInfo]);
+
+  // Surplus visibility: only when viewing today and items exist
+  const surplusClosed = isSurplusClosed();
+  const showSurplus = surplusItems && surplusItems.length > 0 && formatDateLocal(effectiveDate) === formatDateLocal(new Date());
   
   // Check canteen status for selected date (use weekdayInfo if available)
   const { data: canteenStatus } = useQuery({
@@ -257,7 +276,7 @@ export default function Menu() {
           orderId: result?.orders?.[0]?.weekly_order_id || crypto.randomUUID(),
           orderCount: result?.orders?.length || 1,
           totalAmount: checkoutTotal,
-          childName: studentNames || 'Your students',
+          studentName: studentNames || 'Your students',
           itemCount,
           isOffline: false,
           paymentMethod,
@@ -359,7 +378,7 @@ export default function Menu() {
                 Go to Profile to Link a Student
               </button>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
-                In your profile, tap <strong>"Link Student"</strong> and enter your child's school ID.
+                In your profile, tap <strong>"Link Student"</strong> and enter the student's school ID.
               </p>
             </div>
           </div>
@@ -548,6 +567,17 @@ export default function Menu() {
           )}
         </div>
 
+        {/* Cutoff Countdown */}
+        {weekStart && (
+          <div className="mb-4">
+            <CutoffCountdown
+              targetWeekStart={weekStart}
+              cutoffDay={settings.weekly_cutoff_day}
+              cutoffTime={settings.weekly_cutoff_time}
+            />
+          </div>
+        )}
+
         <StudentSelector
           students={students || []}
           selectedStudentId={selectedStudentId}
@@ -581,7 +611,7 @@ export default function Menu() {
                 Select a student to start ordering
               </p>
               <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                Use the <strong>"Order for"</strong> dropdown above to choose which child you're ordering for. Add buttons are disabled until a student is selected.
+                Use the <strong>"Order for"</strong> dropdown above to choose which student you're ordering for. Add buttons are disabled until a student is selected.
               </p>
             </div>
           </div>
@@ -668,6 +698,53 @@ export default function Menu() {
                 addDisabled={!selectedStudentId}
               />
             ))}
+          </div>
+        )}
+
+        {/* Surplus Items Section */}
+        {showSurplus && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                <Clock size={16} className="text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Surplus Items</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Extra items from today — available while supplies last</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {surplusItems.map((item, index) => {
+                const selectedStudent = students?.find(s => s.id === selectedStudentId);
+                return (
+                  <SurplusItemCard
+                    key={item.id}
+                    item={item}
+                    cartQuantity={0}
+                    onAdd={(surplusItem, qty) => {
+                      if (!selectedStudentId || !selectedStudent) {
+                        showToast('Select a student first', 'error');
+                        return;
+                      }
+                      addItem({
+                        product_id: surplusItem.product_id,
+                        student_id: selectedStudentId,
+                        student_name: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
+                        name: surplusItem.product?.name || 'Surplus Item',
+                        price: surplusItem.surplus_price,
+                        image_url: surplusItem.product?.image_url,
+                        quantity: qty,
+                        scheduled_for: formatDateLocal(new Date()),
+                        meal_period: 'lunch',
+                      });
+                      showToast(`Added ${qty} ${surplusItem.product?.name || 'item'}`, 'success');
+                    }}
+                    isClosed={surplusClosed}
+                    index={index}
+                  />
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

@@ -213,7 +213,7 @@ export default function Profile() {
             <div className="flex gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg p-3">
               <AlertCircle size={16} className="text-blue-500 dark:text-blue-400 shrink-0 mt-0.5" />
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                Students are registered by the school. Use the <strong>Student ID</strong> provided by the school to link your child.
+                Students are registered by the school. Use the <strong>Student ID</strong> provided by the school to link your student.
               </p>
             </div>
           </div>

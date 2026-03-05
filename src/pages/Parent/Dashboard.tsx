@@ -1,21 +1,24 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, isToday, isTomorrow, parseISO } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO, addDays } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
 import { useAuth } from '../../hooks/useAuth';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useCart } from '../../hooks/useCart';
+import { useWeeklyOrders } from '../../hooks/useOrders';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
 import { PullToRefresh } from '../../components/PullToRefresh';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { DayCancellationModal } from '../../components/DayCancellationModal';
 import { useToast } from '../../components/Toast';
 import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, isOnlinePaymentMethod } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
+import { useSystemSettings } from '../../hooks/useSystemSettings';
 import { 
   Package, 
   Clock, 
@@ -23,13 +26,15 @@ import {
   RefreshCw, 
   Bell, 
   CalendarClock, 
+  CalendarDays,
   Calendar, 
   X, 
   RotateCcw, 
   MapPin, 
   Sparkles,
   Timer,
-  XCircle
+  XCircle,
+  ChevronRight
 } from 'lucide-react';
 
 // Helper to format date in Philippine timezone (UTC+8)
@@ -108,13 +113,15 @@ export default function ParentDashboard() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { addItem } = useCart();
-  const [activeTab, setActiveTab] = useState<'today' | 'scheduled'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'scheduled' | 'weekly'>('today');
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
+  const [showDayCancelModal, setShowDayCancelModal] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const [, setTimerTick] = useState(0); // Force re-render for countdown timers
   
   // Subscribe to realtime order updates
   useOrderSubscription();
+  const { settings } = useSystemSettings();
   
   const todayStr = formatDateLocal(new Date());
   
@@ -199,6 +206,9 @@ export default function ParentDashboard() {
     },
     enabled: !!user
   });
+
+  // Weekly orders (aggregated weekly pre-orders)
+  const { data: weeklyOrders, isLoading: loadingWeekly } = useWeeklyOrders();
 
   // Cancel order mutation (via edge function)
   const cancelOrderMutation = useMutation({
@@ -381,8 +391,8 @@ export default function ParentDashboard() {
     }
   };
 
-  const isLoading = activeTab === 'today' ? loadingToday : loadingScheduled;
-  const orders = activeTab === 'today' ? todayOrders : scheduledOrders;
+  const isLoading = activeTab === 'today' ? loadingToday : activeTab === 'scheduled' ? loadingScheduled : loadingWeekly;
+  const orders = activeTab === 'today' ? todayOrders : activeTab === 'scheduled' ? scheduledOrders : undefined;
 
   // Group orders by student + date for merged card display
   const groupedOrders = useMemo(() => {
@@ -447,14 +457,14 @@ export default function ParentDashboard() {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setActiveTab('today')}
-              className={`flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 text-sm ${
                 activeTab === 'today'
                   ? 'bg-primary-600 text-white shadow-md shadow-primary-200 dark:shadow-primary-900/30'
                   : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
               }`}
             >
-              <Bell size={18} />
-              Today's Orders
+              <Bell size={16} />
+              Today
               {todayOrders && todayOrders.length > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-xs ${
                   activeTab === 'today' ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-700'
@@ -465,13 +475,13 @@ export default function ParentDashboard() {
             </button>
             <button
               onClick={() => setActiveTab('scheduled')}
-              className={`flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 text-sm ${
                 activeTab === 'scheduled'
                   ? 'bg-primary-600 text-white shadow-md shadow-primary-200 dark:shadow-primary-900/30'
                   : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
               }`}
             >
-              <CalendarClock size={18} />
+              <CalendarClock size={16} />
               Scheduled
               {scheduledOrders && scheduledOrders.length > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-xs ${
@@ -481,10 +491,98 @@ export default function ParentDashboard() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('weekly')}
+              className={`flex-1 py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 text-sm ${
+                activeTab === 'weekly'
+                  ? 'bg-primary-600 text-white shadow-md shadow-primary-200 dark:shadow-primary-900/30'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
+              }`}
+            >
+              <CalendarDays size={16} />
+              Weekly
+              {weeklyOrders && weeklyOrders.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                  activeTab === 'weekly' ? 'bg-primary-500' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                }`}>
+                  {weeklyOrders.length}
+                </span>
+              )}
+            </button>
           </div>
+
+          {/* Bulk Cancel Days button — shown on Scheduled tab when there are orders */}
+          {activeTab === 'scheduled' && scheduledOrders && scheduledOrders.length > 0 && (
+            <button
+              onClick={() => setShowDayCancelModal(true)}
+              className="mb-4 w-full py-2.5 flex items-center justify-center gap-2 border-2 border-dashed border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <X size={16} />
+              Cancel Multiple Days
+            </button>
+          )}
 
           {isLoading ? (
             <LoadingSpinner size="lg" />
+          ) : activeTab === 'weekly' ? (
+            /* ── Weekly Orders List ────────────────────── */
+            weeklyOrders && weeklyOrders.length > 0 ? (
+              <div className="space-y-3">
+                {weeklyOrders.map((wo) => {
+                  const studentName = wo.student
+                    ? `${wo.student.first_name} ${wo.student.last_name}`
+                    : 'Student';
+                  const activeDays = wo.daily_orders?.filter(o => o.status !== 'cancelled').length ?? 0;
+                  const totalDays = wo.daily_orders?.length ?? 0;
+                  const weekEnd = format(addDays(parseISO(wo.week_start), 4), 'MMM d');
+                  const weekStart = format(parseISO(wo.week_start), 'MMM d');
+
+                  return (
+                    <button
+                      key={wo.id}
+                      onClick={() => navigate(`/order-review/${wo.id}`)}
+                      className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-left hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                            <CalendarDays size={20} className="text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                              {weekStart} – {weekEnd}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {studentName} · {activeDays}/{totalDays} days active
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-primary-600 dark:text-primary-400">
+                            ₱{wo.total_amount.toFixed(2)}
+                          </span>
+                          <ChevronRight size={16} className="text-gray-400" />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState
+                icon={CalendarDays}
+                title="No weekly orders"
+                description="Your weekly pre-orders will appear here after checkout"
+                action={
+                  <Link 
+                    to="/menu" 
+                    className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 font-medium"
+                  >
+                    Place Weekly Order
+                  </Link>
+                }
+              />
+            )
           ) : groupedOrders.length > 0 ? (
             <div className="space-y-4">
               {groupedOrders.map((group) => {
@@ -742,6 +840,19 @@ export default function ParentDashboard() {
         message="Are you sure you want to cancel this order? A refund will be processed to your original payment method."
         confirmLabel={cancellingOrder ? 'Cancelling...' : 'Yes, Cancel Order'}
         type="danger"
+      />
+
+      {/* Bulk Day Cancellation Modal */}
+      <DayCancellationModal
+        isOpen={showDayCancelModal}
+        onClose={() => setShowDayCancelModal(false)}
+        dailyOrders={(scheduledOrders || []) as import('../../types').OrderWithDetails[]}
+        cancelCutoffTime={settings.daily_cancel_cutoff_time}
+        onConfirmCancel={async (orderIds) => {
+          for (const orderId of orderIds) {
+            await cancelOrderMutation.mutateAsync(orderId);
+          }
+        }}
       />
     </div>
   );

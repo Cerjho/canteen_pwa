@@ -8,7 +8,6 @@ import { ensureValidSession } from './authSession';
 import { friendlyError } from '../utils/friendlyError';
 import type {
   CreateCheckoutResponse,
-  BatchCheckoutResponse,
   WeeklyCheckoutResponse,
   PaymentStatusResponse,
   PaymentMethod,
@@ -58,94 +57,6 @@ async function extractEdgeFunctionError(error: Error & { context?: unknown }, da
   }
 
   return friendlyError(error.message, 'process your request');
-}
-
-export interface CreateCheckoutRequest {
-  parent_id: string;
-  student_id: string;
-  client_order_id: string;
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price_at_order: number;
-    meal_period?: string;
-  }>;
-  payment_method: 'gcash' | 'paymaya' | 'card';
-  notes?: string;
-  scheduled_for?: string;
-  /** @deprecated Use items[].meal_period instead */
-  meal_period?: string;
-}
-
-export interface BatchCheckoutOrderGroup {
-  student_id: string;
-  client_order_id: string;
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price_at_order: number;
-    meal_period?: string;
-  }>;
-  scheduled_for?: string;
-}
-
-export interface CreateBatchCheckoutRequest {
-  parent_id: string;
-  orders: BatchCheckoutOrderGroup[];
-  payment_method: 'gcash' | 'paymaya' | 'card';
-  notes?: string;
-}
-
-/**
- * Create a PayMongo checkout session for an online payment order.
- * Returns the checkout_url to redirect the user to.
- */
-export async function createCheckout(
-  orderData: CreateCheckoutRequest
-): Promise<CreateCheckoutResponse> {
-  // Ensure we have a valid session (auto-refreshes if needed)
-  await ensureValidSession();
-
-  const { data, error } = await supabase.functions.invoke('create-checkout', {
-    body: orderData,
-  });
-
-  if (error) {
-    const errorMessage = await extractEdgeFunctionError(error, data);
-    throw new Error(errorMessage);
-  }
-
-  if (data?.error) {
-    throw new Error(data.message || data.error);
-  }
-
-  return data as CreateCheckoutResponse;
-}
-
-/**
- * Create a SINGLE PayMongo checkout session covering multiple orders.
- * @deprecated For weekly pre-orders, use createWeeklyCheckout instead.
- */
-export async function createBatchCheckout(
-  batchData: CreateBatchCheckoutRequest
-): Promise<BatchCheckoutResponse> {
-  // Ensure we have a valid session (auto-refreshes if needed)
-  await ensureValidSession();
-
-  const { data, error } = await supabase.functions.invoke('create-batch-checkout', {
-    body: batchData,
-  });
-
-  if (error) {
-    const errorMessage = await extractEdgeFunctionError(error, data);
-    throw new Error(errorMessage);
-  }
-
-  if (data?.error) {
-    throw new Error(data.message || data.error);
-  }
-
-  return data as BatchCheckoutResponse;
 }
 
 /**

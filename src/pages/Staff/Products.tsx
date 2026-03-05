@@ -114,7 +114,7 @@ export default function StaffProducts() {
         <div className="flex items-center justify-between mb-4">
           <PageHeader
             title="Product Availability"
-            subtitle="Manage stock and availability"
+            subtitle="Manage product availability"
           />
           <button
             onClick={() => refetch()}

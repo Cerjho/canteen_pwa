@@ -12,6 +12,7 @@ const ParentDashboard = lazy(() => import('./pages/Parent/Dashboard'));
 const ParentProfile = lazy(() => import('./pages/Parent/Profile'));
 const ParentOrderHistory = lazy(() => import('./pages/Parent/OrderHistory'));
 const ParentOrderConfirmation = lazy(() => import('./pages/Parent/OrderConfirmation'));
+const ParentWeeklyOrderReview = lazy(() => import('./pages/Parent/WeeklyOrderReview'));
 // Staff pages
 const StaffDashboard = lazy(() => import('./pages/Staff/Dashboard'));
 const StaffProducts = lazy(() => import('./pages/Staff/Products'));
@@ -174,6 +175,11 @@ function App() {
         <Route path="/order-confirmation" element={
           <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
             <ParentOrderConfirmation />
+          </RoleRoute>
+        } />
+        <Route path="/order-review/:weeklyOrderId" element={
+          <RoleRoute allowedRoles={['parent', 'admin']} user={user} userRole={userRole}>
+            <ParentWeeklyOrderReview />
           </RoleRoute>
         } />
 

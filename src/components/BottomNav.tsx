@@ -2,10 +2,13 @@ import { NavLink } from 'react-router-dom';
 import { Home, ShoppingBag, User, ClipboardList, Clock, Shield, Package } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useActiveOrderCount } from './ActiveOrderBadge';
+import { useCart } from '../hooks/useCart';
 
 export function BottomNav() {
   const { user } = useAuth();
   const activeOrderCount = useActiveOrderCount();
+  const { items: cartItems } = useCart();
+  const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
   
   // Check user role from app_metadata (server-only, tamper-proof)
   const userRole = user?.app_metadata?.role;
@@ -33,8 +36,8 @@ export function BottomNav() {
   } else if (isParent) {
     // Parent-only navigation
     navItems.push(
-      { to: '/menu', icon: Home, label: 'Menu', badge: 0 },
-      { to: '/dashboard', icon: ShoppingBag, label: 'Active', badge: activeOrderCount },
+      { to: '/menu', icon: Home, label: 'Menu', badge: cartCount },
+      { to: '/dashboard', icon: ShoppingBag, label: 'Orders', badge: activeOrderCount },
       { to: '/orders', icon: Clock, label: 'History', badge: 0 },
       { to: '/profile', icon: User, label: 'Profile', badge: 0 }
     );

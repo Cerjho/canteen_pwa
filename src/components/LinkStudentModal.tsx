@@ -58,7 +58,7 @@ export function LinkStudentModal({ isOpen, onClose, onSubmit, isLoading }: LinkS
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
             <p className="text-sm text-amber-800 dark:text-amber-300">
               💡 <strong>Don't have a Student ID?</strong><br />
-              Contact the school administration to get your child's Student ID.
+              Contact the school administration to get the student's ID.
             </p>
           </div>
 

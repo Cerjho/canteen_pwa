@@ -14,7 +14,7 @@ import {
   EyeOff,
   Loader2,
   User,
-  Baby,
+  GraduationCap,
   ShoppingBag,
   Ticket,
   Copy,
@@ -34,7 +34,7 @@ interface Parent {
   first_name: string;
   last_name: string;
   created_at: string;
-  children_count?: number;
+  students_count?: number;
   orders_count?: number;
 }
 
@@ -118,10 +118,10 @@ export default function AdminUsers() {
       
       if (error) throw error;
       
-      // Batch fetch children counts and order counts (avoids N+1 queries)
+      // Batch fetch student counts and order counts (avoids N+1 queries)
       const parentIds = (profiles || []).map(p => p.id);
 
-      const { data: childrenCounts } = await supabase
+      const { data: studentCounts } = await supabase
         .from('parent_students')
         .select('parent_id')
         .in('parent_id', parentIds);
@@ -132,9 +132,9 @@ export default function AdminUsers() {
         .in('parent_id', parentIds);
 
       // Build count maps
-      const childrenCountMap = new Map<string, number>();
-      (childrenCounts || []).forEach(row => {
-        childrenCountMap.set(row.parent_id, (childrenCountMap.get(row.parent_id) || 0) + 1);
+      const studentCountMap = new Map<string, number>();
+      (studentCounts || []).forEach(row => {
+        studentCountMap.set(row.parent_id, (studentCountMap.get(row.parent_id) || 0) + 1);
       });
       const ordersCountMap = new Map<string, number>();
       (ordersCounts || []).forEach(row => {
@@ -143,7 +143,7 @@ export default function AdminUsers() {
 
       const enrichedParents = (profiles || []).map((profile) => ({
         ...profile,
-        children_count: childrenCountMap.get(profile.id) || 0,
+        students_count: studentCountMap.get(profile.id) || 0,
         orders_count: ordersCountMap.get(profile.id) || 0
       }));
 
@@ -430,11 +430,11 @@ export default function AdminUsers() {
                   <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                        <Baby size={16} className="text-blue-600 dark:text-blue-400" />
+                        <GraduationCap size={16} className="text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Students</p>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">{parent.children_count}</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">{parent.students_count}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

@@ -39,7 +39,7 @@ const ENTITY_ICONS: Record<string, React.ReactNode> = {
   products: <Package size={18} />,
   orders: <ShoppingBag size={18} />,
   parents: <Users size={18} />,
-  children: <User size={18} />,
+  students: <User size={18} />,
   system_settings: <Settings size={18} />
 };
 

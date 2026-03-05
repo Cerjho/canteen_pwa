@@ -10,45 +10,6 @@ import type {
   WeeklyOrderWithDetails,
 } from '../types';
 
-// ── Legacy batch types (kept for backward compatibility) ──
-
-export interface BatchOrderGroup {
-  student_id: string;
-  client_order_id: string;
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price_at_order: number;
-    meal_period?: string;
-  }>;
-  scheduled_for?: string;
-}
-
-export interface CreateBatchOrderRequest {
-  parent_id: string;
-  orders: BatchOrderGroup[];
-  payment_method: 'cash';
-  notes?: string;
-}
-
-export interface BatchOrderResponse {
-  success: boolean;
-  order_ids: string[];
-  merged_order_ids?: string[];
-  new_order_ids?: string[];
-  merged?: boolean;
-  orders: Array<{
-    order_id: string;
-    client_order_id: string;
-    total_amount: number;
-    status: string;
-    payment_status: string;
-    payment_due_at: string | null;
-  }>;
-  total_amount: number;
-  message: string;
-}
-
 export interface OrderError {
   code: string;
   message: string;
@@ -261,42 +222,6 @@ export async function getWeeklyOrderDetail(weeklyOrderId: string): Promise<Weekl
     throw error;
   }
   return data as WeeklyOrderWithDetails;
-}
-
-// ══════════════════════════════════════════════════════════════
-// Legacy Batch Order (kept for backward compatibility)
-// ══════════════════════════════════════════════════════════════
-
-/**
- * Create multiple orders in a single request (cash only).
- * @deprecated For weekly pre-orders, use createWeeklyOrder instead.
- */
-export async function createBatchOrder(batchData: CreateBatchOrderRequest): Promise<BatchOrderResponse> {
-  if (!batchData.parent_id) throw new Error('Please sign in to continue.');
-  if (!batchData.orders || batchData.orders.length === 0) throw new Error('Your cart is empty.');
-
-  if (!isOnline()) {
-    for (const order of batchData.orders) {
-      await queueOrder({
-        parent_id: batchData.parent_id,
-        student_id: order.student_id,
-        client_order_id: order.client_order_id,
-        items: order.items,
-        payment_method: batchData.payment_method,
-        notes: batchData.notes,
-        scheduled_for: order.scheduled_for,
-      });
-    }
-    return {
-      success: true,
-      order_ids: [],
-      orders: [],
-      total_amount: 0,
-      message: 'Orders saved offline. Will sync when connected.',
-    };
-  }
-
-  return invokeWithRetry<BatchOrderResponse>('process-batch-order', batchData);
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -340,7 +340,8 @@ describe('Profile Page - Link Student Flow', () => {
     renderProfile();
     
     await waitFor(() => {
-      expect(screen.getByText(/Link.*Student/i)).toBeInTheDocument();
+      const linkStudentElements = screen.getAllByText(/Link.*Student/i);
+      expect(linkStudentElements.length).toBeGreaterThan(0);
     });
   });
 });

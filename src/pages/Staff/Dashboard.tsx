@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, TouchEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, XCircle, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, TrendingUp, AlertTriangle, BarChart3, Send, Flame, Smartphone } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle, RefreshCw, Bell, Volume2, VolumeX, Printer, Timer, X, XCircle, Banknote, ChevronDown, ChevronRight, Users, Layers, Maximize2, Minimize2, MessageSquare, AlertTriangle, BarChart3, Send, Flame, Smartphone } from 'lucide-react';
 import { format, differenceInMinutes, isToday } from 'date-fns';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
@@ -9,6 +9,9 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { useToast } from '../../components/Toast';
 import { SearchBar } from '../../components/SearchBar';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { StaffStatsPanel } from '../../components/StaffStatsPanel';
+import { StaffKitchenPrepSummary } from '../../components/StaffKitchenPrepSummary';
+import type { GradeMealPrepGroup, PrepItem } from '../../components/StaffKitchenPrepSummary';
 import { playNotificationSound } from '../../utils/notificationSound';
 import { friendlyError } from '../../utils/friendlyError';
 import { getPaymentMethodLabel } from '../../services/payments';
@@ -169,14 +172,6 @@ type ViewMode = 'flat' | 'grouped' | 'kitchen';
 
 // Meal period ordering for kitchen prep view
 const MEAL_PERIOD_ORDER: MealPeriod[] = ['morning_snack', 'lunch', 'afternoon_snack'];
-
-interface PrepItem {
-  name: string;
-  quantity: number;
-  image_url: string;
-  pendingQty: number;
-  preparingQty: number;
-}
 
 // Touch tracking for swipe gestures
 interface TouchState {
@@ -386,15 +381,6 @@ export default function StaffDashboard() {
 
   // Kitchen prep grouped by GRADE first, then meal period within each grade
   // Layout: Grade 1 → Morning: Turon 2, Banana Cue 3 | Lunch: Beef Tapa 3 | Afternoon: Turon 5
-  interface GradeMealPrepGroup {
-    gradeLevel: string;
-    meals: {
-      mealPeriod: MealPeriod;
-      items: PrepItem[];
-      totalItems: number;
-    }[];
-    totalItems: number;
-  }
 
   const prepByGrade = useMemo((): GradeMealPrepGroup[] => {
     if (!orders) return [];
@@ -1343,55 +1329,11 @@ export default function StaffDashboard() {
 
         {/* Stats Panel - Collapsible */}
         {showStatsPanel && orderStats && (
-          <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4 animate-slide-up">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-2">
-                <TrendingUp size={18} /> Today's Performance
-              </h3>
-              <button onClick={() => setShowStatsPanel(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{orderStats.totalOrders}</div>
-                <div className="text-xs text-gray-500">Total Orders</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-green-600">{orderStats.completedOrders}</div>
-                <div className="text-xs text-gray-500">Completed</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-blue-600">{orderStats.completionRate}%</div>
-                <div className="text-xs text-gray-500">Completion Rate</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-purple-600">{orderStats.avgPrepTime}m</div>
-                <div className="text-xs text-gray-500">Avg Prep Time</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
-                <div className={`text-2xl font-bold ${orderStats.pendingTooLong > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                  {orderStats.pendingTooLong}
-                </div>
-                <div className="text-xs text-gray-500">Delayed ({'>'}15m)</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-primary-600">₱{orderStats.totalRevenue.toFixed(0)}</div>
-                <div className="text-xs text-gray-500">Revenue</div>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
-              <span>Order rate: {peakHourStatus.ordersPerHour}/hr</span>
-              <span>•</span>
-              <span className={`flex items-center gap-1 ${
-                peakHourStatus.trend === 'increasing' ? 'text-green-600' : 
-                peakHourStatus.trend === 'decreasing' ? 'text-red-600' : 'text-gray-500'
-              }`}>
-                {peakHourStatus.trend === 'increasing' ? '↑' : peakHourStatus.trend === 'decreasing' ? '↓' : '→'}
-                {peakHourStatus.trend}
-              </span>
-            </div>
-          </div>
+          <StaffStatsPanel
+            orderStats={orderStats}
+            peakHourStatus={peakHourStatus}
+            onClose={() => setShowStatsPanel(false)}
+          />
         )}
 
         {/* Search Bar */}
@@ -1464,77 +1406,7 @@ export default function StaffDashboard() {
         </div>
 
         {/* Kitchen Prep Summary - Grouped by Grade Level, then Meal Period */}
-        {prepByGrade.length > 0 && (
-          <details className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
-            <summary className="px-4 py-3 cursor-pointer hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ChefHat size={20} className="text-amber-600 dark:text-amber-400" />
-                <span className="font-semibold text-amber-800 dark:text-amber-300">
-                  Kitchen Prep Summary
-                </span>
-                <span className="text-xs bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full">
-                  {itemsToPrep} items
-                </span>
-              </div>
-              <span className="text-xs text-amber-600 dark:text-amber-400">Click to expand</span>
-            </summary>
-            <div className="px-4 pb-4 pt-2 space-y-3">
-              {prepByGrade.map((gradeGroup) => (
-                <div key={gradeGroup.gradeLevel} className="bg-white dark:bg-gray-800 rounded-lg border border-amber-200/50 dark:border-gray-700 overflow-hidden">
-                  {/* Grade Header */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-100/50 dark:bg-gray-700/50 border-b border-amber-200/30 dark:border-gray-700">
-                    <Users size={16} className="text-amber-600 dark:text-amber-400" />
-                    <span className="font-semibold text-sm text-amber-800 dark:text-amber-300">
-                      {gradeGroup.gradeLevel}
-                    </span>
-                    <span className="text-[10px] bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded">
-                      {gradeGroup.totalItems} items
-                    </span>
-                  </div>
-
-                  {/* Meal Period Rows */}
-                  <div className="divide-y divide-amber-100 dark:divide-gray-700/50">
-                    {gradeGroup.meals.map((meal) => (
-                      <div key={`${gradeGroup.gradeLevel}-${meal.mealPeriod}`} className="px-4 py-2.5 flex items-start gap-3">
-                        {/* Meal label */}
-                        <div className="flex items-center gap-1.5 min-w-[120px] pt-0.5">
-                          <span>{MEAL_PERIOD_ICONS[meal.mealPeriod]}</span>
-                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                            {MEAL_PERIOD_LABELS[meal.mealPeriod]}
-                          </span>
-                        </div>
-                        {/* Items inline with chips */}
-                        <div className="flex flex-wrap gap-1.5 flex-1">
-                          {meal.items.map((item) => (
-                            <div 
-                              key={item.name}
-                              className="inline-flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700 rounded-md px-2.5 py-1 border border-gray-200 dark:border-gray-600"
-                            >
-                              {item.image_url && (
-                                <img 
-                                  src={item.image_url} 
-                                  alt={item.name}
-                                  className="w-5 h-5 rounded object-cover"
-                                />
-                              )}
-                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name}</span>
-                              <span className="text-xs font-bold text-amber-600 dark:text-yellow-400">{item.quantity}</span>
-                              {item.preparingQty > 0 && (
-                                <span className="text-[9px] px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400 rounded">
-                                  {item.preparingQty} prep
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+        <StaffKitchenPrepSummary prepByGrade={prepByGrade} itemsToPrep={itemsToPrep} />
 
         {/* Quick Stats Bar - Last Refresh & Keyboard Hints */}
         <div className="flex items-center justify-between mb-4 text-xs text-gray-500 dark:text-gray-400">

@@ -10,7 +10,7 @@ import { friendlyError } from '../../utils/friendlyError';
 interface OrderConfirmationState {
   orderId: string;
   totalAmount: number;
-  childName: string;
+  studentName: string;
   itemCount: number;
   isOffline?: boolean;
   paymentMethod?: PaymentMethod;
@@ -356,7 +356,7 @@ export default function OrderConfirmation() {
               <User className="text-primary-600 dark:text-primary-400" size={20} />
             </div>
             <div>
-              <p className="font-medium text-gray-900 dark:text-gray-100">Order for {state.childName}</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">Order for {state.studentName}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">{state.itemCount} item(s)</p>
             </div>
           </div>

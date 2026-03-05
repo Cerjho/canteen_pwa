@@ -163,8 +163,8 @@ async function processQueueInner(): Promise<{ processed: number; failed: number 
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
-      // Call Supabase Edge Function to process order
-      const { data, error } = await supabase.functions.invoke('process-order', {
+      // Call Supabase Edge Function to process weekly order
+      const { data, error } = await supabase.functions.invoke('process-weekly-order', {
         body: {
           parent_id: order.parent_id,
           student_id: order.student_id,
@@ -190,18 +190,6 @@ async function processQueueInner(): Promise<{ processed: number; failed: number 
           }
           await removeQueuedOrder(order.id);
           processed++;
-          continue;
-        }
-
-        if (data.error === 'INSUFFICIENT_STOCK') {
-          // Stock issue - notify user and remove from queue
-          // console.warn('Order failed due to insufficient stock:', data.message);
-          await updateOrderError(order.id, data.message);
-          
-          // Move to failed queue after notifying
-          await moveToFailedQueue(order, data.message);
-          await removeQueuedOrder(order.id);
-          failed++;
           continue;
         }
 

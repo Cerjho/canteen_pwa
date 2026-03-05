@@ -8,25 +8,19 @@ type StudentLike = {
 
 interface StudentSelectorProps {
   students?: StudentLike[];
-  /** @deprecated Use students instead */
-  children?: StudentLike[];
   selectedStudentId?: string | null;
-  /** @deprecated Use selectedStudentId instead */
-  selectedChildId?: string | null;
   onSelect: (id: string) => void;
   required?: boolean;
 }
 
 export function StudentSelector({
   students,
-  children,
   selectedStudentId,
-  selectedChildId,
   onSelect,
   required = false
 }: StudentSelectorProps) {
-  const studentList = students || children || [];
-  const selectedId = selectedStudentId ?? selectedChildId ?? null;
+  const studentList = students || [];
+  const selectedId = selectedStudentId ?? null;
   
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -64,6 +58,3 @@ export function StudentSelector({
     </div>
   );
 }
-
-/** @deprecated Use StudentSelector instead */
-export const ChildSelector = StudentSelector;

@@ -37,6 +37,14 @@ vi.mock('../../../src/hooks/useAuth', () => ({
   useAuth: vi.fn()
 }));
 
+vi.mock('../../../src/hooks/useSystemSettings', () => ({
+  useSystemSettings: vi.fn()
+}));
+
+vi.mock('../../../src/hooks/useProducts', () => ({
+  useSurplusItems: vi.fn()
+}));
+
 vi.mock('../../../src/services/supabaseClient', () => ({
   supabase: {
     from: vi.fn().mockReturnValue({
@@ -62,6 +70,8 @@ import { useStudents } from '../../../src/hooks/useStudents';
 import { useFavorites } from '../../../src/hooks/useFavorites';
 import { useCart } from '../../../src/hooks/useCart';
 import { useAuth } from '../../../src/hooks/useAuth';
+import { useSystemSettings } from '../../../src/hooks/useSystemSettings';
+import { useSurplusItems } from '../../../src/hooks/useProducts';
 import { getProductsForDate, getCanteenStatus, getAvailableOrderDates, getWeekdaysWithStatus } from '../../../src/services/products';
 
 const mockNavigate = vi.fn();
@@ -215,6 +225,39 @@ describe('Menu Page', () => {
       refreshAuth: vi.fn(),
       onRoleChange: vi.fn().mockReturnValue(() => {})
     });
+
+    // Mock useSystemSettings
+    vi.mocked(useSystemSettings).mockReturnValue({
+      settings: {
+        maintenance_mode: false,
+        canteen_name: 'LOHECA Canteen',
+        operating_hours: { open: '07:00', close: '15:00' },
+        weekly_cutoff_day: 5,
+        weekly_cutoff_time: '17:00',
+        surplus_cutoff_time: '08:00',
+        daily_cancel_cutoff_time: '08:00',
+        auto_complete_orders: false,
+        notification_email: '',
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+      isMaintenanceMode: false,
+      isWeeklyCutoffPassed: vi.fn().mockReturnValue(false),
+      getWeeklyCutoffCountdown: vi.fn().mockReturnValue('2d 3h'),
+      isSurplusClosed: vi.fn().mockReturnValue(false),
+    } as unknown as ReturnType<typeof useSystemSettings>);
+
+    // Mock useSurplusItems
+    vi.mocked(useSurplusItems).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isPending: false,
+      isSuccess: true,
+      status: 'success',
+    } as unknown as ReturnType<typeof useSurplusItems>);
 
     // Create dates for testing
     const today = new Date();

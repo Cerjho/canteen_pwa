@@ -229,19 +229,6 @@ export interface CreateCheckoutResponse {
   merged_order_ids?: string[];
 }
 
-/** Response from the create-batch-checkout edge function (legacy) */
-export interface BatchCheckoutResponse {
-  success: boolean;
-  payment_group_id: string;
-  order_ids: string[];
-  merged_order_ids?: string[];
-  new_order_ids?: string[];
-  merged?: boolean;
-  checkout_url?: string;
-  payment_due_at?: string;
-  total_amount: number;
-}
-
 /** Response from the process-weekly-order edge function */
 export interface WeeklyOrderResponse {
   success: boolean;
