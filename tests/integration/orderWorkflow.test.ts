@@ -10,50 +10,6 @@ describe('Order Workflow Integration', () => {
     vi.useRealTimers();
   });
 
-  describe('Balance Payment Flow', () => {
-    it('should complete full balance payment workflow', async () => {
-      // 1. Parent starts with sufficient balance
-      const initialBalance = 500.00;
-      const orderTotal = 155.00;
-
-      // 2. Parent creates order
-      const orderResult = {
-        success: true,
-        order_id: 'order-balance-1',
-        status: 'pending',
-        payment_status: 'paid',
-        total_amount: orderTotal
-      };
-
-      // 3. Balance is deducted
-      const newBalance = initialBalance - orderTotal;
-      expect(newBalance).toBe(345.00);
-
-      // 4. Order appears in staff dashboard
-      const staffOrders = [
-        {
-          id: orderResult.order_id,
-          status: 'pending',
-          payment_status: 'paid',
-          total_amount: orderTotal
-        }
-      ];
-      expect(staffOrders[0].status).toBe('pending');
-
-      // 5. Staff marks as preparing
-      const updatedOrder = { ...staffOrders[0], status: 'preparing' };
-      expect(updatedOrder.status).toBe('preparing');
-
-      // 6. Staff marks as ready
-      const readyOrder = { ...updatedOrder, status: 'ready' };
-      expect(readyOrder.status).toBe('ready');
-
-      // 7. Order completed
-      const completedOrder = { ...readyOrder, status: 'completed' };
-      expect(completedOrder.status).toBe('completed');
-    });
-  });
-
   describe('Cash Payment Flow', () => {
     it('should complete full cash payment workflow', async () => {
       // 1. Parent creates cash order
@@ -129,10 +85,6 @@ describe('Order Workflow Integration', () => {
 
       expect(cancelledOrder.status).toBe('cancelled');
       expect(cancelledOrder.payment_status).toBe('timeout');
-
-      // 5. Stock is restored
-      const stockRestored = true;
-      expect(stockRestored).toBe(true);
     });
   });
 
@@ -212,77 +164,6 @@ describe('Order Workflow Integration', () => {
       // Different Monday should have different items
       const jan12Menu = schedules.filter(s => s.scheduled_date === '2026-01-12');
       expect(jan12Menu.length).toBe(1);
-    });
-  });
-
-  describe('Stock Management', () => {
-    it('should deduct stock on order creation', () => {
-      const initialStock = { 'product-1': 50, 'product-2': 30 };
-      const orderItems = [
-        { product_id: 'product-1', quantity: 2 },
-        { product_id: 'product-2', quantity: 1 }
-      ];
-
-      const newStock = { ...initialStock };
-      orderItems.forEach(item => {
-        newStock[item.product_id as keyof typeof newStock] -= item.quantity;
-      });
-
-      expect(newStock['product-1']).toBe(48);
-      expect(newStock['product-2']).toBe(29);
-    });
-
-    it('should restore stock on order cancellation', () => {
-      const currentStock = { 'product-1': 48, 'product-2': 29 };
-      const cancelledItems = [
-        { product_id: 'product-1', quantity: 2 },
-        { product_id: 'product-2', quantity: 1 }
-      ];
-
-      const restoredStock = { ...currentStock };
-      cancelledItems.forEach(item => {
-        restoredStock[item.product_id as keyof typeof restoredStock] += item.quantity;
-      });
-
-      expect(restoredStock['product-1']).toBe(50);
-      expect(restoredStock['product-2']).toBe(30);
-    });
-
-    it('should prevent orders when stock insufficient', () => {
-      const stock = { 'product-1': 5 };
-      const orderQuantity = 10;
-
-      const hasEnoughStock = stock['product-1'] >= orderQuantity;
-      expect(hasEnoughStock).toBe(false);
-    });
-  });
-
-  describe('Wallet Management', () => {
-    it('should deduct balance on order with balance payment', () => {
-      const initialBalance = 500.00;
-      const orderTotal = 155.00;
-
-      const newBalance = initialBalance - orderTotal;
-      expect(newBalance).toBe(345.00);
-    });
-
-    it('should not deduct balance for cash payment', () => {
-      const initialBalance = 500.00;
-      const paymentMethod = 'cash' as 'cash' | 'balance';
-
-      const newBalance = paymentMethod === 'balance' 
-        ? initialBalance - 155.00 
-        : initialBalance;
-
-      expect(newBalance).toBe(500.00);
-    });
-
-    it('should validate sufficient balance before order', () => {
-      const balance = 50.00;
-      const orderTotal = 155.00;
-
-      const hasSufficientBalance = balance >= orderTotal;
-      expect(hasSufficientBalance).toBe(false);
     });
   });
 });

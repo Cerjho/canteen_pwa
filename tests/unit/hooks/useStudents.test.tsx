@@ -1,4 +1,4 @@
-// useChildren Hook Tests
+// useStudents Hook Tests
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,17 +11,17 @@ vi.mock('../../../src/hooks/useAuth', () => ({
   })
 }));
 
-// Mock children service
-const mockGetChildren = vi.fn();
+// Mock students service
+const mockGetStudents = vi.fn();
 
 vi.mock('../../../src/services/students', () => ({
-  getChildren: (...args: unknown[]) => mockGetChildren(...args)
+  getStudents: (...args: unknown[]) => mockGetStudents(...args)
 }));
 
-import { useChildren } from '../../../src/hooks/useStudents';
-import { mockChildren } from '../../mocks/data';
+import { useStudents } from '../../../src/hooks/useStudents';
+import { mockStudents } from '../../mocks/data';
 
-describe('useChildren Hook', () => {
+describe('useStudents Hook', () => {
   let queryClient: QueryClient;
 
   function createWrapper() {
@@ -46,11 +46,11 @@ describe('useChildren Hook', () => {
     vi.clearAllMocks();
   });
 
-  describe('Fetching Children', () => {
-    it('should fetch children for authenticated user', async () => {
-      mockGetChildren.mockResolvedValue(mockChildren);
+  describe('Fetching Students', () => {
+    it('should fetch students for authenticated user', async () => {
+      mockGetStudents.mockResolvedValue(mockStudents);
 
-      const { result } = renderHook(() => useChildren(), {
+      const { result } = renderHook(() => useStudents(), {
         wrapper: createWrapper()
       });
 
@@ -58,14 +58,14 @@ describe('useChildren Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockGetChildren).toHaveBeenCalledWith('test-user-123');
-      expect(result.current.data).toEqual(mockChildren);
+      expect(mockGetStudents).toHaveBeenCalledWith('test-user-123');
+      expect(result.current.data).toEqual(mockStudents);
     });
 
-    it('should handle empty children list', async () => {
-      mockGetChildren.mockResolvedValue([]);
+    it('should handle empty students list', async () => {
+      mockGetStudents.mockResolvedValue([]);
 
-      const { result } = renderHook(() => useChildren(), {
+      const { result } = renderHook(() => useStudents(), {
         wrapper: createWrapper()
       });
 
@@ -77,9 +77,9 @@ describe('useChildren Hook', () => {
     });
 
     it('should set error state on fetch failure', async () => {
-      mockGetChildren.mockRejectedValue(new Error('Failed to fetch children'));
+      mockGetStudents.mockRejectedValue(new Error('Failed to fetch students'));
 
-      const { result } = renderHook(() => useChildren(), {
+      const { result } = renderHook(() => useStudents(), {
         wrapper: createWrapper()
       });
 
@@ -89,9 +89,9 @@ describe('useChildren Hook', () => {
     });
 
     it('should be in loading state initially', () => {
-      mockGetChildren.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockGetStudents.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-      const { result } = renderHook(() => useChildren(), {
+      const { result } = renderHook(() => useStudents(), {
         wrapper: createWrapper()
       });
 
@@ -100,10 +100,10 @@ describe('useChildren Hook', () => {
   });
 
   describe('Refetch', () => {
-    it('should refetch children', async () => {
-      mockGetChildren.mockResolvedValue(mockChildren);
+    it('should refetch students', async () => {
+      mockGetStudents.mockResolvedValue(mockStudents);
 
-      const { result } = renderHook(() => useChildren(), {
+      const { result } = renderHook(() => useStudents(), {
         wrapper: createWrapper()
       });
 
@@ -111,19 +111,19 @@ describe('useChildren Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      mockGetChildren.mockClear();
+      mockGetStudents.mockClear();
 
       result.current.refetch();
 
       await waitFor(() => {
-        expect(mockGetChildren).toHaveBeenCalled();
+        expect(mockGetStudents).toHaveBeenCalled();
       });
     });
   });
 });
 
 // Test without authenticated user
-describe('useChildren Hook - Unauthenticated', () => {
+describe('useStudents Hook - Unauthenticated', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -138,12 +138,12 @@ describe('useChildren Hook - Unauthenticated', () => {
     vi.resetModules();
   });
 
-  it('should not fetch children without user', async () => {
+  it('should not fetch students without user', async () => {
     vi.doMock('../../../src/hooks/useAuth', () => ({
       useAuth: () => ({ user: null })
     }));
 
-    const { useChildren: useChildrenNoAuth } = await import('../../../src/hooks/useStudents');
+    const { useStudents: useStudentsNoAuth } = await import('../../../src/hooks/useStudents');
 
     function Wrapper({ children }: { children: ReactNode }) {
       return (
@@ -153,12 +153,12 @@ describe('useChildren Hook - Unauthenticated', () => {
       );
     }
 
-    const { result } = renderHook(() => useChildrenNoAuth(), {
+    const { result } = renderHook(() => useStudentsNoAuth(), {
       wrapper: Wrapper
     });
 
     // Query should be disabled without user
     expect(result.current.isLoading).toBe(false);
-    expect(mockGetChildren).not.toHaveBeenCalled();
+    expect(mockGetStudents).not.toHaveBeenCalled();
   });
 });

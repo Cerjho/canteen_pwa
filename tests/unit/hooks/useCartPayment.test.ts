@@ -21,7 +21,6 @@ describe('useCart Online Payment Integration', () => {
       expect(isOnlinePaymentMethod('paymaya')).toBe(true);
       expect(isOnlinePaymentMethod('card')).toBe(true);
       expect(isOnlinePaymentMethod('cash')).toBe(false);
-      expect(isOnlinePaymentMethod('balance')).toBe(false);
     });
 
     it('routes online methods to createCheckout', () => {
@@ -113,18 +112,6 @@ describe('useCart Online Payment Integration', () => {
         { student_id: 'student-2', scheduled_for: '2026-02-20', meal_period: 'lunch' },
       ];
       const paymentMethod = 'cash';
-      const isOnline = isOnlinePaymentMethod(paymentMethod);
-
-      const shouldReject = isOnline && groups.length > 1;
-      expect(shouldReject).toBe(false);
-    });
-
-    it('allows multiple groups for balance payment', () => {
-      const groups = [
-        { student_id: 'student-1', scheduled_for: '2026-02-20', meal_period: 'lunch' },
-        { student_id: 'student-2', scheduled_for: '2026-02-21', meal_period: 'morning_snack' },
-      ];
-      const paymentMethod = 'balance';
       const isOnline = isOnlinePaymentMethod(paymentMethod);
 
       const shouldReject = isOnline && groups.length > 1;

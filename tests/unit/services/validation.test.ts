@@ -263,46 +263,4 @@ describe('Data Integrity', () => {
       expect(checkDuplicate('order-3')).toBe(false); // New
     });
   });
-
-  describe('Stock Validation', () => {
-    it('should reject order when stock is insufficient', () => {
-      const validateStock = (
-        items: Array<{ productId: string; quantity: number }>,
-        inventory: Record<string, number>
-      ) => {
-        for (const item of items) {
-          const available = inventory[item.productId] || 0;
-          if (item.quantity > available) {
-            return {
-              valid: false,
-              error: `Insufficient stock for ${item.productId}. Requested: ${item.quantity}, Available: ${available}`
-            };
-          }
-        }
-        return { valid: true };
-      };
-
-      const inventory = { 'prod-1': 5, 'prod-2': 0 };
-      
-      expect(validateStock([{ productId: 'prod-1', quantity: 3 }], inventory).valid).toBe(true);
-      expect(validateStock([{ productId: 'prod-1', quantity: 10 }], inventory).valid).toBe(false);
-      expect(validateStock([{ productId: 'prod-2', quantity: 1 }], inventory).valid).toBe(false);
-    });
-  });
-
-  describe('Balance Validation', () => {
-    it('should reject payment when balance is insufficient', () => {
-      const validateBalance = (balance: number, amount: number) => {
-        if (amount <= 0) return { valid: false, error: 'Amount must be positive' };
-        if (balance < amount) return { valid: false, error: 'Insufficient balance' };
-        return { valid: true };
-      };
-
-      expect(validateBalance(100, 50).valid).toBe(true);
-      expect(validateBalance(100, 100).valid).toBe(true);
-      expect(validateBalance(100, 150).valid).toBe(false);
-      expect(validateBalance(100, 0).valid).toBe(false);
-      expect(validateBalance(100, -50).valid).toBe(false);
-    });
-  });
 });

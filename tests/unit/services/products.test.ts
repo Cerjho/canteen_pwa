@@ -95,7 +95,7 @@ describe('Products Service', () => {
       await getAllProducts();
 
       expect(mockFrom).toHaveBeenCalledWith('products');
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith('id, name, description, price, category, image_url, available, stock_quantity');
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith('id, name, description, price, category, image_url, available');
     });
 
     it('orders by category', async () => {

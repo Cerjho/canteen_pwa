@@ -1,4 +1,4 @@
-// Children Service Tests
+// Students Service Tests
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock supabase client
@@ -16,82 +16,15 @@ vi.mock('../../../src/services/supabaseClient', () => ({
 }));
 
 import { 
-  getChildren, 
   findStudentById, 
   linkStudent, 
   unlinkStudent, 
-  updateChildDietary,
-  addChild,
-  deleteChild
+  updateStudentDietary
 } from '../../../src/services/students';
 
-describe('Children Service', () => {
+describe('Students Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe('getChildren', () => {
-    const mockQueryBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: [], error: null })
-    };
-
-    beforeEach(() => {
-      mockFrom.mockReturnValue(mockQueryBuilder);
-    });
-
-    it('queries parent_students table', async () => {
-      mockQueryBuilder.eq.mockResolvedValue({ data: [], error: null });
-
-      await getChildren('parent-123');
-
-      expect(mockFrom).toHaveBeenCalledWith('parent_students');
-    });
-
-    it('selects with join to students table', async () => {
-      mockQueryBuilder.eq.mockResolvedValue({ data: [], error: null });
-
-      await getChildren('parent-123');
-
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('students:student_id'));
-    });
-
-    it('filters by parent_id', async () => {
-      mockQueryBuilder.eq.mockResolvedValue({ data: [], error: null });
-
-      await getChildren('parent-123');
-
-      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('parent_id', 'parent-123');
-    });
-
-    it('returns children data flattened from join', async () => {
-      const mockJoinData = [
-        { student_id: 'stu-1', students: { id: 'child-1', student_id: 'STU-001', first_name: 'Maria', last_name: 'Santos', grade_level: '5', section: 'A' } },
-        { student_id: 'stu-2', students: { id: 'child-2', student_id: 'STU-002', first_name: 'Juan', last_name: 'Santos', grade_level: '3', section: 'B' } }
-      ];
-      mockQueryBuilder.eq.mockResolvedValue({ data: mockJoinData, error: null });
-
-      const result = await getChildren('parent-123');
-
-      expect(result).toHaveLength(2);
-      expect(result[0].first_name).toBe('Maria');
-      expect(result[1].first_name).toBe('Juan');
-      expect(result[0].parent_id).toBe('parent-123');
-    });
-
-    it('returns empty array when no children', async () => {
-      mockQueryBuilder.eq.mockResolvedValue({ data: null, error: null });
-
-      const result = await getChildren('parent-123');
-
-      expect(result).toEqual([]);
-    });
-
-    it('throws error on failure', async () => {
-      mockQueryBuilder.eq.mockResolvedValue({ data: null, error: { message: 'Database error' } });
-
-      await expect(getChildren('parent-123')).rejects.toEqual({ message: 'Database error' });
-    });
   });
 
   describe('findStudentById', () => {
@@ -227,11 +160,11 @@ describe('Children Service', () => {
     });
   });
 
-  describe('updateChildDietary', () => {
+  describe('updateStudentDietary', () => {
     it('calls update-dietary function', async () => {
       mockInvoke.mockResolvedValue({ data: { student: { id: 'child-1', student_id: 'STU-001', first_name: 'Test', last_name: 'Child', grade_level: 'Grade 1', is_active: true, created_at: '', updated_at: '' } }, error: null });
 
-      await updateChildDietary('child-1', 'No peanuts');
+      await updateStudentDietary('child-1', 'No peanuts');
 
       expect(mockInvoke).toHaveBeenCalledWith('update-dietary', {
         body: { student_id: 'child-1', dietary_restrictions: 'No peanuts' }
@@ -242,7 +175,7 @@ describe('Children Service', () => {
       const mockStudent = { id: 'child-1', student_id: 'STU-001', first_name: 'Test', last_name: 'Child', grade_level: 'Grade 1', dietary_restrictions: 'No peanuts', is_active: true, created_at: '2024-01-01', updated_at: '2024-01-01' };
       mockInvoke.mockResolvedValue({ data: { student: mockStudent }, error: null });
 
-      const result = await updateChildDietary('child-1', 'No peanuts');
+      const result = await updateStudentDietary('child-1', 'No peanuts');
 
       // Returns Child type for backward compatibility
       expect(result.id).toEqual('child-1');
@@ -252,22 +185,8 @@ describe('Children Service', () => {
     it('throws error on function error', async () => {
       mockInvoke.mockResolvedValue({ data: null, error: { message: 'Unauthorized' } });
 
-      await expect(updateChildDietary('child-1', 'No peanuts')).rejects.toThrow('Unauthorized');
+      await expect(updateStudentDietary('child-1', 'No peanuts')).rejects.toThrow('Unauthorized');
     });
   });
 
-  describe('Legacy Functions', () => {
-    it('addChild throws error', async () => {
-      await expect(addChild({
-        parent_id: 'parent-1',
-        first_name: 'Test',
-        last_name: 'Child',
-        grade_level: 'Grade 1'
-      })).rejects.toThrow('Adding students is no longer supported');
-    });
-
-    it('deleteChild throws error', async () => {
-      await expect(deleteChild('child-1')).rejects.toThrow('Removing students is no longer supported');
-    });
-  });
 });

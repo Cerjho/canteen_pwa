@@ -14,7 +14,7 @@ describe('Process Order Edge Function', () => {
       { product_id: 'product-1', quantity: 2, price_at_order: 65.00 },
       { product_id: 'product-2', quantity: 1, price_at_order: 25.00 }
     ],
-    payment_method: 'balance',
+    payment_method: 'cash',
     notes: 'No spicy please',
     scheduled_for: '2026-01-05'
   };
@@ -24,7 +24,7 @@ describe('Process Order Edge Function', () => {
   });
 
   describe('successful order creation', () => {
-    it('should create order with balance payment', async () => {
+    it('should create order with cash payment', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({
@@ -274,37 +274,7 @@ describe('Process Order Edge Function', () => {
     });
   });
 
-  describe('stock errors', () => {
-    it('should reject insufficient stock', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 400,
-        json: () => Promise.resolve({
-          error: 'INSUFFICIENT_STOCK',
-          message: "Product 'Chicken Adobo' has insufficient stock (available: 5)",
-          product_id: 'product-1',
-          available_stock: 5
-        })
-      });
-
-      const response = await fetch('https://test.supabase.co/functions/v1/process-order', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-token',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...validOrderPayload,
-          items: [{ product_id: 'product-1', quantity: 100, price_at_order: 65.00 }]
-        })
-      });
-
-      expect(response.ok).toBe(false);
-      const result = await response.json();
-      expect(result.error).toBe('INSUFFICIENT_STOCK');
-      expect(result.available_stock).toBe(5);
-    });
-
+  describe('product errors', () => {
     it('should reject unavailable product', async () => {
       mockFetch.mockResolvedValue({
         ok: false,
@@ -359,60 +329,6 @@ describe('Process Order Edge Function', () => {
       expect(response.ok).toBe(false);
       const result = await response.json();
       expect(result.error).toBe('PRODUCT_NOT_FOUND');
-    });
-  });
-
-  describe('balance errors', () => {
-    it('should reject insufficient balance', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 400,
-        json: () => Promise.resolve({
-          error: 'INSUFFICIENT_BALANCE',
-          message: 'Insufficient balance. Required: ₱155.00, Available: ₱50.00',
-          required: 155.00,
-          available: 50.00
-        })
-      });
-
-      const response = await fetch('https://test.supabase.co/functions/v1/process-order', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-token',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(validOrderPayload)
-      });
-
-      expect(response.ok).toBe(false);
-      const result = await response.json();
-      expect(result.error).toBe('INSUFFICIENT_BALANCE');
-      expect(result.required).toBe(155.00);
-      expect(result.available).toBe(50.00);
-    });
-
-    it('should reject when no wallet exists', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 400,
-        json: () => Promise.resolve({
-          error: 'NO_WALLET',
-          message: 'No wallet found. Please top up your balance first.'
-        })
-      });
-
-      const response = await fetch('https://test.supabase.co/functions/v1/process-order', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-token',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(validOrderPayload)
-      });
-
-      expect(response.ok).toBe(false);
-      const result = await response.json();
-      expect(result.error).toBe('NO_WALLET');
     });
   });
 

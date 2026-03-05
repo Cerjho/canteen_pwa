@@ -10,16 +10,15 @@ import type {
   Order,
   Transaction,
   CreateCheckoutResponse,
-  CreateTopupCheckoutResponse,
   PaymentStatusResponse,
 } from '../../../src/types';
 
 describe('Payment Types & Helpers', () => {
   // ─── PaymentMethod type coverage ────────────────────────────
   describe('PaymentMethod values', () => {
-    it('should include all five valid payment methods', () => {
-      const validMethods: PaymentMethod[] = ['cash', 'balance', 'gcash', 'paymaya', 'card'];
-      expect(validMethods).toHaveLength(5);
+    it('should include all four valid payment methods', () => {
+      const validMethods: PaymentMethod[] = ['cash', 'gcash', 'paymaya', 'card'];
+      expect(validMethods).toHaveLength(4);
     });
   });
 
@@ -31,9 +30,8 @@ describe('Payment Types & Helpers', () => {
       expect(ONLINE_PAYMENT_METHODS).toContain('card');
     });
 
-    it('does NOT contain cash or balance', () => {
+    it('does NOT contain cash', () => {
       expect(ONLINE_PAYMENT_METHODS).not.toContain('cash');
-      expect(ONLINE_PAYMENT_METHODS).not.toContain('balance');
     });
 
     it('has exactly 3 entries', () => {
@@ -57,10 +55,6 @@ describe('Payment Types & Helpers', () => {
 
     it('returns false for cash', () => {
       expect(isOnlinePaymentMethod('cash')).toBe(false);
-    });
-
-    it('returns false for balance', () => {
-      expect(isOnlinePaymentMethod('balance')).toBe(false);
     });
 
     it('returns false for unknown strings', () => {
@@ -154,23 +148,6 @@ describe('Payment Types & Helpers', () => {
       expect(tx.paymongo_refund_id).toBe('ref_xxx');
       expect(tx.type).toBe('refund');
     });
-
-    it('supports topup transaction', () => {
-      const tx: Transaction = {
-        id: 'tx-3',
-        parent_id: 'parent-1',
-        type: 'topup',
-        amount: 500.0,
-        method: 'paymaya',
-        status: 'completed',
-        paymongo_payment_id: 'pay_yyy',
-        paymongo_checkout_id: 'cs_yyy',
-        created_at: '2026-02-20T12:00:00Z',
-      };
-
-      expect(tx.type).toBe('topup');
-      expect(tx.method).toBe('paymaya');
-    });
   });
 
   // ─── Response interfaces ────────────────────────────────────
@@ -191,22 +168,6 @@ describe('Payment Types & Helpers', () => {
     });
   });
 
-  describe('CreateTopupCheckoutResponse', () => {
-    it('has required fields', () => {
-      const response: CreateTopupCheckoutResponse = {
-        success: true,
-        topup_session_id: 'topup-1',
-        checkout_url: 'https://checkout.paymongo.com/cs_topup',
-        expires_at: '2026-02-20T12:30:00Z',
-        amount: 500,
-      };
-
-      expect(response.success).toBe(true);
-      expect(response.topup_session_id).toBeTruthy();
-      expect(response.amount).toBe(500);
-    });
-  });
-
   describe('PaymentStatusResponse', () => {
     it('supports order payment status', () => {
       const response: PaymentStatusResponse = {
@@ -218,18 +179,6 @@ describe('Payment Types & Helpers', () => {
       };
 
       expect(response.payment_status).toBe('paid');
-    });
-
-    it('supports topup session status', () => {
-      const response: PaymentStatusResponse = {
-        topup_session_id: 'topup-1',
-        status: 'completed',
-        amount: 500,
-        completed_at: '2026-02-20T12:30:00Z',
-      };
-
-      expect(response.status).toBe('completed');
-      expect(response.amount).toBe(500);
     });
 
     it('allows all PaymentStatus values', () => {

@@ -27,11 +27,9 @@ vi.mock('../../../src/hooks/useAuth', () => ({
 
 // Mock orders service
 const mockGetOrderHistory = vi.fn();
-const mockCreateOrder = vi.fn();
 
 vi.mock('../../../src/services/orders', () => ({
   getOrderHistory: (...args: unknown[]) => mockGetOrderHistory(...args),
-  createOrder: (...args: unknown[]) => mockCreateOrder(...args)
 }));
 
 import { useOrders } from '../../../src/hooks/useOrders';
@@ -107,154 +105,6 @@ describe('useOrders Hook', () => {
 
       await waitFor(() => {
         expect(result.current.isError).toBe(true);
-      });
-    });
-  });
-
-  describe('Creating Orders', () => {
-    it('should create order successfully', async () => {
-      mockGetOrderHistory.mockResolvedValue([]);
-      mockCreateOrder.mockResolvedValue({ id: 'new-order-1', status: 'pending' });
-
-      const { result } = renderHook(() => useOrders(), {
-        wrapper: createWrapper()
-      });
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      result.current.createOrder({
-        parent_id: 'test-user-123',
-        student_id: 'child-1',
-        client_order_id: 'client-1',
-        items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
-        payment_method: 'cash'
-      });
-
-      await waitFor(() => {
-        expect(mockCreateOrder).toHaveBeenCalled();
-      });
-    });
-
-    it('should show success toast after creating order', async () => {
-      mockGetOrderHistory.mockResolvedValue([]);
-      mockCreateOrder.mockResolvedValue({ id: 'new-order-1' });
-
-      const { result } = renderHook(() => useOrders(), {
-        wrapper: createWrapper()
-      });
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      result.current.createOrder({
-        parent_id: 'test-user-123',
-        student_id: 'child-1',
-        client_order_id: 'client-1',
-        items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
-        payment_method: 'cash'
-      });
-
-      await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith(
-          'Order placed successfully!',
-          'success'
-        );
-      });
-    });
-
-    it('should show offline toast when order is queued', async () => {
-      mockGetOrderHistory.mockResolvedValue([]);
-      mockCreateOrder.mockResolvedValue({ queued: true });
-
-      const { result } = renderHook(() => useOrders(), {
-        wrapper: createWrapper()
-      });
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      result.current.createOrder({
-        parent_id: 'test-user-123',
-        student_id: 'child-1',
-        client_order_id: 'client-1',
-        items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
-        payment_method: 'cash'
-      });
-
-      await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith(
-          'Order saved offline. Will sync when connected.',
-          'info'
-        );
-      });
-    });
-
-    it('should show error toast on create failure', async () => {
-      mockGetOrderHistory.mockResolvedValue([]);
-      mockCreateOrder.mockRejectedValue(new Error('Network error'));
-
-      const { result } = renderHook(() => useOrders(), {
-        wrapper: createWrapper()
-      });
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      result.current.createOrder({
-        parent_id: 'test-user-123',
-        student_id: 'child-1',
-        client_order_id: 'client-1',
-        items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
-        payment_method: 'cash'
-      });
-
-      await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith(
-          'Network error',
-          'error'
-        );
-      });
-    });
-
-    it('should set isCreating state during mutation', async () => {
-      mockGetOrderHistory.mockResolvedValue([]);
-      
-      let resolveCreate: ((value: { id: string }) => void) | undefined;
-      mockCreateOrder.mockImplementation(() => new Promise((resolve) => {
-        resolveCreate = resolve;
-      }));
-
-      const { result } = renderHook(() => useOrders(), {
-        wrapper: createWrapper()
-      });
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      result.current.createOrder({
-        parent_id: 'test-user-123',
-        student_id: 'child-1',
-        client_order_id: 'client-1',
-        items: [{ product_id: 'product-1', quantity: 1, price_at_order: 65 }],
-        payment_method: 'cash'
-      });
-
-      await waitFor(() => {
-        expect(result.current.isCreating).toBe(true);
-      });
-
-      if (resolveCreate) {
-        resolveCreate({ id: 'new-order' });
-      }
-
-      await waitFor(() => {
-        expect(result.current.isCreating).toBe(false);
       });
     });
   });

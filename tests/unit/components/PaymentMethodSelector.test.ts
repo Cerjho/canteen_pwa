@@ -6,11 +6,11 @@ import type { PaymentMethod } from '../../../src/types';
 describe('PaymentMethodSelector Component', () => {
   // ─── Payment Method Categories ──────────────────────────────
   describe('Payment Method Groups', () => {
-    const schoolMethods: PaymentMethod[] = ['cash', 'balance'];
+    const schoolMethods: PaymentMethod[] = ['cash'];
     const onlineMethods: PaymentMethod[] = ['gcash', 'paymaya', 'card'];
 
-    it('has 2 school payment methods', () => {
-      expect(schoolMethods).toHaveLength(2);
+    it('has 1 school payment method', () => {
+      expect(schoolMethods).toHaveLength(1);
     });
 
     it('has 3 online payment methods', () => {
@@ -29,11 +29,10 @@ describe('PaymentMethodSelector Component', () => {
       });
     });
 
-    it('together they cover all 5 payment methods', () => {
+    it('together they cover all 4 payment methods', () => {
       const all = [...schoolMethods, ...onlineMethods];
-      expect(all).toHaveLength(5);
+      expect(all).toHaveLength(4);
       expect(all).toContain('cash');
-      expect(all).toContain('balance');
       expect(all).toContain('gcash');
       expect(all).toContain('paymaya');
       expect(all).toContain('card');
@@ -83,9 +82,6 @@ describe('PaymentMethodSelector Component', () => {
 
       selected = 'card';
       expect(selected).toBe('card');
-
-      selected = 'balance';
-      expect(selected).toBe('balance');
     });
 
     it('shows redirect notice for online methods', () => {
@@ -105,20 +101,19 @@ describe('PaymentMethodSelector Component', () => {
   describe('Cart Drawer Payment Options', () => {
     const paymentOptions = [
       { id: 'cash', label: 'Cash', group: 'school' },
-      { id: 'balance', label: 'Wallet Balance', group: 'school' },
       { id: 'gcash', label: 'GCash', group: 'online' },
       { id: 'paymaya', label: 'PayMaya', group: 'online' },
       { id: 'card', label: 'Credit/Debit Card', group: 'online' },
     ];
 
-    it('has 5 total payment options', () => {
-      expect(paymentOptions).toHaveLength(5);
+    it('has 4 total payment options', () => {
+      expect(paymentOptions).toHaveLength(4);
     });
 
-    it('has 2 school options and 3 online options', () => {
+    it('has 1 school option and 3 online options', () => {
       const school = paymentOptions.filter((o) => o.group === 'school');
       const online = paymentOptions.filter((o) => o.group === 'online');
-      expect(school).toHaveLength(2);
+      expect(school).toHaveLength(1);
       expect(online).toHaveLength(3);
     });
 

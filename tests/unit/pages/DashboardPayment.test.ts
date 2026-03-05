@@ -36,12 +36,6 @@ describe('Dashboard Payment Status Display', () => {
         'Pay at the counter'
       );
     });
-
-    it('shows "Pay at the counter" for balance awaiting_payment', () => {
-      expect(getStatusMessage('awaiting_payment', 'awaiting_payment', 'balance')).toBe(
-        'Pay at the counter'
-      );
-    });
   });
 
   // ─── Online Payment Orders ──────────────────────────────────
@@ -68,7 +62,7 @@ describe('Dashboard Payment Status Display', () => {
   // ─── Timeout Status ─────────────────────────────────────────
   describe('Timeout Status', () => {
     it('shows timeout message regardless of payment method', () => {
-      const methods: PaymentMethod[] = ['cash', 'balance', 'gcash', 'paymaya', 'card'];
+      const methods: PaymentMethod[] = ['cash', 'gcash', 'paymaya', 'card'];
       methods.forEach((method) => {
         expect(getStatusMessage('cancelled', 'timeout', method)).toBe(
           'Payment expired - Order cancelled'

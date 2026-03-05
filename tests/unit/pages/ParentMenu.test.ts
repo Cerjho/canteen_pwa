@@ -144,20 +144,9 @@ describe('Parent Menu Page', () => {
       expect(cart).toHaveLength(1);
     });
 
-    it('should respect stock limits', () => {
-      const product = { id: 'product-1', stock: 5 };
-      const cartQuantity = 3;
-      
-      const canAddMore = cartQuantity < product.stock;
-      expect(canAddMore).toBe(true);
-
-      const atLimit = 5 < product.stock;
-      expect(atLimit).toBe(false);
-    });
-
-    it('should disable add button for out of stock items', () => {
-      const product = { id: 'product-1', stock: 0 };
-      const isDisabled = product.stock <= 0;
+    it('should disable add button for unavailable items', () => {
+      const product = { id: 'product-1', available: false };
+      const isDisabled = !product.available;
       expect(isDisabled).toBe(true);
     });
   });
@@ -265,30 +254,22 @@ describe('Product Card', () => {
     expect(formatPrice(123.50)).toBe('₱123.50');
   });
 
-  it('should show low stock warning', () => {
-    const product = { stock: 3 };
-    const lowStockThreshold = 5;
-    
-    const showLowStockWarning = product.stock > 0 && product.stock <= lowStockThreshold;
-    expect(showLowStockWarning).toBe(true);
-  });
-
-  it('should show out of stock badge', () => {
-    const product = { stock: 0 };
-    const isOutOfStock = product.stock <= 0;
-    expect(isOutOfStock).toBe(true);
+  it('should show unavailable badge', () => {
+    const product = { available: false };
+    const isUnavailable = !product.available;
+    expect(isUnavailable).toBe(true);
   });
 });
 
-describe('Child Selection', () => {
-  it('should require child selection for ordering', () => {
-    const selectedChildId = null;
-    const canCheckout = selectedChildId !== null;
+describe('Student Selection', () => {
+  it('should require student selection for ordering', () => {
+    const selectedStudentId = null;
+    const canCheckout = selectedStudentId !== null;
     expect(canCheckout).toBe(false);
   });
 
-  it('should filter menu by child dietary restrictions', () => {
-    const childAllergies = ['peanuts', 'dairy'];
+  it('should filter menu by student dietary restrictions', () => {
+    const studentAllergies = ['peanuts', 'dairy'];
     const products = [
       { name: 'Peanut Butter Sandwich', allergens: ['peanuts'] },
       { name: 'Burger', allergens: [] },
@@ -296,7 +277,7 @@ describe('Child Selection', () => {
     ];
 
     const safeProducts = products.filter(p => 
-      !p.allergens.some(a => childAllergies.includes(a))
+      !p.allergens.some(a => studentAllergies.includes(a))
     );
 
     expect(safeProducts).toHaveLength(1);
@@ -305,10 +286,10 @@ describe('Child Selection', () => {
 
   it('should show allergen warnings', () => {
     const product = { allergens: ['peanuts', 'dairy'] };
-    const childAllergies = ['peanuts'];
+    const studentAllergies = ['peanuts'];
 
     const hasAllergenConflict = product.allergens.some(a => 
-      childAllergies.includes(a)
+      studentAllergies.includes(a)
     );
 
     expect(hasAllergenConflict).toBe(true);

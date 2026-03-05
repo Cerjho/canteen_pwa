@@ -126,11 +126,11 @@ describe('Profile Page', () => {
       error: null
     } as Awaited<ReturnType<typeof supabase.auth.getSession>>);
 
-    // Mock supabase.from for wallet query
+    // Mock supabase.from for queries
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
+          single: vi.fn().mockResolvedValue({ data: null, error: null })
         })
       })
     } as unknown as ReturnType<typeof supabase.from>);
@@ -328,7 +328,7 @@ describe('Profile Page - Link Student Flow', () => {
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
+          single: vi.fn().mockResolvedValue({ data: null, error: null })
         })
       })
     } as unknown as ReturnType<typeof supabase.from>);
@@ -375,7 +375,7 @@ describe('Profile Page - Unlink Student Flow', () => {
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
+          single: vi.fn().mockResolvedValue({ data: null, error: null })
         })
       })
     } as unknown as ReturnType<typeof supabase.from>);
@@ -424,7 +424,7 @@ describe('Profile Page - Edit Student Flow', () => {
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { balance: 100 }, error: null })
+          single: vi.fn().mockResolvedValue({ data: null, error: null })
         })
       })
     } as unknown as ReturnType<typeof supabase.from>);

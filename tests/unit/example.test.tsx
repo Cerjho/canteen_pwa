@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { ProductCard } from '../../src/components/ProductCard';
-import { ChildSelector } from '../../src/components/StudentSelector';
+import { StudentSelector } from '../../src/components/StudentSelector';
 
 // Mock Supabase client
 vi.mock('../../src/services/supabaseClient', () => ({
@@ -71,7 +71,7 @@ describe('ProductCard', () => {
       <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
     );
 
-    expect(screen.getByText('Sold Out')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
   });
 
@@ -96,19 +96,19 @@ describe('ProductCard', () => {
 });
 
 // ============================================
-// ChildSelector Tests
+// StudentSelector Tests
 // ============================================
-describe('ChildSelector', () => {
-  const mockChildren = [
+describe('StudentSelector', () => {
+  const mockStudents = [
     {
-      id: 'child-1',
+      id: 'student-1',
       first_name: 'Maria',
       last_name: 'Santos',
       grade_level: 'Grade 3',
       section: 'A'
     },
     {
-      id: 'child-2',
+      id: 'student-2',
       first_name: 'Juan',
       last_name: 'Santos',
       grade_level: 'Grade 1',
@@ -124,9 +124,9 @@ describe('ChildSelector', () => {
 
   it('renders select dropdown with label', () => {
     render(
-      <ChildSelector
-        children={mockChildren}
-        selectedChildId={null}
+      <StudentSelector
+        students={mockStudents}
+        selectedStudentId={null}
         onSelect={mockOnSelect}
       />
     );
@@ -135,11 +135,11 @@ describe('ChildSelector', () => {
     expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 
-  it('renders all children options', () => {
+  it('renders all student options', () => {
     render(
-      <ChildSelector
-        children={mockChildren}
-        selectedChildId={null}
+      <StudentSelector
+        students={mockStudents}
+        selectedStudentId={null}
         onSelect={mockOnSelect}
       />
     );
@@ -149,53 +149,52 @@ describe('ChildSelector', () => {
     expect(screen.getByText('Juan Santos - Grade 1 B')).toBeInTheDocument();
   });
 
-  it('calls onSelect when child is selected', () => {
+  it('calls onSelect when student is selected', () => {
     render(
-      <ChildSelector
-        children={mockChildren}
-        selectedChildId={null}
+      <StudentSelector
+        students={mockStudents}
+        selectedStudentId={null}
         onSelect={mockOnSelect}
       />
     );
 
     const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'child-1' } });
+    fireEvent.change(select, { target: { value: 'student-1' } });
 
-    expect(mockOnSelect).toHaveBeenCalledWith('child-1');
+    expect(mockOnSelect).toHaveBeenCalledWith('student-1');
   });
 
-  it('shows selected child', () => {
+  it('shows selected student', () => {
     render(
-      <ChildSelector
-        children={mockChildren}
-        selectedChildId="child-2"
+      <StudentSelector
+        students={mockStudents}
+        selectedStudentId="student-2"
         onSelect={mockOnSelect}
       />
     );
 
     const select = screen.getByRole('combobox') as HTMLSelectElement;
-    expect(select.value).toBe('child-2');
+    expect(select.value).toBe('student-2');
   });
 
-  it('shows message when no children exist', () => {
+  it('shows message when no students exist', () => {
     render(
-      <ChildSelector
-        children={[]}
-        selectedChildId={null}
+      <StudentSelector
+        students={[]}
+        selectedStudentId={null}
         onSelect={mockOnSelect}
       />
     );
 
-    // With no students, selector shows placeholder option only
     const select = screen.getByRole('combobox');
     expect(select).toBeInTheDocument();
     expect(screen.getByText('Select a student')).toBeInTheDocument();
   });
 
-  it('handles child without section', () => {
-    const childrenWithoutSection = [
+  it('handles student without section', () => {
+    const studentsWithoutSection = [
       {
-        id: 'child-3',
+        id: 'student-3',
         first_name: 'Pedro',
         last_name: 'Cruz',
         grade_level: 'Grade 2'
@@ -203,9 +202,9 @@ describe('ChildSelector', () => {
     ];
 
     render(
-      <ChildSelector
-        children={childrenWithoutSection}
-        selectedChildId={null}
+      <StudentSelector
+        students={studentsWithoutSection}
+        selectedStudentId={null}
         onSelect={mockOnSelect}
       />
     );

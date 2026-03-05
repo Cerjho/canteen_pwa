@@ -264,21 +264,21 @@ describe('Price Formatting Integration', () => {
   });
 });
 
-describe('Child Management Integration', () => {
-  it('formats child display name', () => {
-    const formatChildName = (child: { first_name: string; last_name: string; grade_level: string; section?: string }) => {
-      const base = `${child.first_name} ${child.last_name} - ${child.grade_level}`;
-      return child.section ? `${base} ${child.section}` : base;
+describe('Student Management Integration', () => {
+  it('formats student display name', () => {
+    const formatStudentName = (student: { first_name: string; last_name: string; grade_level: string; section?: string }) => {
+      const base = `${student.first_name} ${student.last_name} - ${student.grade_level}`;
+      return student.section ? `${base} ${student.section}` : base;
     };
 
-    expect(formatChildName({
+    expect(formatStudentName({
       first_name: 'Maria',
       last_name: 'Santos',
       grade_level: 'Grade 3',
       section: 'A'
     })).toBe('Maria Santos - Grade 3 A');
 
-    expect(formatChildName({
+    expect(formatStudentName({
       first_name: 'Juan',
       last_name: 'Cruz',
       grade_level: 'Grade 1'
@@ -288,7 +288,7 @@ describe('Child Management Integration', () => {
 
 describe('Offline Queue Integration', () => {
   it('queues order when offline', async () => {
-    interface QueuedOrder { items: unknown[]; child_id: string; queued_at?: Date; }
+    interface QueuedOrder { items: unknown[]; student_id: string; queued_at?: Date; }
     const queue: QueuedOrder[] = [];
     const isOnline = () => false;
     
@@ -300,7 +300,7 @@ describe('Offline Queue Integration', () => {
       return { id: 'online-order' };
     };
 
-    const result = createOrder({ items: [], child_id: 'c1' });
+    const result = createOrder({ items: [], student_id: 's1' });
 
     expect(result.queued).toBe(true);
     expect(queue).toHaveLength(1);

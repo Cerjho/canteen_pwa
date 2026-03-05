@@ -103,7 +103,7 @@ describe('ProductCard Component', () => {
         <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
       );
 
-      expect(screen.getByText('Sold Out')).toBeInTheDocument();
+      expect(screen.getByText('Unavailable')).toBeInTheDocument();
     });
 
     it('does not render add button when unavailable', () => {
@@ -119,7 +119,7 @@ describe('ProductCard Component', () => {
         <ProductCard {...mockProduct} available={false} onAddToCart={mockOnAddToCart} />
       );
 
-      const badge = screen.getByText('Sold Out');
+      const badge = screen.getByText('Unavailable');
       expect(badge).toHaveClass('text-red-500');
     });
   });

@@ -146,16 +146,16 @@ describe('Dashboard Statistics Logic', () => {
     expect(completedOrders).toHaveLength(1);
   });
 
-  it('counts low stock products', () => {
+  it('counts unavailable products', () => {
     const products = [
-      { id: 'p1', stock: 5, low_stock_threshold: 10 },
-      { id: 'p2', stock: 20, low_stock_threshold: 10 },
-      { id: 'p3', stock: 3, low_stock_threshold: 10 }
+      { id: 'p1', available: false },
+      { id: 'p2', available: true },
+      { id: 'p3', available: false }
     ];
 
-    const lowStockCount = products.filter(p => p.stock < p.low_stock_threshold).length;
+    const unavailableCount = products.filter(p => !p.available).length;
     
-    expect(lowStockCount).toBe(2);
+    expect(unavailableCount).toBe(2);
   });
 });
 

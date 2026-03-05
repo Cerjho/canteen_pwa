@@ -42,7 +42,7 @@ vi.mock('../../../src/services/supabaseClient', () => ({
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({ data: { balance: 500 }, error: null })
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
         })
       })
     })
@@ -75,7 +75,6 @@ const mockProducts = [
     category: 'mains' as const,
     available: true,
     image_url: 'https://example.com/adobo.jpg',
-    stock_quantity: 50,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z'
   },
@@ -87,7 +86,6 @@ const mockProducts = [
     category: 'snacks' as const,
     available: true,
     image_url: 'https://example.com/banana.jpg',
-    stock_quantity: 100,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z'
   },
@@ -99,7 +97,6 @@ const mockProducts = [
     category: 'drinks' as const,
     available: true,
     image_url: 'https://example.com/oj.jpg',
-    stock_quantity: 30,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z'
   }

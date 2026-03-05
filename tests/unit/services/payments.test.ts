@@ -26,9 +26,7 @@ vi.mock('../../../src/services/authSession', () => ({
 
 import {
   createCheckout,
-  createTopupCheckout,
   checkPaymentStatus,
-  checkTopupStatus,
   getPaymentMethodLabel,
   getCheckoutButtonText,
 } from '../../../src/services/payments';
@@ -151,7 +149,7 @@ describe('Payment Service', () => {
       });
 
       await expect(createCheckout(mockOrderData)).rejects.toThrow(
-        'out of stock'
+        'Insufficient stock'
       );
     });
 
@@ -209,82 +207,6 @@ describe('Payment Service', () => {
 
       const result = await createCheckout(cardOrder);
       expect(result.order_id).toBe('order-3');
-    });
-  });
-
-  // ─── createTopupCheckout ────────────────────────────────────
-  describe('createTopupCheckout', () => {
-    it('invokes create-topup-checkout with amount and method', async () => {
-      mockInvoke.mockResolvedValue({
-        data: {
-          success: true,
-          topup_session_id: 'topup-1',
-          checkout_url: 'https://checkout.paymongo.com/cs_topup',
-          expires_at: '2026-02-20T12:30:00Z',
-          amount: 500,
-        },
-        error: null,
-      });
-
-      const result = await createTopupCheckout({ amount: 500, payment_method: 'gcash' });
-
-      expect(mockInvoke).toHaveBeenCalledWith('create-topup-checkout', {
-        body: { amount: 500, payment_method: 'gcash' },
-      });
-      expect(result.success).toBe(true);
-      expect(result.topup_session_id).toBe('topup-1');
-      expect(result.checkout_url).toContain('paymongo.com');
-      expect(result.amount).toBe(500);
-    });
-
-    it('throws error when not authenticated', async () => {
-      mockEnsureValidSession.mockRejectedValue(new Error('Please sign in again'));
-
-      await expect(
-        createTopupCheckout({ amount: 500, payment_method: 'gcash' })
-      ).rejects.toThrow('Please sign in again');
-    });
-
-    it('throws error on edge function failure', async () => {
-      mockInvoke.mockResolvedValue({
-        data: null,
-        error: { message: 'Amount too low' },
-      });
-
-      await expect(
-        createTopupCheckout({ amount: 10, payment_method: 'gcash' })
-      ).rejects.toThrow('Amount too low');
-    });
-
-    it('throws error when data contains error response', async () => {
-      mockInvoke.mockResolvedValue({
-        data: { error: 'INVALID_AMOUNT', message: 'Minimum top-up is ₱50' },
-        error: null,
-      });
-
-      await expect(
-        createTopupCheckout({ amount: 20, payment_method: 'gcash' })
-      ).rejects.toThrow('Minimum top-up is ₱50');
-    });
-
-    it('works without specifying payment method', async () => {
-      mockInvoke.mockResolvedValue({
-        data: {
-          success: true,
-          topup_session_id: 'topup-2',
-          checkout_url: 'https://checkout.paymongo.com/cs_all',
-          expires_at: '2026-02-20T12:30:00Z',
-          amount: 1000,
-        },
-        error: null,
-      });
-
-      const result = await createTopupCheckout({ amount: 1000 });
-
-      expect(mockInvoke).toHaveBeenCalledWith('create-topup-checkout', {
-        body: { amount: 1000 },
-      });
-      expect(result.amount).toBe(1000);
     });
   });
 
@@ -354,62 +276,10 @@ describe('Payment Service', () => {
     });
   });
 
-  // ─── checkTopupStatus ───────────────────────────────────────
-  describe('checkTopupStatus', () => {
-    it('invokes check-payment-status with topup_session_id', async () => {
-      mockInvoke.mockResolvedValue({
-        data: {
-          topup_session_id: 'topup-1',
-          status: 'completed',
-          amount: 500,
-          completed_at: '2026-02-20T12:30:00Z',
-        },
-        error: null,
-      });
-
-      const result = await checkTopupStatus('topup-1');
-
-      expect(mockInvoke).toHaveBeenCalledWith('check-payment-status', {
-        body: { topup_session_id: 'topup-1' },
-      });
-      expect(result.status).toBe('completed');
-      expect(result.amount).toBe(500);
-    });
-
-    it('returns pending status for unprocessed top-ups', async () => {
-      mockInvoke.mockResolvedValue({
-        data: {
-          topup_session_id: 'topup-1',
-          status: 'pending',
-          amount: 500,
-        },
-        error: null,
-      });
-
-      const result = await checkTopupStatus('topup-1');
-      expect(result.status).toBe('pending');
-    });
-
-    it('throws error on failure', async () => {
-      mockInvoke.mockResolvedValue({
-        data: null,
-        error: { message: 'Session not found' },
-      });
-
-      await expect(checkTopupStatus('invalid-id')).rejects.toThrow(
-        'Session not found'
-      );
-    });
-  });
-
   // ─── getPaymentMethodLabel ──────────────────────────────────
   describe('getPaymentMethodLabel', () => {
     it('returns "Cash" for cash', () => {
       expect(getPaymentMethodLabel('cash')).toBe('Cash');
-    });
-
-    it('returns "Wallet Balance" for balance', () => {
-      expect(getPaymentMethodLabel('balance')).toBe('Wallet Balance');
     });
 
     it('returns "GCash" for gcash', () => {
@@ -441,10 +311,6 @@ describe('Payment Service', () => {
 
     it('returns "Pay with Card" for card', () => {
       expect(getCheckoutButtonText('card')).toBe('Pay with Card');
-    });
-
-    it('returns "Pay with Balance" for balance', () => {
-      expect(getCheckoutButtonText('balance')).toBe('Pay with Balance');
     });
 
     it('returns "Place Order" for cash', () => {

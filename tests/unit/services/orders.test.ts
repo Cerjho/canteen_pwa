@@ -27,14 +27,14 @@ vi.mock('../../../src/services/localQueue', () => ({
   queueOrder: vi.fn()
 }));
 
-import { createOrder, getOrderHistory } from '../../../src/services/orders';
+import { createWeeklyOrder, getOrderHistory } from '../../../src/services/orders';
 import { isOnline, queueOrder } from '../../../src/services/localQueue';
 
 describe('Orders Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (isOnline as ReturnType<typeof vi.fn>).mockReturnValue(true);
-    // Provide a valid session so createOrder doesn't throw "Please sign in"
+    // Provide a valid session so createWeeklyOrder doesn't throw "Please sign in"
     mockGetSession.mockResolvedValue({
       data: { session: { user: { id: 'user-1' }, access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
       error: null
@@ -45,66 +45,74 @@ describe('Orders Service', () => {
     });
   });
 
-  describe('createOrder', () => {
-    const mockOrderData = {
+  describe('createWeeklyOrder', () => {
+    const mockWeeklyOrderData = {
       parent_id: 'parent-123',
-      student_id: 'child-1',
-      client_order_id: 'client-order-1',
-      items: [
-        { product_id: 'product-1', quantity: 2, price_at_order: 65.00 }
+      student_id: 'student-1',
+      week_start: '2026-03-09',
+      days: [
+        {
+          scheduled_for: '2026-03-09',
+          items: [{ product_id: 'product-1', quantity: 2, price_at_order: 65.00 }]
+        }
       ],
-      payment_method: 'cash',
+      payment_method: 'cash' as const,
       notes: 'No spicy'
     };
 
-    it('calls process-order function when online', async () => {
-      mockInvoke.mockResolvedValue({ data: { id: 'order-1' }, error: null });
+    it('calls process-weekly-order function when online', async () => {
+      const mockResponse = { success: true, weekly_order_id: 'wo-1', order_ids: ['o-1'], total_amount: 130, payment_status: 'paid', message: 'OK' };
+      mockInvoke.mockResolvedValue({ data: mockResponse, error: null });
 
-      await createOrder(mockOrderData);
+      await createWeeklyOrder(mockWeeklyOrderData);
 
-      expect(mockInvoke).toHaveBeenCalledWith('process-order', {
-        body: mockOrderData
+      expect(mockInvoke).toHaveBeenCalledWith('process-weekly-order', {
+        body: mockWeeklyOrderData
       });
     });
 
-    it('returns order data on success', async () => {
-      mockInvoke.mockResolvedValue({ data: { id: 'order-1', status: 'pending' }, error: null });
+    it('returns weekly order response on success', async () => {
+      const mockResponse = { success: true, weekly_order_id: 'wo-1', order_ids: ['o-1'], total_amount: 130, payment_status: 'paid', message: 'OK' };
+      mockInvoke.mockResolvedValue({ data: mockResponse, error: null });
 
-      const result = await createOrder(mockOrderData);
+      const result = await createWeeklyOrder(mockWeeklyOrderData);
 
-      expect(result).toEqual({ id: 'order-1', status: 'pending' });
+      expect(result).toEqual(mockResponse);
     });
 
     it('throws error on failure', async () => {
-      const errorObj = { message: 'Insufficient balance' };
+      const errorObj = { message: 'Order creation failed' };
       mockInvoke.mockResolvedValue({ data: null, error: errorObj });
 
-      // The service catches errors and converts them to Error instances
-      await expect(createOrder(mockOrderData)).rejects.toBeInstanceOf(Error);
+      await expect(createWeeklyOrder(mockWeeklyOrderData)).rejects.toBeInstanceOf(Error);
     });
 
-    it('queues order when offline', async () => {
+    it('queues order when offline (cash)', async () => {
       (isOnline as ReturnType<typeof vi.fn>).mockReturnValue(false);
 
-      const result = await createOrder(mockOrderData);
+      const result = await createWeeklyOrder(mockWeeklyOrderData);
 
-      expect(queueOrder).toHaveBeenCalledWith(mockOrderData);
-      expect(result).toEqual({ queued: true });
+      expect(queueOrder).toHaveBeenCalled();
+      expect(result.message).toContain('offline');
       expect(mockInvoke).not.toHaveBeenCalled();
     });
 
-    it('includes scheduled_for in order data', async () => {
-      mockInvoke.mockResolvedValue({ data: { id: 'order-1' }, error: null });
+    it('includes all days in weekly order request', async () => {
+      const mockResponse = { success: true, weekly_order_id: 'wo-1', order_ids: ['o-1', 'o-2'], total_amount: 260, payment_status: 'paid', message: 'OK' };
+      mockInvoke.mockResolvedValue({ data: mockResponse, error: null });
 
-      const orderWithSchedule = {
-        ...mockOrderData,
-        scheduled_for: '2024-01-15'
+      const multiDayOrder = {
+        ...mockWeeklyOrderData,
+        days: [
+          { scheduled_for: '2026-03-09', items: [{ product_id: 'p-1', quantity: 1, price_at_order: 65.00 }] },
+          { scheduled_for: '2026-03-10', items: [{ product_id: 'p-2', quantity: 1, price_at_order: 65.00 }] },
+        ]
       };
 
-      await createOrder(orderWithSchedule);
+      await createWeeklyOrder(multiDayOrder);
 
-      expect(mockInvoke).toHaveBeenCalledWith('process-order', {
-        body: orderWithSchedule
+      expect(mockInvoke).toHaveBeenCalledWith('process-weekly-order', {
+        body: multiDayOrder
       });
     });
   });
@@ -134,7 +142,7 @@ describe('Orders Service', () => {
 
       await getOrderHistory('parent-123');
 
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('child:students'));
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('student:students'));
       expect(mockQueryBuilder.select).toHaveBeenCalledWith(expect.stringContaining('items:order_items'));
     });
 

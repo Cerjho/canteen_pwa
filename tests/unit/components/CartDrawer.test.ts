@@ -53,13 +53,6 @@ describe('CartDrawer Component', () => {
       quantity = Math.max(1, quantity - 1);
       expect(quantity).toBe(1);
     });
-
-    it('should not exceed stock', () => {
-      const stock = 10;
-      let quantity = 10;
-      quantity = Math.min(stock, quantity + 1);
-      expect(quantity).toBe(10);
-    });
   });
 
   describe('Item Removal', () => {
@@ -96,22 +89,15 @@ describe('CartDrawer Component', () => {
   });
 
   describe('Payment Method', () => {
-    it('should default to balance payment', () => {
-      const defaultMethod = 'balance';
-      expect(defaultMethod).toBe('balance');
+    it('should default to cash payment', () => {
+      const defaultMethod = 'cash';
+      expect(defaultMethod).toBe('cash');
     });
 
-    it('should switch to cash payment', () => {
-      let method = 'balance';
-      method = 'cash';
-      expect(method).toBe('cash');
-    });
-
-    it('should show balance amount for balance payment', () => {
-      const paymentMethod = 'balance';
-      const _balance = 500.00;
-      const showBalance = paymentMethod === 'balance';
-      expect(showBalance).toBe(true);
+    it('should switch to gcash payment', () => {
+      let method = 'cash';
+      method = 'gcash';
+      expect(method).toBe('gcash');
     });
 
     it('should show cash instructions for cash payment', () => {
@@ -122,39 +108,27 @@ describe('CartDrawer Component', () => {
   });
 
   describe('Checkout Validation', () => {
-    it('should require child selection', () => {
-      const selectedChild = null;
+    it('should require student selection', () => {
+      const selectedStudent = null;
       const errors: string[] = [];
 
-      if (!selectedChild) {
-        errors.push('Please select a child');
+      if (!selectedStudent) {
+        errors.push('Please select a student');
       }
 
-      expect(errors).toContain('Please select a child');
+      expect(errors).toContain('Please select a student');
     });
 
-    it('should validate sufficient balance', () => {
-      const balance = 50.00;
-      const total = 185.00;
-      const paymentMethod = 'balance';
-      const errors: string[] = [];
-
-      if (paymentMethod === 'balance' && balance < total) {
-        errors.push('Insufficient balance');
-      }
-
-      expect(errors).toContain('Insufficient balance');
-    });
-
-    it('should validate stock availability', () => {
+    it('should validate product availability', () => {
       const items = [
-        { product_id: 'p1', quantity: 10, stock: 5 }
+        { product_id: 'p1', quantity: 2, available: true },
+        { product_id: 'p2', quantity: 1, available: false }
       ];
       const errors: string[] = [];
 
       items.forEach(item => {
-        if (item.quantity > item.stock) {
-          errors.push(`Not enough stock for ${item.product_id}`);
+        if (!item.available) {
+          errors.push(`Product ${item.product_id} is unavailable`);
         }
       });
 
@@ -162,17 +136,13 @@ describe('CartDrawer Component', () => {
     });
 
     it('should allow checkout when valid', () => {
-      const selectedChild = 'child-1';
-      const balance = 500.00;
-      const total = 185.00;
-      const paymentMethod = 'balance';
-      const items = [{ quantity: 2, stock: 10 }];
+      const selectedStudent = 'student-1';
+      const items = [{ quantity: 2, available: true }];
 
-      const hasChild = !!selectedChild;
-      const hasSufficientBalance = paymentMethod !== 'balance' || balance >= total;
-      const hasStockAvailable = items.every(i => i.quantity <= i.stock);
+      const hasStudent = !!selectedStudent;
+      const allAvailable = items.every(i => i.available);
 
-      const canCheckout = hasChild && hasSufficientBalance && hasStockAvailable;
+      const canCheckout = hasStudent && allAvailable;
       expect(canCheckout).toBe(true);
     });
   });
@@ -284,23 +254,8 @@ describe('Payment Summary', () => {
   });
 
   it('should show payment method', () => {
-    const paymentMethod = 'balance';
-    expect(['balance', 'cash']).toContain(paymentMethod);
-  });
-
-  it('should show current balance for balance payment', () => {
-    const balance = 500.00;
-    const paymentMethod = 'balance';
-    const showBalance = paymentMethod === 'balance';
-    expect(showBalance).toBe(true);
-    expect(balance).toBe(500.00);
-  });
-
-  it('should show remaining balance after order', () => {
-    const balance = 500.00;
-    const total = 185.00;
-    const remaining = balance - total;
-    expect(remaining).toBe(315.00);
+    const paymentMethod = 'cash';
+    expect(['cash', 'gcash', 'paymaya', 'card']).toContain(paymentMethod);
   });
 
   it('should show timeout warning for cash payment', () => {

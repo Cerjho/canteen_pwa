@@ -57,22 +57,6 @@ describe('CartBottomSheet — Business Logic', () => {
     });
   });
 
-  // ── Balance check ───────────────────────────────────────
-
-  describe('Balance Validation', () => {
-    it('allows balance payment when sufficient', () => {
-      const parentBalance = 200;
-      const selectedTotal = 150;
-      expect(parentBalance >= selectedTotal).toBe(true);
-    });
-
-    it('blocks balance payment when insufficient', () => {
-      const parentBalance = 50;
-      const selectedTotal = 150;
-      expect(parentBalance >= selectedTotal).toBe(false);
-    });
-  });
-
   // ── Grouping logic ──────────────────────────────────────
 
   describe('Date-Student Grouping', () => {
@@ -241,7 +225,6 @@ describe('CartBottomSheet — Business Logic', () => {
   describe('Payment Method Display', () => {
     const PAYMENT_METHOD_META: Record<string, { label: string }> = {
       cash: { label: 'Cash' },
-      balance: { label: 'Wallet Balance' },
       gcash: { label: 'GCash' },
       paymaya: { label: 'PayMaya' },
       card: { label: 'Credit/Debit Card' },
@@ -249,7 +232,6 @@ describe('CartBottomSheet — Business Logic', () => {
 
     it('maps all payment methods to display labels', () => {
       expect(PAYMENT_METHOD_META['cash'].label).toBe('Cash');
-      expect(PAYMENT_METHOD_META['balance'].label).toBe('Wallet Balance');
       expect(PAYMENT_METHOD_META['gcash'].label).toBe('GCash');
       expect(PAYMENT_METHOD_META['paymaya'].label).toBe('PayMaya');
       expect(PAYMENT_METHOD_META['card'].label).toBe('Credit/Debit Card');
@@ -276,34 +258,30 @@ describe('CartBottomSheet — Business Logic', () => {
   // ── BUG-003: Checkout button disabled states ────────────
 
   describe('BUG-003: Checkout Button Disabled States', () => {
-    it('checkout button is disabled when balance payment selected but balance insufficient', () => {
-      const paymentMethod = 'balance';
-      const canUseBalance = false;
-      const itemsLength = 3;
+    it('checkout button is disabled when cart is empty', () => {
+      const itemsLength = 0;
       const isCheckingOut = false;
 
-      const disabled = itemsLength === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance);
+      const disabled = itemsLength === 0 || isCheckingOut;
       expect(disabled).toBe(true);
     });
 
-    it('checkout button is enabled when balance is sufficient', () => {
-      const paymentMethod = 'balance';
-      const canUseBalance = true;
+    it('checkout button is disabled when checking out', () => {
       const itemsLength = 3;
-      const isCheckingOut = false;
+      const isCheckingOut = true;
 
-      const disabled = itemsLength === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance);
-      expect(disabled).toBe(false);
+      const disabled = itemsLength === 0 || isCheckingOut;
+      expect(disabled).toBe(true);
     });
 
-    it('checkout button is enabled for cash payment regardless of balance', () => {
+    it('checkout button is enabled for cash payment with items', () => {
       const paymentMethod = 'cash';
-      const canUseBalance = false;
       const itemsLength = 3;
       const isCheckingOut = false;
 
-      const disabled = itemsLength === 0 || isCheckingOut || (paymentMethod === 'balance' && !canUseBalance);
+      const disabled = itemsLength === 0 || isCheckingOut;
       expect(disabled).toBe(false);
+      expect(paymentMethod).toBe('cash');
     });
   });
 });

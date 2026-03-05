@@ -1,20 +1,20 @@
-// ChildSelector Component Tests
+// StudentSelector Component Tests
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { ChildSelector } from '../../../src/components/StudentSelector';
+import { StudentSelector } from '../../../src/components/StudentSelector';
 
-describe('ChildSelector Component', () => {
-  const mockChildren = [
+describe('StudentSelector Component', () => {
+  const mockStudents = [
     {
-      id: 'child-1',
+      id: 'student-1',
       first_name: 'Maria',
       last_name: 'Santos',
       grade_level: 'Grade 3',
       section: 'A'
     },
     {
-      id: 'child-2',
+      id: 'student-2',
       first_name: 'Juan',
       last_name: 'Santos',
       grade_level: 'Grade 1',
@@ -31,9 +31,9 @@ describe('ChildSelector Component', () => {
   describe('Rendering', () => {
     it('renders label', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -43,9 +43,9 @@ describe('ChildSelector Component', () => {
 
     it('renders select dropdown', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -55,9 +55,9 @@ describe('ChildSelector Component', () => {
 
     it('renders placeholder option', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -65,11 +65,11 @@ describe('ChildSelector Component', () => {
       expect(screen.getByText('Select a student')).toBeInTheDocument();
     });
 
-    it('renders all children options', () => {
+    it('renders all student options', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -80,67 +80,67 @@ describe('ChildSelector Component', () => {
   });
 
   describe('Selection', () => {
-    it('calls onSelect when child is selected', () => {
+    it('calls onSelect when student is selected', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
 
       const select = screen.getByRole('combobox');
-      fireEvent.change(select, { target: { value: 'child-1' } });
+      fireEvent.change(select, { target: { value: 'student-1' } });
 
-      expect(mockOnSelect).toHaveBeenCalledWith('child-1');
+      expect(mockOnSelect).toHaveBeenCalledWith('student-1');
     });
 
-    it('shows selected child', () => {
+    it('shows selected student', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId="child-2"
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId="student-2"
           onSelect={mockOnSelect}
         />
       );
 
       const select = screen.getByRole('combobox') as HTMLSelectElement;
-      expect(select.value).toBe('child-2');
+      expect(select.value).toBe('student-2');
     });
 
     it('can change selection', () => {
       const { rerender } = render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId="child-1"
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId="student-1"
           onSelect={mockOnSelect}
         />
       );
 
       const select = screen.getByRole('combobox');
-      fireEvent.change(select, { target: { value: 'child-2' } });
+      fireEvent.change(select, { target: { value: 'student-2' } });
 
-      expect(mockOnSelect).toHaveBeenCalledWith('child-2');
+      expect(mockOnSelect).toHaveBeenCalledWith('student-2');
 
       // Simulate parent updating state
       rerender(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId="child-2"
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId="student-2"
           onSelect={mockOnSelect}
         />
       );
 
-      expect((select as HTMLSelectElement).value).toBe('child-2');
+      expect((select as HTMLSelectElement).value).toBe('student-2');
     });
   });
 
   describe('Empty State', () => {
-    it('shows message when no children exist', () => {
+    it('shows message when no students exist', () => {
       render(
-        <ChildSelector
-          children={[]}
-          selectedChildId={null}
+        <StudentSelector
+          students={[]}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -151,11 +151,11 @@ describe('ChildSelector Component', () => {
       expect(screen.getByText('Select a student')).toBeInTheDocument();
     });
 
-    it('still renders select when no children', () => {
+    it('still renders select when no students', () => {
       render(
-        <ChildSelector
-          children={[]}
-          selectedChildId={null}
+        <StudentSelector
+          students={[]}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -164,11 +164,11 @@ describe('ChildSelector Component', () => {
     });
   });
 
-  describe('Child Without Section', () => {
-    it('handles child without section', () => {
-      const childrenWithoutSection = [
+  describe('Student Without Section', () => {
+    it('handles student without section', () => {
+      const studentsWithoutSection = [
         {
-          id: 'child-3',
+          id: 'student-3',
           first_name: 'Pedro',
           last_name: 'Cruz',
           grade_level: 'Grade 2'
@@ -176,9 +176,9 @@ describe('ChildSelector Component', () => {
       ];
 
       render(
-        <ChildSelector
-          children={childrenWithoutSection}
-          selectedChildId={null}
+        <StudentSelector
+          students={studentsWithoutSection}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -187,9 +187,9 @@ describe('ChildSelector Component', () => {
     });
 
     it('does not show extra space when no section', () => {
-      const childrenWithoutSection = [
+      const studentsWithoutSection = [
         {
-          id: 'child-3',
+          id: 'student-3',
           first_name: 'Pedro',
           last_name: 'Cruz',
           grade_level: 'Grade 2'
@@ -197,9 +197,9 @@ describe('ChildSelector Component', () => {
       ];
 
       render(
-        <ChildSelector
-          children={childrenWithoutSection}
-          selectedChildId={null}
+        <StudentSelector
+          students={studentsWithoutSection}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -210,18 +210,18 @@ describe('ChildSelector Component', () => {
     });
   });
 
-  describe('Mixed Children', () => {
-    it('handles mix of children with and without sections', () => {
-      const mixedChildren = [
+  describe('Mixed Students', () => {
+    it('handles mix of students with and without sections', () => {
+      const mixedStudents = [
         {
-          id: 'child-1',
+          id: 'student-1',
           first_name: 'Maria',
           last_name: 'Santos',
           grade_level: 'Grade 3',
           section: 'A'
         },
         {
-          id: 'child-2',
+          id: 'student-2',
           first_name: 'Pedro',
           last_name: 'Cruz',
           grade_level: 'Grade 2'
@@ -230,9 +230,9 @@ describe('ChildSelector Component', () => {
       ];
 
       render(
-        <ChildSelector
-          children={mixedChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mixedStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -245,9 +245,9 @@ describe('ChildSelector Component', () => {
   describe('Accessibility', () => {
     it('has associated label', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );
@@ -258,9 +258,9 @@ describe('ChildSelector Component', () => {
 
     it('select is keyboard accessible', () => {
       render(
-        <ChildSelector
-          children={mockChildren}
-          selectedChildId={null}
+        <StudentSelector
+          students={mockStudents}
+          selectedStudentId={null}
           onSelect={mockOnSelect}
         />
       );

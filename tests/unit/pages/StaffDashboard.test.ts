@@ -30,7 +30,7 @@ describe('Staff Dashboard', () => {
         id: 'order-1',
         status: 'pending',
         payment_status: 'paid',
-        payment_method: 'balance',
+        payment_method: 'gcash',
         created_at: '2026-01-05T09:00:00',
         scheduled_for: '2026-01-05',
         total_amount: 150.00
@@ -49,7 +49,7 @@ describe('Staff Dashboard', () => {
         id: 'order-3',
         status: 'pending',
         payment_status: 'paid',
-        payment_method: 'balance',
+        payment_method: 'gcash',
         created_at: '2026-01-04T15:00:00',
         scheduled_for: '2026-01-10', // Future order
         total_amount: 200.00
@@ -83,8 +83,8 @@ describe('Staff Dashboard', () => {
       const cashOrders = mockOrders.filter(o => o.payment_method === 'cash');
       expect(cashOrders).toHaveLength(1);
 
-      const balanceOrders = mockOrders.filter(o => o.payment_method === 'balance');
-      expect(balanceOrders).toHaveLength(2);
+      const gcashOrders = mockOrders.filter(o => o.payment_method === 'gcash');
+      expect(gcashOrders).toHaveLength(2);
     });
   });
 
@@ -149,7 +149,7 @@ describe('Staff Dashboard', () => {
       const order = {
         id: 'order-1',
         status: 'pending',
-        payment_method: 'balance'
+        payment_method: 'gcash'
       };
 
       const showConfirmButton = order.status === 'awaiting_payment';
@@ -386,7 +386,7 @@ describe('Grade Level Grouping', () => {
 
   interface GradeGroup {
     gradeLevel: string;
-    orders: Array<{ id: string; status: string; child: { grade_level: string } }>;
+    orders: Array<{ id: string; status: string; student: { grade_level: string } }>;
     orderCount: number;
     pendingCount: number;
     preparingCount: number;
@@ -394,11 +394,11 @@ describe('Grade Level Grouping', () => {
     awaitingPaymentCount: number;
   }
 
-  function groupOrdersByGrade(orders: Array<{ id: string; status: string; child: { grade_level: string } }>): GradeGroup[] {
-    const groups = new Map<string, Array<{ id: string; status: string; child: { grade_level: string } }>>();
+  function groupOrdersByGrade(orders: Array<{ id: string; status: string; student: { grade_level: string } }>): GradeGroup[] {
+    const groups = new Map<string, Array<{ id: string; status: string; student: { grade_level: string } }>>();
     
     orders.forEach(order => {
-      const gradeLevel = order.child?.grade_level || 'Unknown';
+      const gradeLevel = order.student?.grade_level || 'Unknown';
       const existing = groups.get(gradeLevel);
       if (existing) {
         existing.push(order);
@@ -422,11 +422,11 @@ describe('Grade Level Grouping', () => {
 
   it('should group orders by grade level', () => {
     const mockOrders = [
-      { id: '1', status: 'pending', child: { grade_level: 'Grade 1' } },
-      { id: '2', status: 'preparing', child: { grade_level: 'Grade 3' } },
-      { id: '3', status: 'pending', child: { grade_level: 'Grade 1' } },
-      { id: '4', status: 'ready', child: { grade_level: 'Grade 3' } },
-      { id: '5', status: 'pending', child: { grade_level: 'Kinder' } },
+      { id: '1', status: 'pending', student: { grade_level: 'Grade 1' } },
+      { id: '2', status: 'preparing', student: { grade_level: 'Grade 3' } },
+      { id: '3', status: 'pending', student: { grade_level: 'Grade 1' } },
+      { id: '4', status: 'ready', student: { grade_level: 'Grade 3' } },
+      { id: '5', status: 'pending', student: { grade_level: 'Kinder' } },
     ];
 
     const grouped = groupOrdersByGrade(mockOrders);
@@ -448,11 +448,11 @@ describe('Grade Level Grouping', () => {
 
   it('should sort grades in correct K-12 order', () => {
     const mockOrders = [
-      { id: '1', status: 'pending', child: { grade_level: 'Grade 12' } },
-      { id: '2', status: 'pending', child: { grade_level: 'Grade 1' } },
-      { id: '3', status: 'pending', child: { grade_level: 'Nursery' } },
-      { id: '4', status: 'pending', child: { grade_level: 'Grade 7' } },
-      { id: '5', status: 'pending', child: { grade_level: 'Kinder' } },
+      { id: '1', status: 'pending', student: { grade_level: 'Grade 12' } },
+      { id: '2', status: 'pending', student: { grade_level: 'Grade 1' } },
+      { id: '3', status: 'pending', student: { grade_level: 'Nursery' } },
+      { id: '4', status: 'pending', student: { grade_level: 'Grade 7' } },
+      { id: '5', status: 'pending', student: { grade_level: 'Kinder' } },
     ];
 
     const grouped = groupOrdersByGrade(mockOrders);
@@ -463,10 +463,10 @@ describe('Grade Level Grouping', () => {
 
   it('should calculate status counts per grade correctly', () => {
     const mockOrders = [
-      { id: '1', status: 'pending', child: { grade_level: 'Grade 1' } },
-      { id: '2', status: 'preparing', child: { grade_level: 'Grade 1' } },
-      { id: '3', status: 'ready', child: { grade_level: 'Grade 1' } },
-      { id: '4', status: 'awaiting_payment', child: { grade_level: 'Grade 1' } },
+      { id: '1', status: 'pending', student: { grade_level: 'Grade 1' } },
+      { id: '2', status: 'preparing', student: { grade_level: 'Grade 1' } },
+      { id: '3', status: 'ready', student: { grade_level: 'Grade 1' } },
+      { id: '4', status: 'awaiting_payment', student: { grade_level: 'Grade 1' } },
     ];
 
     const grouped = groupOrdersByGrade(mockOrders);
@@ -482,9 +482,9 @@ describe('Grade Level Grouping', () => {
 
   it('should handle orders with missing grade level', () => {
     const mockOrders = [
-      { id: '1', status: 'pending', child: { grade_level: 'Grade 1' } },
-      { id: '2', status: 'pending', child: { grade_level: '' } },
-      { id: '3', status: 'pending', child: { grade_level: null as unknown as string } },
+      { id: '1', status: 'pending', student: { grade_level: 'Grade 1' } },
+      { id: '2', status: 'pending', student: { grade_level: '' } },
+      { id: '3', status: 'pending', student: { grade_level: null as unknown as string } },
     ];
 
     const grouped = groupOrdersByGrade(mockOrders);

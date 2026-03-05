@@ -42,16 +42,27 @@ vi.mock('../../../src/hooks/useAuth', () => ({
   })
 }));
 
-// Mock createBatchOrder (the hook now uses batch order API)
-const mockCreateBatchOrder = vi.fn();
+// Mock createWeeklyOrder (the hook uses weekly order API for cash)
+const mockCreateWeeklyOrder = vi.fn();
 vi.mock('../../../src/services/orders', () => ({
-  createBatchOrder: (data: Record<string, unknown>) => mockCreateBatchOrder(data)
+  createWeeklyOrder: (data: Record<string, unknown>) => mockCreateWeeklyOrder(data)
 }));
 
 // Mock payments service (imported by the hook)
+const mockCreateWeeklyCheckout = vi.fn();
 vi.mock('../../../src/services/payments', () => ({
-  createBatchCheckout: vi.fn()
+  createWeeklyCheckout: (data: Record<string, unknown>) => mockCreateWeeklyCheckout(data)
 }));
+
+// Mock dateUtils — override getNextOrderableWeek so the selected week starts on
+// today, ensuring cart items with scheduled_for = today fall within the week filter
+vi.mock('../../../src/utils/dateUtils', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/utils/dateUtils')>('../../../src/utils/dateUtils');
+  return {
+    ...actual,
+    getNextOrderableWeek: () => actual.getTodayLocal(),
+  };
+});
 
 describe('useCart Hook', () => {
   // Use Asia/Manila timezone (same as the hook) to avoid CI failures
@@ -82,11 +93,12 @@ describe('useCart Hook', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateBatchOrder.mockResolvedValue({
+    mockCreateWeeklyOrder.mockResolvedValue({
       success: true,
+      weekly_order_id: 'wo-1',
       order_ids: ['order-1'],
-      orders: [{ order_id: 'order-1', client_order_id: 'client-1', total_amount: 65, status: 'pending', payment_status: 'awaiting_payment', payment_due_at: null }],
       total_amount: 65,
+      payment_status: 'paid',
       message: 'Orders created successfully'
     });
   });
@@ -365,15 +377,15 @@ describe('useCart Hook', () => {
       const { result } = renderHook(() => useCart());
 
       act(() => {
-        result.current.setPaymentMethod('balance');
+        result.current.setPaymentMethod('paymaya');
       });
 
-      expect(result.current.paymentMethod).toBe('balance');
+      expect(result.current.paymentMethod).toBe('paymaya');
     });
   });
 
   describe('checkout', () => {
-    it('should create order with cart items', async () => {
+    it('should create weekly order with cart items', async () => {
       const { result } = await renderCartHook();
 
       await act(async () => {
@@ -388,12 +400,13 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', '');
       });
 
-      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
+      expect(mockCreateWeeklyOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           parent_id: 'test-user-123',
-          orders: expect.arrayContaining([
+          student_id: 'student-1',
+          days: expect.arrayContaining([
             expect.objectContaining({
-              student_id: 'student-1',
+              scheduled_for: today,
               items: expect.arrayContaining([
                 expect.objectContaining({
                   product_id: 'product-1',
@@ -449,12 +462,12 @@ describe('useCart Hook', () => {
       });
 
       await act(async () => {
-        await result.current.checkout('balance', '');
+        await result.current.checkout('cash', '');
       });
 
-      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
+      expect(mockCreateWeeklyOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          payment_method: 'balance'
+          payment_method: 'cash'
         })
       );
     });
@@ -474,7 +487,7 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', 'Extra rice please');
       });
 
-      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
+      expect(mockCreateWeeklyOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           notes: 'Extra rice please'
         })
@@ -496,9 +509,9 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', '');
       });
 
-      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
+      expect(mockCreateWeeklyOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          orders: expect.arrayContaining([
+          days: expect.arrayContaining([
             expect.objectContaining({
               scheduled_for: today
             })
@@ -508,11 +521,12 @@ describe('useCart Hook', () => {
     });
 
     it('should return order result', async () => {
-      mockCreateBatchOrder.mockResolvedValue({
+      mockCreateWeeklyOrder.mockResolvedValue({
         success: true,
-        order_ids: ['new-order-id'],
-        orders: [{ order_id: 'new-order-id', client_order_id: 'c-1', total_amount: 65, status: 'pending', payment_status: 'awaiting_payment', payment_due_at: null }],
+        weekly_order_id: 'wo-1',
+        order_ids: ['order-1'],
         total_amount: 65,
+        payment_status: 'paid',
         message: 'OK'
       });
 
@@ -533,7 +547,7 @@ describe('useCart Hook', () => {
 
       expect(orderResult).toMatchObject({
         orders: expect.arrayContaining([
-          expect.objectContaining({ order_id: 'new-order-id' })
+          expect.objectContaining({ weekly_order_id: 'wo-1' })
         ])
       });
     });
@@ -561,8 +575,8 @@ describe('useCart Hook', () => {
         await result.current.checkout('cash', '');
       });
 
-      // The batch order should have been called with empty string notes, NOT 'Old stale notes'
-      expect(mockCreateBatchOrder).toHaveBeenCalledWith(
+      // The weekly order should have been called with empty string notes, NOT 'Old stale notes'
+      expect(mockCreateWeeklyOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           notes: ''
         })

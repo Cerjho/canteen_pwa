@@ -57,7 +57,7 @@ describe('Cash Payment Flow', () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          order_id: 'order-balance-paid'
+          order_id: 'order-gcash-paid'
         })
       });
 
@@ -193,28 +193,6 @@ describe('Cash Payment Flow', () => {
       expect(result.cancelled_count).toBe(3);
     });
 
-    it('should restore stock for cancelled orders', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          cancelled_count: 1,
-          stock_restored: true
-        })
-      });
-
-      const response = await fetch('https://test.supabase.co/functions/v1/cleanup-timeout-orders', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer service-key',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
-      expect(result.stock_restored).toBe(true);
-    });
-
     it('should handle no expired orders gracefully', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
@@ -304,7 +282,7 @@ describe('Staff Dashboard Payment Actions', () => {
           id: 'order-2',
           status: 'pending',
           payment_status: 'paid',
-          payment_method: 'balance',
+          payment_method: 'gcash',
           total_amount: 130.00
         }
       ])

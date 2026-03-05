@@ -1,7 +1,6 @@
 // Mock Data for Testing
 import type { 
   Product, 
-  Child, 
   Student,
   OrderWithDetails, 
   CartItem,
@@ -21,7 +20,6 @@ export const mockProducts: Product[] = [
     category: 'mains',
     image_url: 'https://example.com/adobo.jpg',
     available: true,
-    stock_quantity: 50,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z'
   },
@@ -33,7 +31,6 @@ export const mockProducts: Product[] = [
     category: 'mains',
     image_url: 'https://example.com/spaghetti.jpg',
     available: true,
-    stock_quantity: 30,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z'
   },
@@ -45,7 +42,6 @@ export const mockProducts: Product[] = [
     category: 'snacks',
     image_url: 'https://example.com/bananacue.jpg',
     available: true,
-    stock_quantity: 100,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z'
   },
@@ -57,19 +53,17 @@ export const mockProducts: Product[] = [
     category: 'drinks',
     image_url: 'https://example.com/oj.jpg',
     available: true,
-    stock_quantity: 20,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z'
   },
   {
     id: 'product-5',
-    name: 'Sold Out Item',
+    name: 'Unavailable Item',
     description: 'This item is currently unavailable',
     price: 45.00,
     category: 'snacks',
     image_url: 'https://example.com/soldout.jpg',
     available: false,
-    stock_quantity: 0,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z'
   }
@@ -111,46 +105,6 @@ export const mockStudentWithoutSection: Student = {
   last_name: 'Cruz',
   grade_level: 'Grade 2',
   is_active: true,
-  created_at: '2024-01-01T00:00:00Z',
-  updated_at: '2024-01-01T00:00:00Z'
-};
-
-// ============================================
-// Children (deprecated - for backward compatibility)
-// ============================================
-export const mockChildren: Child[] = [
-  {
-    id: 'student-1',
-    student_id: 'STU-001',
-    parent_id: 'test-user-123',
-    first_name: 'Maria',
-    last_name: 'Santos',
-    grade_level: 'Grade 3',
-    section: 'A',
-    dietary_restrictions: 'No peanuts',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: 'student-2',
-    student_id: 'STU-002',
-    parent_id: 'test-user-123',
-    first_name: 'Juan',
-    last_name: 'Santos',
-    grade_level: 'Grade 1',
-    section: 'B',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z'
-  }
-];
-
-export const mockChildWithoutSection: Child = {
-  id: 'student-3',
-  student_id: 'STU-003',
-  parent_id: 'test-user-123',
-  first_name: 'Pedro',
-  last_name: 'Cruz',
-  grade_level: 'Grade 2',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z'
 };
@@ -220,10 +174,7 @@ export const mockOrders: OrderWithDetails[] = [
     created_at: '2024-01-01T10:00:00Z',
     updated_at: '2024-01-01T10:00:00Z',
     student: {
-      first_name: 'Maria',
-      last_name: 'Santos'
-    },
-    child: {
+      id: 'student-1',
       first_name: 'Maria',
       last_name: 'Santos'
     },
@@ -240,10 +191,7 @@ export const mockOrders: OrderWithDetails[] = [
     created_at: '2024-01-01T09:00:00Z',
     updated_at: '2024-01-01T09:30:00Z',
     student: {
-      first_name: 'Juan',
-      last_name: 'Santos'
-    },
-    child: {
+      id: 'student-2',
       first_name: 'Juan',
       last_name: 'Santos'
     },
@@ -281,15 +229,12 @@ export const mockOrders: OrderWithDetails[] = [
     client_order_id: 'client-order-3',
     status: 'completed',
     total_amount: 65.00,
-    payment_method: 'balance',
+    payment_method: 'card',
     created_at: '2023-12-31T12:00:00Z',
     updated_at: '2023-12-31T12:30:00Z',
     completed_at: '2023-12-31T12:30:00Z',
     student: {
-      first_name: 'Maria',
-      last_name: 'Santos'
-    },
-    child: {
+      id: 'student-1',
       first_name: 'Maria',
       last_name: 'Santos'
     },
@@ -319,7 +264,6 @@ export const mockParent: Parent = {
   phone_number: '+639123456789',
   first_name: 'Test',
   last_name: 'Parent',
-  balance: 500.00,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z'
 };

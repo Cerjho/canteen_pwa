@@ -24,7 +24,7 @@ const mockOrders = [
     status: 'pending',
     total_amount: 130,
     created_at: '2024-01-15T10:30:00Z',
-    child: { first_name: 'Maria', last_name: 'Santos' },
+    student: { first_name: 'Maria', last_name: 'Santos' },
     items: [
       { id: 'item-1', quantity: 2, price_at_order: 65, product: { id: 'p1', name: 'Chicken Adobo', price: 65, image_url: '' } }
     ]
@@ -34,7 +34,7 @@ const mockOrders = [
     status: 'preparing',
     total_amount: 40,
     created_at: '2024-01-15T09:00:00Z',
-    child: { first_name: 'Juan', last_name: 'Cruz' },
+    student: { first_name: 'Juan', last_name: 'Cruz' },
     items: [
       { id: 'item-2', quantity: 2, price_at_order: 15, product: { id: 'p2', name: 'Banana Cue', price: 15, image_url: '' } },
       { id: 'item-3', quantity: 1, price_at_order: 25, product: { id: 'p3', name: 'Orange Juice', price: 25, image_url: '' } }
@@ -45,7 +45,7 @@ const mockOrders = [
     status: 'completed',
     total_amount: 65,
     created_at: '2024-01-14T12:00:00Z',
-    child: { first_name: 'Maria', last_name: 'Santos' },
+    student: { first_name: 'Maria', last_name: 'Santos' },
     items: [
       { id: 'item-4', quantity: 1, price_at_order: 65, product: { id: 'p1', name: 'Chicken Adobo', price: 65, image_url: '' } }
     ]
@@ -55,7 +55,7 @@ const mockOrders = [
     status: 'ready',
     total_amount: 25,
     created_at: '2024-01-14T11:00:00Z',
-    child: { first_name: 'Juan', last_name: 'Cruz' },
+    student: { first_name: 'Juan', last_name: 'Cruz' },
     items: [
       { id: 'item-5', quantity: 1, price_at_order: 25, product: { id: 'p3', name: 'Orange Juice', price: 25, image_url: '' } }
     ]
@@ -65,7 +65,7 @@ const mockOrders = [
     status: 'cancelled',
     total_amount: 15,
     created_at: '2024-01-13T10:00:00Z',
-    child: { first_name: 'Maria', last_name: 'Santos' },
+    student: { first_name: 'Maria', last_name: 'Santos' },
     items: [
       { id: 'item-6', quantity: 1, price_at_order: 15, product: { id: 'p2', name: 'Banana Cue', price: 15, image_url: '' } }
     ]
@@ -208,7 +208,7 @@ describe('OrderHistory Page', () => {
   });
 
   describe('Order Details', () => {
-    it('shows child name for each order', async () => {
+    it('shows student name for each order', async () => {
       renderOrderHistory();
       
       await waitFor(() => {

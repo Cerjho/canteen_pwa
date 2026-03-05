@@ -11,7 +11,6 @@ vi.mock('../../../src/services/payments', () => ({
   getPaymentMethodLabel: (m: string) => {
     const labels: Record<string, string> = {
       cash: 'Cash',
-      balance: 'Wallet Balance',
       gcash: 'GCash',
       paymaya: 'PayMaya',
       card: 'Credit/Debit Card',
@@ -176,17 +175,6 @@ describe('Online Payment Checkout Flow', () => {
       expect(params.get('payment')).toBe('cancelled');
     });
 
-    it('extracts topup=success param', () => {
-      const params = new URLSearchParams('?topup=success&session=topup-1');
-      expect(params.get('topup')).toBe('success');
-      expect(params.get('session')).toBe('topup-1');
-    });
-
-    it('extracts topup=cancelled param', () => {
-      const params = new URLSearchParams('?topup=cancelled');
-      expect(params.get('topup')).toBe('cancelled');
-    });
-
     it('handles missing params gracefully', () => {
       const params = new URLSearchParams('');
       expect(params.get('payment')).toBeNull();
@@ -268,10 +256,5 @@ describe('Online Payment Checkout Flow', () => {
       expect(isOnline).toBe(true);
     });
 
-    it('does not show redirect notice for balance', () => {
-      const method: PaymentMethod = 'balance';
-      const isOnline = isOnlinePaymentMethod(method);
-      expect(isOnline).toBe(false);
-    });
   });
 });

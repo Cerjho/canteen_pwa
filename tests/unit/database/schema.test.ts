@@ -283,15 +283,4 @@ describe('Payment Flow Constraints', () => {
     expect(cashOrderDefaults.status).toBe('awaiting_payment');
     expect(cashOrderDefaults.payment_due_at).toContain('15 minutes');
   });
-
-  it('should set paid status for balance orders', () => {
-    const balanceOrderDefaults = {
-      status: 'pending',
-      payment_status: 'paid',
-      payment_due_at: null
-    };
-
-    expect(balanceOrderDefaults.status).toBe('pending');
-    expect(balanceOrderDefaults.payment_status).toBe('paid');
-  });
 });

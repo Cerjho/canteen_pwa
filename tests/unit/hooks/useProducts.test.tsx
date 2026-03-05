@@ -157,7 +157,6 @@ describe('useProducts Hook', () => {
           category: 'mains' as const,
           image_url: 'https://example.com/new.jpg',
           available: true,
-          stock_quantity: 10,
           created_at: '2024-01-02T00:00:00Z',
           updated_at: '2024-01-02T00:00:00Z'
         }
