@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, isToday, isTomorrow, parseISO, addDays } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../services/supabaseClient';
 import { ensureValidAccessToken } from '../../services/authSession';
@@ -25,9 +25,7 @@ import {
   ChefHat, 
   RefreshCw, 
   Bell, 
-  CalendarClock, 
   CalendarDays,
-  Calendar, 
   X, 
   RotateCcw, 
   MapPin, 
@@ -74,14 +72,6 @@ interface Order {
   items: OrderItem[];
 }
 
-// Get friendly date label
-function getScheduledLabel(dateStr: string): string {
-  const date = parseISO(dateStr);
-  if (isToday(date)) return 'Today';
-  if (isTomorrow(date)) return 'Tomorrow';
-  return format(date, 'EEE, MMM d');
-}
-
 // Get payment time remaining
 function getPaymentTimeRemaining(paymentDueAt?: string): { minutes: number; seconds: number; expired: boolean; text: string } {
   if (!paymentDueAt) {
@@ -113,7 +103,7 @@ export default function ParentDashboard() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { addItem } = useCart();
-  const [activeTab, setActiveTab] = useState<'today' | 'scheduled' | 'weekly'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'weekly'>('today');
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
   const [showDayCancelModal, setShowDayCancelModal] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState(false);
@@ -181,34 +171,16 @@ export default function ParentDashboard() {
     refetchInterval: 10000 // More frequent refresh to update countdown timers
   });
 
-  // Fetch scheduled future orders
-  const { data: scheduledOrders, isLoading: loadingScheduled, refetch: refetchScheduled } = useQuery<Order[]>({
-    queryKey: ['scheduled-orders', user?.id, todayStr],
-    queryFn: async () => {
-      if (!user) throw new Error('Please sign in to continue.');
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          student:students!orders_student_id_fkey(id, first_name, last_name),
-          items:order_items(
-            *,
-            product:products(name, image_url)
-          )
-        `)
-        .eq('parent_id', user.id)
-        .gt('scheduled_for', todayStr)
-        .in('status', ['awaiting_payment', 'pending'])
-        .order('scheduled_for', { ascending: true });
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user
-  });
-
   // Weekly orders (aggregated weekly pre-orders)
   const { data: weeklyOrders, isLoading: loadingWeekly } = useWeeklyOrders();
+
+  // Future daily orders derived from weekly orders — used for the Cancel Multiple Days modal
+  const futureDailyOrders = useMemo(() => {
+    if (!weeklyOrders) return [];
+    return weeklyOrders
+      .flatMap(wo => wo.daily_orders || [])
+      .filter(o => (o.scheduled_for ?? '') > todayStr);
+  }, [weeklyOrders, todayStr]);
 
   // Cancel order mutation (via edge function)
   const cancelOrderMutation = useMutation({
@@ -231,7 +203,6 @@ export default function ParentDashboard() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['active-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-orders'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       showToast(result.message || 'Order cancelled successfully', 'success');
       setShowCancelDialog(null);
@@ -310,13 +281,13 @@ export default function ParentDashboard() {
   };
 
   const handleRefresh = async () => {
-    await Promise.all([refetchToday(), refetchScheduled()]);
+    await refetchToday();
   };
   
   // Real-time countdown timer for payment deadlines
   useEffect(() => {
     // Check if there are any awaiting_payment orders
-    const allOrders = [...(todayOrders || []), ...(scheduledOrders || [])];
+    const allOrders = todayOrders || [];
     const hasAwaitingPayment = allOrders.some(o => 
       (o.status === 'awaiting_payment' || o.payment_status === 'awaiting_payment') && o.payment_due_at
     );
@@ -329,7 +300,7 @@ export default function ParentDashboard() {
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [todayOrders, scheduledOrders]);
+  }, [todayOrders]);
 
   const getStatusDetails = (status: string, paymentStatus?: string, paymentMethod?: string) => {
     // Check for timeout first
@@ -391,8 +362,8 @@ export default function ParentDashboard() {
     }
   };
 
-  const isLoading = activeTab === 'today' ? loadingToday : activeTab === 'scheduled' ? loadingScheduled : loadingWeekly;
-  const orders = activeTab === 'today' ? todayOrders : activeTab === 'scheduled' ? scheduledOrders : undefined;
+  const isLoading = activeTab === 'today' ? loadingToday : loadingWeekly;
+  const orders = activeTab === 'today' ? todayOrders : undefined;
 
   // Group orders by student + date for merged card display
   const groupedOrders = useMemo(() => {
@@ -474,24 +445,6 @@ export default function ParentDashboard() {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('scheduled')}
-              className={`flex-1 py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 text-sm ${
-                activeTab === 'scheduled'
-                  ? 'bg-primary-600 text-white shadow-md shadow-primary-200 dark:shadow-primary-900/30'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
-              }`}
-            >
-              <CalendarClock size={16} />
-              Scheduled
-              {scheduledOrders && scheduledOrders.length > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-xs ${
-                  activeTab === 'scheduled' ? 'bg-primary-500' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                }`}>
-                  {scheduledOrders.length}
-                </span>
-              )}
-            </button>
-            <button
               onClick={() => setActiveTab('weekly')}
               className={`flex-1 py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 text-sm ${
                 activeTab === 'weekly'
@@ -511,8 +464,8 @@ export default function ParentDashboard() {
             </button>
           </div>
 
-          {/* Bulk Cancel Days button — shown on Scheduled tab when there are orders */}
-          {activeTab === 'scheduled' && scheduledOrders && scheduledOrders.length > 0 && (
+          {/* Bulk Cancel Days button — shown on Weekly tab when there are cancellable future days */}
+          {activeTab === 'weekly' && futureDailyOrders.length > 0 && (
             <button
               onClick={() => setShowDayCancelModal(true)}
               className="mb-4 w-full py-2.5 flex items-center justify-center gap-2 border-2 border-dashed border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -586,8 +539,6 @@ export default function ParentDashboard() {
           ) : groupedOrders.length > 0 ? (
             <div className="space-y-4">
               {groupedOrders.map((group) => {
-                const isFutureOrder = activeTab === 'scheduled';
-
                 // Overall card status based on most actionable sub-order
                 const hasReadyOrder = group.orders.some(o => o.status === 'ready');
                 const hasAwaitingPayment = group.orders.some(o =>
@@ -611,43 +562,26 @@ export default function ParentDashboard() {
                 return (
                   <div
                     key={`${group.studentId}_${group.scheduledFor}`}
-                    className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 overflow-hidden transition-all animate-fade-in ${
-                      isFutureOrder ? 'border-amber-200 dark:border-amber-800' : overallStatus.color
-                    } ${hasReadyOrder ? 'animate-pulse-subtle ring-2 ring-green-400 shadow-green-100 dark:shadow-green-900/20' : ''}`}
+                    className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 overflow-hidden transition-all animate-fade-in ${overallStatus.color} ${hasReadyOrder ? 'animate-pulse-subtle ring-2 ring-green-400 shadow-green-100 dark:shadow-green-900/20' : ''}`}
                   >
                     {/* Progress Bar */}
-                    {!isFutureOrder && (
-                      <div className="h-1 bg-gray-100 dark:bg-gray-700">
-                        <div
-                          className={`h-full transition-all duration-500 ${
-                            primaryStatus === 'pending' ? 'bg-gray-400' :
-                            primaryStatus === 'preparing' ? 'bg-yellow-400' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${overallStatus.progress}%` }}
-                        />
-                      </div>
-                    )}
+                    <div className="h-1 bg-gray-100 dark:bg-gray-700">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          primaryStatus === 'pending' ? 'bg-gray-400' :
+                          primaryStatus === 'preparing' ? 'bg-yellow-400' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${overallStatus.progress}%` }}
+                      />
+                    </div>
 
                     {/* Status Banner */}
-                    <div className={`px-4 py-3 flex items-center justify-between ${
-                      isFutureOrder ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : overallStatus.color
-                    }`}>
+                    <div className={`px-4 py-3 flex items-center justify-between ${overallStatus.color}`}>
                       <div className="flex items-center gap-2">
-                        {isFutureOrder ? (
-                          <>
-                            <Calendar size={20} />
-                            <span className="font-semibold">{getScheduledLabel(group.scheduledFor)}</span>
-                          </>
-                        ) : (
-                          <>
-                            <OverallIcon size={20} className={hasReadyOrder ? 'animate-bounce' : ''} />
-                            <span className="font-semibold">{overallStatus.label}</span>
-                          </>
-                        )}
+                        <OverallIcon size={20} className={hasReadyOrder ? 'animate-bounce' : ''} />
+                        <span className="font-semibold">{overallStatus.label}</span>
                       </div>
-                      <span className="text-sm">
-                        {isFutureOrder ? 'Advance Order' : overallStatus.message}
-                      </span>
+                      <span className="text-sm">{overallStatus.message}</span>
                     </div>
 
                     {/* Ready Banner */}
@@ -688,10 +622,7 @@ export default function ParentDashboard() {
                             For {group.studentName}
                           </h3>
                           <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {isFutureOrder
-                              ? format(parseISO(group.scheduledFor), 'EEEE, MMMM d')
-                              : `Ordered at ${format(new Date(group.createdAt), 'h:mm a')}`
-                            }
+                            {`Ordered at ${format(new Date(group.createdAt), 'h:mm a')}`}
                           </p>
                         </div>
                         <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
@@ -811,19 +742,15 @@ export default function ParentDashboard() {
             </div>
           ) : (
             <EmptyState
-              icon={activeTab === 'today' ? Package : CalendarClock}
-              title={activeTab === 'today' ? 'No active orders' : 'No scheduled orders'}
-              description={
-                activeTab === 'today' 
-                  ? "Your today's orders will appear here" 
-                  : "Order ahead for future days from the menu"
-              }
+              icon={Package}
+              title="No active orders"
+              description="Your today's orders will appear here"
               action={
                 <Link 
                   to="/menu" 
                   className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 font-medium"
                 >
-                  {activeTab === 'today' ? 'Browse Menu' : 'Order Ahead'}
+                  Browse Menu
                 </Link>
               }
             />
@@ -846,7 +773,7 @@ export default function ParentDashboard() {
       <DayCancellationModal
         isOpen={showDayCancelModal}
         onClose={() => setShowDayCancelModal(false)}
-        dailyOrders={(scheduledOrders || []) as import('../../types').OrderWithDetails[]}
+        dailyOrders={futureDailyOrders}
         cancelCutoffTime={settings.daily_cancel_cutoff_time}
         onConfirmCancel={async (orderIds) => {
           for (const orderId of orderIds) {
