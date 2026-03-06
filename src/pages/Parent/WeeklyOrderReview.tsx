@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   format,
@@ -19,6 +20,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { useWeeklyOrderDetail, useCancelDay } from '../../hooks/useOrders';
+import { getWeekdaysWithStatus } from '../../services/products';
 import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
@@ -82,27 +84,53 @@ export default function WeeklyOrderReview() {
   const { data: weeklyOrder, isLoading, isError } = useWeeklyOrderDetail(weeklyOrderId ?? null);
   const cancelDay = useCancelDay();
 
+  // Fetch holiday/makeup-day context for the week so Saturday is only shown
+  // when it is a makeup day (mirrors Menu.tsx behaviour).
+  const weekStart = weeklyOrder?.week_start;
+  const { data: weekdaysInfo } = useQuery({
+    queryKey: ['weekdays-with-status', weekStart],
+    queryFn: async () => {
+      if (!weekStart) return [];
+      return getWeekdaysWithStatus(weekStart);
+    },
+    enabled: !!weekStart,
+  });
+
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null);
 
-  // Build calendar grid from week_start (Mon-Sat, 6 days to include makeup Saturdays)
+  // Build calendar grid for the week.
+  // Saturday is included only when confirmed as a makeup day, or when an order
+  // already exists on that date (it must have been a makeup day at order time).
   const calendarDays = useMemo(() => {
     if (!weeklyOrder) return [];
     const monday = parseISO(weeklyOrder.week_start);
-    return Array.from({ length: 6 }, (_, i) => {
+    const days = Array.from({ length: 6 }, (_, i) => {
       const date = addDays(monday, i);
       const dateStr = format(date, 'yyyy-MM-dd');
-      const order = weeklyOrder.daily_orders?.find(
-        (o) => o.scheduled_for === dateStr,
-      );
+      const dayOfWeek = date.getDay(); // 0 = Sun … 6 = Sat
+      const weekdayInfo = weekdaysInfo?.find(w => w.dateStr === dateStr);
+
+      // Only show Saturday when it's a makeup day or has an existing order
+      if (dayOfWeek === 6) {
+        const hasOrderOnSat = !!weeklyOrder.daily_orders?.find(o => o.scheduled_for === dateStr);
+        if (!weekdayInfo?.isMakeupDay && !hasOrderOnSat) return null;
+      }
+
+      const order = weeklyOrder.daily_orders?.find(o => o.scheduled_for === dateStr);
       return {
         date,
         dateStr,
         dayLabel: WEEKDAY_LABELS[i],
         order: order ?? null,
         isPast: isBefore(startOfDay(date), startOfDay(new Date())),
+        isHoliday: weekdayInfo?.isHoliday ?? false,
+        holidayName: weekdayInfo?.holidayName,
+        isMakeupDay: weekdayInfo?.isMakeupDay ?? false,
+        makeupDayName: weekdayInfo?.makeupDayName,
       };
     });
-  }, [weeklyOrder]);
+    return days.filter((d): d is NonNullable<typeof d> => d !== null);
+  }, [weeklyOrder, weekdaysInfo]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -199,17 +227,17 @@ export default function WeeklyOrderReview() {
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-gray-900">
-      <PageHeader
-        title="Weekly Order"
-        subtitle={`Week of ${format(parseISO(weeklyOrder.week_start), 'MMM d, yyyy')}`}
-        action={
-          <button onClick={() => navigate(-1)} className="text-sm text-primary-600 dark:text-primary-400 font-medium">
-            ← Back
-          </button>
-        }
-      />
+      <div className="container mx-auto px-4 py-6 space-y-4">
+        <PageHeader
+          title="Weekly Order"
+          subtitle={`Week of ${format(parseISO(weeklyOrder.week_start), 'MMM d, yyyy')}`}
+          action={
+            <button onClick={() => navigate(-1)} className="text-sm text-primary-600 dark:text-primary-400 font-medium">
+              ← Back
+            </button>
+          }
+        />
 
-      <div className="container mx-auto px-4 py-4 space-y-4">
         {/* ── Header card ────────────────────────────── */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
@@ -219,7 +247,9 @@ export default function WeeklyOrderReview() {
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {format(parseISO(weeklyOrder.week_start), 'MMM d')} –{' '}
-                {format(addDays(parseISO(weeklyOrder.week_start), 5), 'MMM d, yyyy')}
+                {calendarDays.length > 0
+                  ? format(calendarDays[calendarDays.length - 1].date, 'MMM d, yyyy')
+                  : format(addDays(parseISO(weeklyOrder.week_start), 4), 'MMM d, yyyy')}
               </p>
             </div>
             <div className="text-right">
@@ -274,7 +304,7 @@ export default function WeeklyOrderReview() {
             Daily Breakdown
           </h3>
 
-          {calendarDays.map(({ date, dateStr, dayLabel, order, isPast }) => {
+          {calendarDays.map(({ date, dateStr, dayLabel, order, isPast, isHoliday, holidayName, isMakeupDay, makeupDayName }) => {
             const hasOrder = !!order;
             const isCancelled = order?.status === 'cancelled';
             const statusMeta = order ? getStatusMeta(order.status) : null;
@@ -286,9 +316,11 @@ export default function WeeklyOrderReview() {
                 className={`bg-white dark:bg-gray-800 rounded-2xl border overflow-hidden transition-all ${
                   isCancelled
                     ? 'border-red-200 dark:border-red-800 opacity-60'
-                    : isPast
-                      ? 'border-gray-200 dark:border-gray-700 opacity-75'
-                      : 'border-gray-100 dark:border-gray-700'
+                    : isHoliday
+                      ? 'border-red-100 dark:border-red-900/40'
+                      : isPast
+                        ? 'border-gray-200 dark:border-gray-700 opacity-75'
+                        : 'border-gray-100 dark:border-gray-700'
                 }`}
               >
                 {/* Day header */}
@@ -306,9 +338,13 @@ export default function WeeklyOrderReview() {
                       className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center text-xs font-bold ${
                         isCancelled
                           ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                          : isPast
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                            : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                        : isHoliday
+                          ? 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400'
+                          : isMakeupDay
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                            : isPast
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                              : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
                       }`}
                     >
                       <span className="leading-none">{dayLabel}</span>
@@ -328,9 +364,19 @@ export default function WeeklyOrderReview() {
                           {statusMeta.label}
                         </span>
                       )}
-                      {!hasOrder && (
+                      {!hasOrder && !isHoliday && (
                         <span className="text-xs text-gray-400 dark:text-gray-500">
                           No order
+                        </span>
+                      )}
+                      {isHoliday && (
+                        <span className="text-xs text-red-500 dark:text-red-400">
+                          {holidayName ?? 'Holiday'}
+                        </span>
+                      )}
+                      {isMakeupDay && makeupDayName && (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                          {makeupDayName}
                         </span>
                       )}
                     </div>
