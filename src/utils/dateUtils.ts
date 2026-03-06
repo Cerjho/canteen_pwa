@@ -23,6 +23,29 @@ export function getTodayLocal(): string {
 }
 
 /**
+ * Returns tomorrow's date string in 'YYYY-MM-DD' format, anchored to Asia/Manila timezone.
+ * Safer than date-fns isTomorrow() which uses the browser's local timezone.
+ */
+export function getTomorrowLocal(): string {
+  const today = new Date(getTodayLocal() + 'T00:00:00');
+  today.setDate(today.getDate() + 1);
+  return formatDateLocal(today);
+}
+
+/**
+ * Returns the Monday of the week containing the given Manila date string.
+ * Safe to use with Manila-anchored YYYY-MM-DD strings — avoids browser-timezone
+ * getDay() pitfalls that can occur when calling .getDay() on a raw Date.
+ */
+export function getMondayOf(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0 = Sun, 1 = Mon… (safe: input is a Manila YYYY-MM-DD)
+  const diff = day === 0 ? -6 : 1 - day; // Mon = 0 offset, others negative
+  d.setDate(d.getDate() + diff);
+  return formatDateLocal(d);
+}
+
+/**
  * Get the current Manila time components.
  */
 function getManilaTime(date: Date = new Date()): { hours: number; minutes: number; dayOfWeek: number; dateStr: string } {

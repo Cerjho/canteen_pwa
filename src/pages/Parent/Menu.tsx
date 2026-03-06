@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingCart, Calendar, CalendarOff, ChevronLeft, ChevronRight, CalendarDays, UserPlus, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, isTomorrow } from 'date-fns';
+import { format } from 'date-fns';
 import { getProductsForDate, getCanteenStatus, getWeekdaysWithStatus, formatDateLocal } from '../../services/products';
 import { useStudents } from '../../hooks/useStudents';
 import { useFavorites } from '../../hooks/useFavorites';
@@ -22,7 +22,7 @@ import type { ProductCategory, MealPeriod, PaymentMethod } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
 import { autoMealPeriod, MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS } from '../../types';
 import { useSystemSettings } from '../../hooks/useSystemSettings';
-import { getNextOrderableWeek, getWeekLabel } from '../../utils/dateUtils';
+import { getNextOrderableWeek, getWeekLabel, getMondayOf, getTodayLocal, getTomorrowLocal } from '../../utils/dateUtils';
 
 const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -32,10 +32,13 @@ const CATEGORIES: { value: ProductCategory | 'all' | 'favorites'; label: string 
   { value: 'drinks', label: 'Drinks' },
 ];
 
-// Get friendly date label (uses PH-timezone string comparison for "Today")
+// Max weeks the user can navigate forward from the current week
+const MAX_FORWARD_WEEKS = 8;
+
+// Get friendly date label (uses PH-timezone string comparisons anchored to Manila)
 function getDateLabel(date: Date): string {
   if (formatDateLocal(date) === formatDateLocal(new Date())) return 'Today';
-  if (isTomorrow(date)) return 'Tomorrow';
+  if (formatDateLocal(date) === getTomorrowLocal()) return 'Tomorrow';
   return format(date, 'EEE, MMM d');
 }
 
@@ -75,15 +78,10 @@ export default function Menu() {
     () => getNextOrderableWeek(settings.weekly_cutoff_day, settings.weekly_cutoff_time),
     [settings.weekly_cutoff_day, settings.weekly_cutoff_time]
   );
-  // Allow viewing current week (Mon of this week), even if cutoff passed
-  const viewFloor = useMemo(() => {
-    const today = new Date();
-    const day = today.getDay(); // 0=Sun
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday
-    const monday = new Date(today);
-    monday.setDate(diff);
-    return formatDateLocal(monday);
-  }, []);
+  // Allow viewing current week (Mon of this week), even if cutoff passed.
+  // Uses getMondayOf(getTodayLocal()) so the calculation is anchored to Manila
+  // timezone, not the browser's local timezone.
+  const viewFloor = useMemo(() => getMondayOf(getTodayLocal()), []);
   const [currentWeekStart, setCurrentWeekStart] = useState<string | null>(null);
   // Initialize currentWeekStart once minWeekStart resolves (settings may load async)
   useEffect(() => {
@@ -114,8 +112,14 @@ export default function Menu() {
     if (!currentWeekStart) return;
     const nextMonday = new Date(currentWeekStart + 'T00:00:00');
     nextMonday.setDate(nextMonday.getDate() + 7);
-    setCurrentWeekStart(formatDateLocal(nextMonday));
-    setSelectedDate(null); // reset day selection
+    const nextStr = formatDateLocal(nextMonday);
+    // Cap forward navigation at MAX_FORWARD_WEEKS weeks beyond the current week
+    const maxDate = new Date(getMondayOf(getTodayLocal()) + 'T00:00:00');
+    maxDate.setDate(maxDate.getDate() + MAX_FORWARD_WEEKS * 7);
+    if (nextStr <= formatDateLocal(maxDate)) {
+      setCurrentWeekStart(nextStr);
+      setSelectedDate(null); // reset day selection
+    }
   }, [currentWeekStart]);
 
   // Query active orders for the cart (merge detection)
@@ -177,10 +181,12 @@ export default function Menu() {
   // Combine status from weekdayInfo or canteenStatus
   const isCanteenOpen = selectedWeekdayInfo ? selectedWeekdayInfo.isOpen : canteenStatus?.isOpen !== false;
   
-  // Fetch products for the selected date
+  // Fetch products for the selected date.
+  // Pass selectedWeekdayInfo so getProductsForDate can skip redundant holiday/
+  // makeup_day DB round-trips — the weekday context is already resolved.
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', formatDateLocal(effectiveDate)],
-    queryFn: () => getProductsForDate(effectiveDate),
+    queryFn: () => getProductsForDate(effectiveDate, selectedWeekdayInfo ?? undefined),
     enabled: !!selectedDate && isCanteenOpen
   });
 

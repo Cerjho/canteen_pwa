@@ -224,34 +224,46 @@ export async function getAvailableOrderDates(): Promise<Date[]> {
   return weekdays.filter(w => w.isOpen).map(w => w.date);
 }
 
-// Get products available for a specific date based on menu schedule
-export async function getProductsForDate(date: Date): Promise<Product[]> {
-  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+// Get products available for a specific date based on menu schedule.
+// When weekdayInfo is provided (e.g. from getWeekdaysWithStatus), the redundant
+// per-date holiday and makeup_day DB round-trips are skipped entirely.
+export async function getProductsForDate(date: Date, weekdayInfo?: WeekdayInfo): Promise<Product[]> {
   const dateStr = formatDateLocal(date);
-  
-  // Check for holiday first (including recurring) - holidays close canteen
-  const holiday = await checkHoliday(date);
-  if (holiday) {
-    return []; // Holiday - canteen closed
-  }
-  
-  // Weekend check
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    // Sunday always closed
-    if (dayOfWeek === 0) {
+
+  if (weekdayInfo) {
+    // Fast path: caller already resolved open/holiday/makeup status — skip DB checks.
+    if (!weekdayInfo.isOpen) {
       return [];
     }
-    // Saturday - check if it's a make-up day
-    const { data: makeupDay } = await supabase
-      .from('makeup_days')
-      .select('id')
-      .eq('date', dateStr)
-      .maybeSingle();
-    
-    if (!makeupDay) {
-      return []; // Regular Saturday - closed
+    // isOpen is true — proceed directly to menu_schedules fetch below.
+  } else {
+    // Slow path: no context provided — resolve open status via DB queries.
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+    // Check for holiday first (including recurring) - holidays close canteen
+    const holiday = await checkHoliday(date);
+    if (holiday) {
+      return []; // Holiday - canteen closed
     }
-    // Make-up Saturday - continue to fetch menu
+
+    // Weekend check
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      // Sunday always closed
+      if (dayOfWeek === 0) {
+        return [];
+      }
+      // Saturday - check if it's a make-up day
+      const { data: makeupDay } = await supabase
+        .from('makeup_days')
+        .select('id')
+        .eq('date', dateStr)
+        .maybeSingle();
+
+      if (!makeupDay) {
+        return []; // Regular Saturday - closed
+      }
+      // Make-up Saturday - continue to fetch menu
+    }
   }
   
   // Check for date-specific menu schedules (date-based system)
