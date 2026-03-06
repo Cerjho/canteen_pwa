@@ -13,12 +13,10 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
 import { PullToRefresh } from '../../components/PullToRefresh';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { DayCancellationModal } from '../../components/DayCancellationModal';
 import { useToast } from '../../components/Toast';
 import type { MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, isOnlinePaymentMethod } from '../../types';
 import { friendlyError } from '../../utils/friendlyError';
-import { useSystemSettings } from '../../hooks/useSystemSettings';
 import { 
   Package, 
   Clock, 
@@ -105,14 +103,12 @@ export default function ParentDashboard() {
   const { addItem } = useCart();
   const [activeTab, setActiveTab] = useState<'today' | 'weekly'>('today');
   const [showCancelDialog, setShowCancelDialog] = useState<string | null>(null);
-  const [showDayCancelModal, setShowDayCancelModal] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const [, setTimerTick] = useState(0); // Force re-render for countdown timers
   
   // Subscribe to realtime order updates
   useOrderSubscription();
-  const { settings } = useSystemSettings();
-  
+
   const todayStr = formatDateLocal(new Date());
   
   // Fetch today's active orders (awaiting_payment, pending, preparing, ready)
@@ -173,14 +169,6 @@ export default function ParentDashboard() {
 
   // Weekly orders (aggregated weekly pre-orders)
   const { data: weeklyOrders, isLoading: loadingWeekly } = useWeeklyOrders();
-
-  // Future daily orders derived from weekly orders — used for the Cancel Multiple Days modal
-  const futureDailyOrders = useMemo(() => {
-    if (!weeklyOrders) return [];
-    return weeklyOrders
-      .flatMap(wo => wo.daily_orders || [])
-      .filter(o => (o.scheduled_for ?? '') > todayStr);
-  }, [weeklyOrders, todayStr]);
 
   // Cancel order mutation (via edge function)
   const cancelOrderMutation = useMutation({
@@ -463,17 +451,6 @@ export default function ParentDashboard() {
               )}
             </button>
           </div>
-
-          {/* Bulk Cancel Days button — shown on Weekly tab when there are cancellable future days */}
-          {activeTab === 'weekly' && futureDailyOrders.length > 0 && (
-            <button
-              onClick={() => setShowDayCancelModal(true)}
-              className="mb-4 w-full py-2.5 flex items-center justify-center gap-2 border-2 border-dashed border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              <X size={16} />
-              Cancel Multiple Days
-            </button>
-          )}
 
           {isLoading ? (
             <LoadingSpinner size="lg" />
@@ -769,18 +746,6 @@ export default function ParentDashboard() {
         type="danger"
       />
 
-      {/* Bulk Day Cancellation Modal */}
-      <DayCancellationModal
-        isOpen={showDayCancelModal}
-        onClose={() => setShowDayCancelModal(false)}
-        dailyOrders={futureDailyOrders}
-        cancelCutoffTime={settings.daily_cancel_cutoff_time}
-        onConfirmCancel={async (orderIds) => {
-          for (const orderId of orderIds) {
-            await cancelOrderMutation.mutateAsync(orderId);
-          }
-        }}
-      />
     </div>
   );
 }

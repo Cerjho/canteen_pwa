@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Loader2,
   Ban,
+  X,
 } from 'lucide-react';
 import { useWeeklyOrderDetail, useCancelDay } from '../../hooks/useOrders';
 import { getWeekdaysWithStatus } from '../../services/products';
@@ -25,6 +26,9 @@ import { PageHeader } from '../../components/PageHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
 import { useConfirm } from '../../components/ConfirmDialog';
+import { DayCancellationModal } from '../../components/DayCancellationModal';
+import { useSystemSettings } from '../../hooks/useSystemSettings';
+import { getTodayLocal } from '../../utils/dateUtils';
 import type { OrderWithDetails, MealPeriod } from '../../types';
 import { MEAL_PERIOD_LABELS, MEAL_PERIOD_ICONS, isOnlinePaymentMethod } from '../../types';
 import { getPaymentMethodLabel } from '../../services/payments';
@@ -97,6 +101,19 @@ export default function WeeklyOrderReview() {
   });
 
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null);
+  const [showDayCancelModal, setShowDayCancelModal] = useState(false);
+
+  const { settings } = useSystemSettings();
+
+  const todayStr = getTodayLocal();
+
+  // Future cancellable daily orders for this weekly order
+  const futureDailyOrders = useMemo(() => {
+    if (!weeklyOrder?.daily_orders) return [];
+    return weeklyOrder.daily_orders.filter(
+      (o) => (o.scheduled_for ?? '') > todayStr && o.status !== 'cancelled' && o.status !== 'completed',
+    );
+  }, [weeklyOrder, todayStr]);
 
   // Build calendar grid for the week.
   // Saturday is included only when confirmed as a makeup day, or when an order
@@ -300,9 +317,20 @@ export default function WeeklyOrderReview() {
 
         {/* ── 5-Day Calendar Grid ────────────────────── */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
-            Daily Breakdown
-          </h3>
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Daily Breakdown
+            </h3>
+            {futureDailyOrders.length > 0 && (
+              <button
+                onClick={() => setShowDayCancelModal(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <X size={13} />
+                Cancel Multiple Days
+              </button>
+            )}
+          </div>
 
           {calendarDays.map(({ date, dateStr, dayLabel, order, isPast, isHoliday, holidayName, isMakeupDay, makeupDayName }) => {
             const hasOrder = !!order;
@@ -475,6 +503,18 @@ export default function WeeklyOrderReview() {
       </div>
 
       {ConfirmDialogElement}
+
+      <DayCancellationModal
+        isOpen={showDayCancelModal}
+        onClose={() => setShowDayCancelModal(false)}
+        dailyOrders={futureDailyOrders}
+        cancelCutoffTime={settings.daily_cancel_cutoff_time}
+        onConfirmCancel={async (orderIds) => {
+          for (const orderId of orderIds) {
+            await cancelDay.mutateAsync({ orderId });
+          }
+        }}
+      />
     </div>
   );
 }
