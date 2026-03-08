@@ -642,7 +642,7 @@ export default function Menu() {
         </div>
 
         {/* Cutoff Countdown */}
-        {weekStart && (
+        {weekStart && !weekCutoffPassed && (
           <div className="mb-4">
             <CutoffCountdown
               targetWeekStart={weekStart}
