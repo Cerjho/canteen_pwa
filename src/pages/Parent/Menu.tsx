@@ -66,7 +66,8 @@ export default function Menu() {
     setSelectedStudentId,
     clearDate,
     copyDateItems,
-    summary
+    summary,
+    isLoadingCart
   } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { data: students, isLoading: studentsLoading } = useStudents();
@@ -673,7 +674,7 @@ export default function Menu() {
         />
 
         {/* Banner: prompt student selection before ordering */}
-        {students && students.length > 0 && !selectedStudentId && (
+        {!isLoadingCart && students && students.length > 0 && !selectedStudentId && (
           <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-4 mb-4">
             <span className="text-amber-500 dark:text-amber-400 mt-0.5" aria-hidden>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 shrink-0">
