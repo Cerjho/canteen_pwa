@@ -11,13 +11,15 @@ interface StudentSelectorProps {
   selectedStudentId?: string | null;
   onSelect: (id: string) => void;
   required?: boolean;
+  isLoading?: boolean;
 }
 
 export function StudentSelector({
   students,
   selectedStudentId,
   onSelect,
-  required = false
+  required = false,
+  isLoading = false,
 }: StudentSelectorProps) {
   const studentList = students || [];
   const selectedId = selectedStudentId ?? null;
@@ -50,7 +52,7 @@ export function StudentSelector({
           </option>
         ))}
       </select>
-      {studentList.length > 0 && !selectedId && (
+      {!isLoading && studentList.length > 0 && !selectedId && (
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5" role="alert">
           Select a student to start ordering.
         </p>

@@ -657,6 +657,7 @@ export default function Menu() {
           students={students || []}
           selectedStudentId={selectedStudentId}
           onSelect={setSelectedStudentId}
+          isLoading={isLoadingCart}
         />
 
         {/* Weekly Cart Summary - shows multi-day cart at a glance */}
